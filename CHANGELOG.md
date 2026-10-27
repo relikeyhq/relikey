@@ -24,6 +24,11 @@ Releases are semver tags, `v0.1.0` first. A ReliKey release is its pins and its 
 
 ## [Unreleased]
 
+### Changed
+- The model marks contracts C-01 (lease as role assignment), C-04 (signed lease bundles) and C-10 (per-edge ceiling)
+  as built, each naming the agent tests that show it; C-10 also names what is not yet applied (hardware attestation,
+  remote-reach mode and ports).
+
 ## [0.1.2] - 2026-10-27
 
 The first published release. It holds everything listed under 0.1.0 plus the fix below.

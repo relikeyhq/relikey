@@ -13,7 +13,9 @@ contracts:
       A signed lease in the bundle becomes a role assignment with expires_at = lease end; an early end or a revocation
       in a newer bundle revokes it. Assignments the agent did not make are drift, reported to KeyClerk; KeyClerk (through
       the agent) is the only writer (KeyClerk 0013 D2).
-    status: needed
+      Built and unit-tested (agent internal/apply apply_test.go and regress_test.go: grants with expires_at, a moved
+      expiry, drift reported not guessed; internal/agent agent_test.go: revocation and offline lease end on the fakes).
+    status: built
 
   - id: C-02
     name: Session approval from a signed lease
@@ -53,8 +55,12 @@ contracts:
       The agent pulls bundles outbound, refuses a bundle with a lower serial, a wrong signer or past its horizon, and
       reports what it applied. Past a class horizon it ends that class's leases; visit leases end at their own signed
       window (decision 0007; fail closed, decision 0005 point 3). Bundle entries outside the edge's ceiling (C-10) are refused.
+      Built and unit-tested (agent internal/kcedge kcedge_test.go: the verifier against KeyClerk's conformance set
+      testdata/edge.json, serial floors, signers and class horizons included, plus fuzzing; internal/state
+      state_test.go: floors only rise; internal/agent agent_test.go: a lease applied and reported, a replayed bundle
+      refused, a lease ended at its own time while the desk is down).
     keyclerk: KeyClerk 0014 (v0.17.0), docs/keyclerk-edge-interface.md
-    status: needed
+    status: built
 
   - id: C-06
     name: Pre-staged visit lease
@@ -117,8 +123,13 @@ contracts:
       The agent admits only what both the core's signed policy and the ceiling allow (persons or roles, targets, maximum
       lease, maximum offline validity, lease classes, hardware profile, remote-reach mode and ports). A ceiling with a
       lower serial or a wrong signer is refused. Hardware facts come from attestation, not from the ceiling (0007).
+      Built as a Go port of ceiling.rego (agent internal/kcedge ceiling.go) until the signed policy module runs in
+      process; unit-tested against KeyClerk's ceiling vectors (kcedge_test.go TestCeilingPolicyMatchesKeyClerk and the
+      ceilings family in TestConformanceFamilies) and on the fakes (agent_test.go
+      TestALeaseOutsideTheCeilingIsNotApplied). Not yet: hardware attestation (the agent attests basic, so visit
+      leases are refused), and remote-reach mode and ports are checked for form but not yet applied.
     keyclerk: KeyClerk 0014 (v0.17.0), docs/keyclerk-edge-interface.md
-    status: needed
+    status: built
 
   - id: C-05
     name: Broker sign-in and approval proofs
