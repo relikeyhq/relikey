@@ -54,7 +54,8 @@ a revoke that cuts a held session, Warpgate's admin interface unreachable on the
 reports over post-quantum hybrid TLS. The fleet's enrolment by code and its officer anchor ceremony are built and
 tested, not yet walked on a deployed box. The decision records and model are the design of record. What is **not**
 done: production networking, high availability, signed releases, and several contracts still marked `needed` in the
-model. Not production-ready; treat it as a working architecture you can stand up in a lab.
+model. Not production-ready; treat it as a working architecture you can stand up in a lab. What comes next is in
+[ROADMAP.md](ROADMAP.md).
 
 ## Quickstart: a lab on one box
 A core and one edge on the same Linux host, the way full-stack run 2 stood them up (`docs/reviews/`). You need Python
