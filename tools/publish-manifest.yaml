@@ -23,6 +23,7 @@ public:
   - LICENSE
   - NOTICE
   - README.md
+  - ROADMAP.md
   - SECURITY.md
   - pyproject.toml
   - FUZZING.md
