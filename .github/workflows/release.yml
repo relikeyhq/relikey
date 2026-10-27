@@ -43,8 +43,15 @@ jobs:
             echo "Verify: \`sha256sum -c SHA256SUMS\`, then \`gh attestation verify FILE --repo ${GITHUB_REPOSITORY}\`."
           } >> notes/notes.md
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8  # v4.2.2
+        id: attest
         with:
           subject-checksums: agent/dist/SHA256SUMS
+      - name: Attach the provenance bundle to the release files
+        env:
+          BUNDLE: ${{ steps.attest.outputs.bundle-path }}
+        # The same Sigstore bundle `gh attestation verify` fetches, as a release file, so it can be checked offline
+        # (gh attestation verify FILE --bundle relikey-provenance.intoto.jsonl --repo relikeyhq/relikey).
+        run: cp "$BUNDLE" agent/dist/relikey-provenance.intoto.jsonl
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: dist
