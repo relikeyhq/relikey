@@ -1,0 +1,8 @@
+# An edge's targets, applied to its Warpgate by deploy/edge/targets.py (idempotent). Copy to targets.yaml and edit.
+# name and role match the edge's enrolment (enrol_edge targets[].target / .role); host_key is the target's own SSH
+# host key, verified out of band (from the system's console or its operator) - never taken from the network alone.
+targets:
+  - name: plc-ssh
+    role: plc-operators
+    ssh: {host: 10.0.0.5, port: 22, username: plcuser}
+    host_key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA...replace-with-the-real-key"

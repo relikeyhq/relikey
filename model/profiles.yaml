@@ -1,0 +1,44 @@
+# Profiles compose adapters into a running shape (decision 0016). A profile binds the two swappable roles the
+# operator cares about - clerk (IGA) and bastion - to an implementation from model/adapters.yaml, or to `none` for a
+# deliberately reduced ReliKey. The infra roles default to their one reference adapter.
+#
+# The matrix is {clerk} x {bastion} over {keyclerk, other-iga-1, other-iga-2} x {warpgate, other-bastion-1,
+# other-bastion-2}, plus only-bastion and only-clerk. `reference` (KeyClerk + Warpgate) is the optimised, shipped
+# profile and must satisfy every contract (tools/check_conformance.py enforces this). The keyclerk x other-bastion
+# cells are included so each axis is proven independently substitutable, not just the all-other corner.
+
+defaults:            # the infra roles, same in every profile for now
+  facade: lldap
+  broker: keycloak
+  mirror: zot
+  org-store: s3
+  agent: relikey-agent
+
+profiles:
+  - id: reference                 # "BOTH", optimised and shipped
+    optimised: true
+    bind: {clerk: keyclerk, bastion: warpgate}
+
+  - id: only-bastion              # "ONLY Warpgate": a recorded protocol bastion, no lease governance
+    bind: {clerk: none, bastion: warpgate}
+  - id: only-clerk                # "ONLY KeyClerk": lease-governed LDAP access, no protocol bastion
+    bind: {clerk: keyclerk, bastion: none}
+
+  - id: other-iga-1-warpgate
+    bind: {clerk: other-iga-1, bastion: warpgate}
+  - id: other-iga-2-warpgate
+    bind: {clerk: other-iga-2, bastion: warpgate}
+
+  - id: keyclerk-other-bastion-1
+    bind: {clerk: keyclerk, bastion: other-bastion-1}
+  - id: keyclerk-other-bastion-2
+    bind: {clerk: keyclerk, bastion: other-bastion-2}
+
+  - id: other-iga-1-other-bastion-1
+    bind: {clerk: other-iga-1, bastion: other-bastion-1}
+  - id: other-iga-1-other-bastion-2
+    bind: {clerk: other-iga-1, bastion: other-bastion-2}
+  - id: other-iga-2-other-bastion-1
+    bind: {clerk: other-iga-2, bastion: other-bastion-1}
+  - id: other-iga-2-other-bastion-2
+    bind: {clerk: other-iga-2, bastion: other-bastion-2}

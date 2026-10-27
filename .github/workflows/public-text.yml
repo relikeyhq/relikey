@@ -1,0 +1,73 @@
+# Decision 0027: everything posted here is public at once. This checks pull requests (title, body, added lines, commit
+# messages), issues and comments with tools/public_text_check.py, including outside contributions, and labels a hit
+# for a maintainer. It runs the base branch's check on text and git objects only: the proposed code is fetched as data
+# and never checked out or run. Patterns that would publish themselves come from the RELIKEY_PRIVATE_PATTERNS secret.
+name: Public text
+on:
+  pull_request_target:
+    types: [opened, edited, synchronize, reopened]
+  issues:
+    types: [opened, edited]
+  issue_comment:
+    types: [created, edited]
+  pull_request_review:
+    types: [submitted, edited]
+  pull_request_review_comment:
+    types: [created, edited]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.event.issue.number }}-${{ github.event.comment.id || github.event.review.id || 'body' }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Public text check
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.27.3"
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - run: go install github.com/zricethezav/gitleaks/v8@v8.30.1
+      - run: pip install -q --require-hashes -r requirements-test.txt
+      - name: Check the text
+        env:
+          # Event text arrives through the environment, never interpolated into the script.
+          TITLE: ${{ github.event.pull_request.title || (github.event_name == 'issues' && github.event.issue.title) || '' }}
+          BODY: ${{ github.event.comment.body || github.event.review.body || github.event.pull_request.body || github.event.issue.body || '' }}
+          RELIKEY_PRIVATE_PATTERNS: ${{ secrets.RELIKEY_PRIVATE_PATTERNS }}
+        run: |
+          printf '%s\n%s\n' "$TITLE" "$BODY" > "$RUNNER_TEMP/text.md"
+          python tools/public_text_check.py --text "$RUNNER_TEMP/text.md"
+      - name: Check the diff and commit messages
+        if: github.event_name == 'pull_request_target'
+        env:
+          PR: ${{ github.event.pull_request.number }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+          RELIKEY_PRIVATE_PATTERNS: ${{ secrets.RELIKEY_PRIVATE_PATTERNS }}
+        run: |
+          git fetch --no-tags origin "refs/pull/$PR/head"
+          python tools/public_text_check.py --strict --range "$BASE..$HEAD"
+      - name: Label for a maintainer
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
+        run: |
+          gh label create held-for-text-review --color B60205 \
+            --description "The public text check found something a maintainer must read" -R "$GITHUB_REPOSITORY" || true
+          gh issue edit "$NUMBER" --add-label held-for-text-review -R "$GITHUB_REPOSITORY"

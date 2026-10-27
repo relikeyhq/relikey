@@ -1,0 +1,6 @@
+# The key that signs KeyClerk's release tags (its publisher's general signing key, principal named here by role;
+# fingerprint
+# SHA256:pnbEy2TIUqaf1sSRbH30SRBRBw8FY3foXd1409OfmPE, from the KeyClerk session at the operator's request,
+# 2026-10-25). install.py requires a good signature from it on the pinned tag, and the tag on the pinned commit:
+# a good signature alone means "signed by the publisher", not "this KeyClerk release".
+keyclerk-releases namespaces="git" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEAkeCa6y5NuiE5cXVIlhubw0ZMeT6Ba+qIoWRCJdf/t

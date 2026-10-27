@@ -1,0 +1,88 @@
+# The core's front (decision 0015): one TLS listener, routed by host name; everything behind it is on the pod's
+# loopback. Host names come from deploy/secrets/core.env (install.py). The certificate is install.py's (a local CA,
+# or the organisation's own); no ACME, no admin API.
+{
+	admin off
+	auto_https off
+	persist_config off
+}
+
+(tls_core) {
+	tls /etc/caddy/tls/front.crt /etc/caddy/tls/front.key {
+		protocols tls1.2 tls1.3
+	}
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+	log
+}
+
+# The broker, for people and for edges (Warpgate's OIDC, F-04): the one realm's sign-in, OIDC endpoints and keys,
+# and the static resources its pages load. Not the admin console, not the admin API, not the master realm.
+https://{$BROKER_HOST}:8443 {
+	import tls_core
+	@realm path /realms/{$REALM} /realms/{$REALM}/* /resources/*
+	handle @realm {
+		reverse_proxy 127.0.0.1:8080
+	}
+	handle {
+		respond 404
+	}
+}
+
+# The desk, for people: its pages and its API (/api/v1).
+https://{$DESK_HOST}:8443 {
+	import tls_core
+	reverse_proxy 127.0.0.1:8091 {
+		header_up Host {host}   # the bare name the desk allows, whatever the port
+	}
+}
+
+# The edge-facing name (F-06, F-18): only what an edge needs. The desk's edge routes, and the mirror's read API.
+https://{$EDGE_HOST}:8443 {
+	import tls_core
+	@edge path /api/v1/edge/* /api/v1/edge-key
+	handle @edge {
+		reverse_proxy 127.0.0.1:8091 {
+			header_up Host {host}
+		}
+	}
+	# The fleet service (decision 0026): edges only send their signed report here; the inventory is never served on
+	# the edge-facing name.
+	@fleet {
+		method POST
+		path /fleet/v1/report /fleet/v1/enrol   # the report, and an enrolling edge's key (0026 point 15)
+	}
+	handle @fleet {
+		request_body {
+			max_size 64KB
+		}
+		reverse_proxy 127.0.0.1:8093 {
+			header_up Host 127.0.0.1:8093   # the fleet answers loopback names only (DNS rebinding)
+		}
+	}
+	@pull {
+		method GET HEAD
+		path /v2 /v2/*
+	}
+	handle @pull {
+		reverse_proxy 127.0.0.1:5000
+	}
+	handle {
+		respond 404
+	}
+}
+
+# The broker's admin console and admin API: published on the host's loopback only (compose.yaml), reached through an
+# SSH tunnel. KC_HOSTNAME_ADMIN names it. Bound to loopback here too: on the host network (the lab) there is no
+# published-port mapping to restrict it, and the full-stack run found it listening on every interface.
+https://localhost:8444 {
+	bind 127.0.0.1
+	import tls_core
+	reverse_proxy 127.0.0.1:8080
+}
+
+# Optional names, one file each, written by their setup scripts (deploy/secrets/sites, mounted read-only): the
+# fleet page (fleet_page.py). None by default.
+import /etc/caddy/sites/*.caddy

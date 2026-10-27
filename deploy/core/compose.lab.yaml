@@ -1,0 +1,16 @@
+# Lab override: the core pod on the host network, so an edge pod on the same lab box reaches the front on the host's
+# 8443 (and the internals sit on the host's loopback). Never in production: there the pod has its own namespace and
+# only the front's ports are published.
+#   podman compose --env-file deploy/secrets/core.env -f deploy/core/compose.yaml -f deploy/core/compose.lab.yaml up -d
+services:
+  front:
+    network_mode: host
+    ports: !reset []
+  signer:
+    image: ${KEYCLERK_IMAGE:-localhost/keyclerk:0.26.3}   # lab only: install.py --keyclerk-ref
+  desk:
+    image: ${KEYCLERK_IMAGE:-localhost/keyclerk:0.26.3}   # lab only: install.py --keyclerk-ref
+  reconcile:
+    image: ${KEYCLERK_IMAGE:-localhost/keyclerk:0.26.3}   # lab only: install.py --keyclerk-ref
+  setup:
+    image: ${KEYCLERK_IMAGE:-localhost/keyclerk:0.26.3}   # lab only: install.py --keyclerk-ref

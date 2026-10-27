@@ -1,0 +1,11 @@
+version = 1
+SPDX-PackageName = "ReliKey"
+SPDX-PackageSupplier = "VDHome"
+
+# Every file of ours: the copyright line beside each file's own SPDX-License-Identifier header (aggregate, so a file's
+# header still counts), and the licence for files that carry none (documents, the model, brand assets, test data).
+[[annotations]]
+path = "**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 VDHome and the ReliKey contributors"
+SPDX-License-Identifier = "EUPL-1.2"

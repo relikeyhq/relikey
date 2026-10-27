@@ -1,0 +1,158 @@
+# What ReliKey needs from its components, stated against their APIs as read on 2026-10-23.
+# Governance code lives in KeyClerk (KeyClerk 0002); the edge agent only applies what KeyClerk signed (decision 0005).
+# Status: needed (nothing built), built, verified (an end-to-end test in ReliKey passes).
+
+contracts:
+  - id: C-01
+    name: Lease as Warpgate role assignment
+    provider: bastion
+    consumer: agent
+    api: "/users/:id/roles and /users/:id/roles/:role_id with expires_at (warpgate-admin/src/api/users.rs)"
+    permission: AccessRolesAssign, on the edge host's loopback only
+    behaviour: >
+      A signed lease in the bundle becomes a role assignment with expires_at = lease end; an early end or a revocation
+      in a newer bundle revokes it. Assignments the agent did not make are drift, reported to KeyClerk; KeyClerk (through
+      the agent) is the only writer (KeyClerk 0013 D2).
+    status: needed
+
+  - id: C-02
+    name: Session approval from a signed lease
+    provider: bastion
+    consumer: agent
+    api: "GET /session-approvals, POST /session-approvals/:id/approve|reject, approvals stream (session_approvals.rs)"
+    permission: ApproveSessions, on the edge host's loopback only
+    behaviour: >
+      The agent approves a pending session only if a valid signed lease in its current bundle covers that person,
+      target and moment, including any second key the policy required when KeyClerk granted it; otherwise it rejects
+      with the reason. No live round trip to the core is needed, so approval works while the edge is cut off.
+    status: needed
+
+  - id: C-03
+    name: LDAP lease credential
+    provider: facade
+    consumer: agent
+    api: "the facade's admin API on loopback (lldap: GraphQL and its password-set flow on http_host=127.0.0.1), never the
+      LDAP port the legacy system binds to; RFC 3062 password modify only if the facade separates admin binds (R-02)"
+    permission: a facade admin bound to the edge host's loopback
+    behaviour: >
+      Lease start: the agent sets the person's facade password to a fresh random value and sends it encrypted to that
+      person's own key, derived from their passkey (WebAuthn PRF / hmac-secret) and registered in KeyClerk; the desk
+      relays ciphertext only. Where the system binds once per login, the agent rotates again after the first
+      successful bind, and alerts on a bind with no matching session of the holder. Lease end: rotate, send nothing.
+      No fallback to a desk key (decision 0009).
+    keyclerk: KeyClerk 0014 (v0.17.0), docs/keyclerk-edge-interface.md
+    status: needed
+
+  - id: C-04
+    name: Signed lease bundles
+    provider: clerk
+    consumer: agent
+    api: "KeyClerk 0013 D3: signed, serial-numbered bundles with a ceiling, a serial floor and horizons per class"
+    permission: the edge's own enrolment credential, one per edge
+    behaviour: >
+      The agent pulls bundles outbound, refuses a bundle with a lower serial, a wrong signer or past its horizon, and
+      reports what it applied. Past a class horizon it ends that class's leases; visit leases end at their own signed
+      window (decision 0007; fail closed, decision 0005 point 3). Bundle entries outside the edge's ceiling (C-10) are refused.
+    keyclerk: KeyClerk 0014 (v0.17.0), docs/keyclerk-edge-interface.md
+    status: needed
+
+  - id: C-06
+    name: Pre-staged visit lease
+    provider: bastion
+    consumer: agent
+    api: "Warpgate user credentials (SSH public key) plus C-01 role assignment with expires_at"
+    permission: credential and role assignment on the edge's loopback only
+    behaviour: >
+      A visit lease in the bundle installs the operator's hardware-held ssh-ed25519 public key (sk-ssh once U-01 lands) and a role assignment for the window;
+      both are removed at the window's end even if the edge is cut off. Works with no network at all (decision 0006).
+      The agent installs only sk-ssh-ed25519 and ssh-ed25519 keys, assigns the role only when it reaches no target the
+      visit does not name, and runs the ceiling's visit rules (an assured edge), which KeyClerk's reference verifier
+      leaves out. Built and unit-tested (agent internal/apply visit_test.go); not yet live, since this agent attests basic.
+    keyclerk: KeyClerk 0014 (v0.17.0), docs/keyclerk-edge-interface.md
+    status: built
+
+  - id: C-07
+    name: Carried visit lease
+    provider: agent
+    consumer: person
+    api: "the agent's local access port (R-11)"
+    permission: KeyClerk's lease signature plus proof of possession of the bound hardware key
+    behaviour: >
+      The agent accepts a lease signed to the operator for this edge, inside its window and above the serial floor,
+      then installs it as in C-06. Refuses a lease for another edge, a replayed lease, or one older than the floor.
+    keyclerk: KeyClerk 0014 (v0.17.0), docs/keyclerk-edge-interface.md
+    status: needed
+
+  - id: C-08
+    name: Phoned unlock
+    provider: agent
+    consumer: [person, clerk]
+    api: "challenge shown at the edge; short response code issued by KeyClerk (R-13)"
+    permission: a per-edge unlock key shared by the edge and the core only
+    behaviour: >
+      Single use, bound to edge, person, target, nonce and duration; the approver is a second person; rate-limited and
+      recorded. A wrong code counts toward lock-out.
+    keyclerk: KeyClerk 0014c (v0.19.0), docs/keyclerk-edge-interface.md
+    status: needed
+
+  - id: C-09
+    name: Break-glass credential
+    provider: agent
+    consumer: [person, clerk]
+    api: "one sealed local credential per legacy system, escrowed in the organisation's password manager (R-06)"
+    permission: dual control of the escrow; the agent rotates it after any use
+    behaviour: >
+      Use is detected (facade or Warpgate sign-in with the break-glass account), recorded in the hash-chained edge log,
+      rotated as soon as the agent can, and reported to KeyClerk as an incident for review on reconnect.
+    keyclerk: KeyClerk 0014 (v0.17.0), docs/keyclerk-edge-interface.md
+    status: needed
+
+  - id: C-10
+    name: Per-edge ceiling
+    provider: agent
+    consumer: clerk
+    api: "ceiling as data sealed by the officer (kc-edge-ceiling-v2, carried in the bundle exactly as sealed) read by KeyClerk's ceiling.rego (KeyClerk 0014, 0014d; 0007 amended)"
+    permission: only the edge officer's signature changes it; the officer is not a core administrator
+    behaviour: >
+      The agent admits only what both the core's signed policy and the ceiling allow (persons or roles, targets, maximum
+      lease, maximum offline validity, lease classes, hardware profile, remote-reach mode and ports). A ceiling with a
+      lower serial or a wrong signer is refused. Hardware facts come from attestation, not from the ceiling (0007).
+    keyclerk: KeyClerk 0014 (v0.17.0), docs/keyclerk-edge-interface.md
+    status: needed
+
+  - id: C-05
+    name: Broker sign-in and approval proofs
+    provider: broker
+    consumer: [clerk, bastion]
+    api: "OIDC; KeyClerk 0003 (SCIM) and 0006 (approvals as signatures)"
+    permission: per KeyClerk 0003
+    behaviour: >
+      Passkey-only sign-in by default; approvals are the approver's own fresh sign-in. Warpgate side (decision 0010):
+      one confidential PKCE client per edge with no roles claim (KeyClerk watches its mappers), auto_create_users off,
+      e-mail admin-editable only. KeyClerk's approval proofs
+      (KeyClerk 0006) are off by default there; ReliKey's shipped configuration sets `approvals.proofs: required`
+      (a supported, CI-covered KeyClerk setting, confirmed 2026-10-23).
+    status: built
+
+  - id: C-11
+    name: Signed updates
+    provider: mirror
+    consumer: host
+    api: "a signed update manifest naming image digests; images pulled from the core's mirror (F-18)"
+    permission: an update-signing key separate from the lease-signing key; the edge pins its public key
+    behaviour: >
+      The edge applies only images whose digest the current manifest names and whose provenance (build attestation,
+      SBOM) was verified at pin time; a manifest with a lower serial is refused; rollout is staged by edge group.
+    status: needed
+
+  - id: C-12
+    name: Recording backfill
+    provider: org-store
+    consumer: agent
+    api: "the organisation's S3-compatible store; Warpgate's own upload does not retry (U-10)"
+    permission: write-only to the edge's own prefix
+    behaviour: >
+      Recordings left in the local store are uploaded when the uplink returns, their hashes chained in the edge log
+      and acknowledged by the core before deletion. Below the store's free-disk floor no new recorded session starts.
+    keyclerk: KeyClerk 0014 (v0.17.0), docs/keyclerk-edge-interface.md
+    status: needed

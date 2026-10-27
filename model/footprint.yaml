@@ -1,0 +1,34 @@
+# Where the edge must fit (decision 0005). The model check sums the edge components' estimated footprint and refuses
+# a model that does not fit every profile with its headroom, or an edge component that lacks a profile's architecture.
+# Estimates are replaced by measurements (footprint.measured: true) from a soak on real hardware before 1.0.
+
+headroom: 0.5       # the edge may use at most half of a profile's memory and disk; the host and its own work need the rest
+# recording_store_mb: the local store for recordings the edge cannot deliver yet (decision 0009). Below its free-disk
+# floor the edge refuses new recorded sessions, so a small store means offline sessions stop sooner.
+
+profiles:
+  - id: switch-app-hosting
+    name: Container host on a managed switch (app-hosting class)
+    arch: arm64
+    ram_mb: 512
+    disk_mb: 1024
+    recording_store_mb: 90       # hundreds of terminal session-minutes; under 20 s of a busy RDP screen
+    graphical: false             # RDP/VNC targets do not fit (docs/measurements.md): terminal and LDAP only
+    note: The small end of switch app hosting; x86 switch platforms are covered by the amd64 builds.
+
+  - id: router-container
+    name: Router or switch with a container feature and little memory
+    arch: armv7
+    ram_mb: 256
+    disk_mb: 512
+    recording_store_mb: 0
+    stretch: true      # failing it is a warning, not an error
+    note: Stretch target; recordings must stream off the device (F-09).
+
+  - id: small-board
+    name: Single-board computer (Raspberry Pi class, 1 GB)
+    arch: arm64
+    ram_mb: 1024
+    disk_mb: 8192
+    recording_store_mb: 2048     # about 6 minutes of busy-screen RDP recording offline
+    graphical: true              # about four concurrent busy RDP sessions within the budget

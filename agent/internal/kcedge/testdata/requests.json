@@ -1,0 +1,41 @@
+{
+ "format": "relikey-request-vectors-v1",
+ "source": "keyclerk.edge.sign_request",
+ "edge": "edge-a",
+ "seed": 5,
+ "seconds": 1792756800,
+ "nonce": "AAECAwQFBgcICQoLDA0ODxAR",
+ "public_key": "6e7a1cdd29b0b78fd13af4c5598feff4ef2a97166e3ca6f2e4fbfccd80505bf1",
+ "cases": [
+  {
+   "method": "GET",
+   "path": "/api/v1/edge/bundle",
+   "body": "",
+   "header": "edge-a;1792756800;AAECAwQFBgcICQoLDA0ODxAR;278e22697b733319d791e1629338653bf5cea21a4ee8db0b0e40c3bc13adcd8006f0ac7f5636200d2ed474c09c408ab390bf3e7c6265542b1c477ef7e974d20c"
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/edge/bundle?serial=7",
+   "body": "",
+   "header": "edge-a;1792756800;AAECAwQFBgcICQoLDA0ODxAR;d6c2df431cdff7d78d79d5fb884271cdc2b5f4c4f232424c2dff6d0d34a0c1dd614d70a45b41d9b45c3ef104c5e10c900f393e3975ade8ae49a44774b9b88307"
+  },
+  {
+   "method": "POST",
+   "path": "/api/v1/edge/report",
+   "body": "eyJhcHBsaWVkX3NlcmlhbCI6NywiYXR0ZXN0YXRpb24iOnsicHJvZmlsZSI6ImJhc2ljIn0sImRyaWZ0IjpbXX0=",
+   "header": "edge-a;1792756800;AAECAwQFBgcICQoLDA0ODxAR;01a813295ba69bf9caad97915db7be545ee1be1007b0689c764edf3341d081dec03eac079ef7a737c52cb3ac40fce8ade19180236ca1897ba91d7885505cff05"
+  },
+  {
+   "method": "post",
+   "path": "/api/v1/edge/incident",
+   "body": "eyJraW5kIjoiZHJpZnQiLCJkZXRhaWwiOiJjYWbDqSJ9",
+   "header": "edge-a;1792756800;AAECAwQFBgcICQoLDA0ODxAR;5be7ce552815bc904c7613910d043e93209605a3046dc0d14abecb075f8612b1c808410a7c3e09919e60cd63720976de1571edd9a793aa537a5781c4edd88400"
+  },
+  {
+   "method": "GET",
+   "path": "/api/v1/edge/escrow/item%2F1",
+   "body": "",
+   "header": "edge-a;1792756800;AAECAwQFBgcICQoLDA0ODxAR;9b4a0edbb5d43d8c033d8370f47901e0997a706800e6d6065de6dd1ab63a204db4fc88a9e5d108aa5adc7270042e1344ce14ed90f76c0d254493ffb5c530290c"
+  }
+ ]
+}

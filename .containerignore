@@ -1,0 +1,5 @@
+# Image builds take the repository root as context; only the binaries they copy may reach the builder, never
+# deploy/secrets, .git or a local venv (red team of 2026-10-25).
+*
+!agent/dist/relikey-agent-linux-*
+!agent/dist/relikey-fleet-linux-*

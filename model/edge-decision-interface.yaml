@@ -1,0 +1,76 @@
+# The edge-decision interface (EDI) - decision 0017, draft 2.
+#
+# The security profile of the published edge protocol (decision 0023 point 3): the properties the agent verifies,
+# without product names. Not a second wire format: an emitter speaks the protocol; this says which of its guarantees
+# are load-bearing. KeyClerk's kc-edge binding is the reference emitter (reference_binding below); a clerk adapter over
+# another IGA must supply every property the IGA does not. Scope: the bundle and the sealed ceiling (C-04, C-06,
+# C-10); the rest the agent consumes is reference-only (out_of_scope below).
+#
+# This is the seam decision 0016 calls the clerk role. What the IGA natively gives vs what the adapter must add is the
+# "residue" the midPoint adapter measures.
+
+edge_decision_interface:
+  consumed_by: agent
+  emitted_by: clerk            # reference emitter: KeyClerk; or an adapter over another IGA
+  transport: the agent pulls outbound; nothing dials the edge (decision 0005)
+
+  # Each property is something the agent requires and verifies. `native_iga` marks whether a general IGA
+  # (midPoint, Syncope) provides it; the rest is adapter residue.
+  properties:
+    - id: decisions
+      need: "a set of access decisions (leases and visit leases): subject (the broker's stable identifier for the
+        person, plus the holder key for a visit lease), target, role, lease class and a validity window (not-before,
+        not-after); revocable by omission in a newer artifact, effective within one pull interval while connected"
+      native_iga: yes          # IGAs express time-bounded, revocable role assignments (activation validFrom/validTo)
+    - id: ceiling
+      need: "a per-edge ceiling, sealed by the edge officer with a key the emitter does not hold, checked at every
+        bundle against the officer key the edge pinned, with its own serial floor; the agent admits only within both
+        the core's decisions and the ceiling (contract C-10, decision 0007: two keys, never one)"
+      native_iga: no           # the officer-sealed, edge-bounded ceiling is not an IGA concept
+    - id: serial
+      need: "a monotonic serial; the agent applies only an artifact whose serial is above the stored floor (a re-fetch
+        of the one already held is not applied again): rollback and replay protection"
+      native_iga: no
+    - id: horizons
+      need: "a horizon per lease class; past it the agent ends that class's leases - bounded offline validity
+        (decision 0007, fail closed)"
+      native_iga: no
+    - id: signature
+      need: "a signature over the exact signed bytes, with the format tag inside them, verifiable offline against a
+        public key the edge has pinned; no live core round trip; the algorithm follows the format tag (decision 0022)"
+      native_iga: no           # IGAs provision to a target; they do not sign an offline-verifiable decision bundle
+    - id: enrolment_binding
+      need: "the artifact is addressed to this edge's own enrolment identity; one credential per edge (contract C-04)"
+      native_iga: no
+
+    - id: governed_roles
+      need: "optional: the roles the clerk governs on this edge (SCIM Group shapes); absent is no catalogue, never
+        'none governed'; a malformed one refuses the artifact (full-stack run 2 finding 8, KeyClerk decision 0025)"
+      native_iga: yes          # an IGA's entitlement catalogue
+
+  verifications_the_agent_runs:
+    - "the signature validates against the pinned key over the exact signed bytes, the format tag inside them"
+    - "the artifact is addressed to this edge"
+    - "the serial is above the stored floor"
+    - "the issue time is not in the future beyond the skew, and not before the newest signed time seen"
+    - "the edge's clock is not before the newest signed time seen"
+    - "the ceiling is sealed by the pinned officer key and its serial is not below the stored ceiling serial"
+    - "every decision is inside the sealed ceiling and its class horizon"
+    - "governed_roles, when present, is well formed"
+
+  out_of_scope:
+    note: "reference-only, bound to KeyClerk's formats until each has its own profile: the enrolment statement and
+      cosign, ended notices, carried leases (C-07), unlock (C-08), escrow (C-09), evidence (C-12), the relay (C-03),
+      modules by hash, signed edge requests"
+
+  reference_binding:
+    emitter: KeyClerk
+    artifacts: "kc-edge-bundle-v3 (decisions, serial, horizons, enrolment binding) and kc-edge-ceiling-v2 (ceiling)"
+    note: "the agent's reference implementation and KeyClerk's conformance vectors verify this binding; it is the
+      only shipped emitter; a test-only second emitter without KeyClerk's code (agent/internal/testemit) passes the
+      agent's verifier and is refused for each breach of the verifications above (decision 0017 point 6)"
+
+  adapter_residue:
+    note: "a clerk adapter over a general IGA gets `decisions` natively and must ADD ceiling sealing, serial,
+      horizons, signature, pinned-key verification and enrolment binding. Measured 2026-10-24: midPoint supplies 1 of
+      6; the clerk role is KeyClerk-shaped, and no clerk agnosticism is claimed (decision 0017 point 7)."

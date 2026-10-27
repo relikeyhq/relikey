@@ -1,0 +1,20 @@
+[project]
+name = "relikey"
+version = "0.0.1"
+description = "Modern access in front of legacy systems: Keycloak, KeyClerk and Warpgate as one small appliance"
+license = "EUPL-1.2"
+requires-python = ">=3.11"
+dependencies = ["pyyaml>=6"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+# pyflakes, pycodestyle, bugbear (as KeyClerk). Long lines and short statements joined with ";" stay a matter of review.
+select = ["E", "F", "W", "B"]
+ignore = ["E501", "E702"]

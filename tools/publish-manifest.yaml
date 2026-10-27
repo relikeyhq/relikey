@@ -1,0 +1,78 @@
+# Curated public-export manifest.
+#
+# Fail-closed: every git-tracked file must be matched by exactly one of `public`
+# or `holdback` (prefix match). A tracked file in neither makes the export FAIL,
+# so a newly added file is classified deliberately, never leaked by default.
+#
+# `holdback` wins over `public` on overlap (so docs/ is public but docs/reviews/ is not).
+#
+# This manifest decides placement only. gitleaks is the secret backstop, and
+# `review_flags` marks included files whose prose a human must eyeball before the flip
+# (an attack recipe or infra detail is prose the leak gate cannot catch).
+
+public:
+  # root files cleared for publication
+  - .gitattributes
+  - .gitignore
+  - .gitleaks.toml
+  - CHANGELOG.md
+  - CODE_OF_CONDUCT.md
+  - .containerignore
+  - .dockerignore
+  - CONTRIBUTING.md
+  - LICENSE
+  - NOTICE
+  - README.md
+  - SECURITY.md
+  - pyproject.toml
+  - FUZZING.md
+  - relikey.allowed_signers
+  - REUSE.toml
+  - requirements-ci.txt
+  - requirements-test.txt
+  # directories cleared for publication
+  - LICENSES/
+  - .github/
+  - adapters/
+  - agent/
+  - fleet/
+  - brand/
+  - deploy/
+  - docs/
+  - hooks/
+  - model/
+  - tests/
+  - tools/
+
+holdback:
+  # red-team reports, findings and residuals - the public repo gets a SUMMARY only
+  - docs/reviews/
+  # lab tooling stays private
+  - lab/
+  # GitLab-specific templates - the GitHub export uses .github/
+  - .gitlab/
+  # never publish generated secrets or env files, wherever they land
+  - deploy/secrets/
+  # the identity patterns the export refuses (publishing them would leak them)
+  - tools/publish-private.yaml
+  # the brand's working material (rejected concepts, mockups, the category scan): the public repo gets the result
+  - brand/concepts/
+  - brand/scan.json
+
+# Included files whose CONTENT a human must review before the flip (warn, not fail):
+# attack detail, residuals, live limits, or infra identifiers the leak gate cannot see.
+review_flags:
+  - "(?i)red[- ]?team"
+  - "(?i)exploit\\b"
+  - "(?i)residual risk"
+  - "(?i)\\bCVE-[0-9]"
+  # a public address: not loopback, any-address, RFC 1918 or the documentation ranges (RFC 5737)
+  - "\\b(?!127\\.|0\\.0\\.0\\.0|10\\.|192\\.168\\.|172\\.(?:1[6-9]|2\\d|3[01])\\.|192\\.0\\.2\\.|198\\.51\\.100\\.|203\\.0\\.113\\.)(?:[0-9]{1,3}\\.){3}[0-9]{1,3}\\b"
+
+# Patterns that HARD-FAIL the export (the operator's identity, local machine paths), and the review flags naming
+# private infrastructure, live in tools/publish-private.yaml, which is held back: listing them here would publish them.
+# Generic local-path patterns are safe to keep public:
+hard_fail:
+  - "C:\\\\Users\\\\"
+  - "/home/[a-z]"
+  - "(?i)\\b[a-z]:/users/"

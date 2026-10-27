@@ -1,0 +1,82 @@
+# Adapters bind a role to an implementation (decision 0016). A contract (model/contracts.yaml) is the role's
+# product-neutral behaviour; how an implementation meets it is the adapter's. Each adapter declares which of its role's
+# provider-contracts it satisfies; tools/check_conformance.py checks the reference profile is complete and that every
+# stand-in covers its role, and derives the per-profile matrix.
+#
+# kind: reference  = the shipped, optimised implementation (KeyClerk, Warpgate, ...).
+#       own        = ReliKey's own component, never swapped (the edge agent).
+#       stand-in   = a placeholder that meets the role interface by construction, to prove the contract is agnostic;
+#                    `candidates` names real products that could be assessed and promoted to a named adapter.
+# A stand-in asserts nothing about any real product. Promoting a candidate means assessing it contract by contract.
+
+adapters:
+  # --- clerk (the governance / IGA role): provides C-04 ---
+  - id: keyclerk
+    role: clerk
+    kind: reference
+    product: KeyClerk
+    satisfies: [C-04]
+    notes: "The optimised governance engine: signed, serial-numbered lease bundles with a ceiling (0013 D3)."
+  - id: other-iga-1
+    role: clerk
+    kind: stand-in
+    satisfies: [C-04]
+    candidates: [midPoint]
+    notes: "Stand-in IGA. A real promotion must emit lease bundles conforming to the edge interface, or ship an
+      adapter that maps its grant model onto one; re-assess C-04 before trusting it."
+  - id: other-iga-2
+    role: clerk
+    kind: stand-in
+    satisfies: [C-04]
+    candidates: [Apache Syncope]
+    notes: "Second stand-in IGA, to prove C-04 is not shaped to one alternative either."
+
+  # --- bastion (the protocol-proxy role): provides C-01, C-02, C-06 ---
+  - id: warpgate
+    role: bastion
+    kind: reference
+    product: Warpgate
+    satisfies: [C-01, C-02, C-06]
+    notes: "The optimised bastion: expiring role assignments, session approvals, pre-staged visit credentials."
+  - id: other-bastion-1
+    role: bastion
+    kind: stand-in
+    satisfies: [C-01, C-02, C-06]
+    candidates: [Teleport]
+    notes: "Stand-in bastion. A real promotion needs expiring access grants, a session-approval gate and a
+      pre-staged credential path, or an adapter that provides them; re-assess C-01/C-02/C-06."
+  - id: other-bastion-2
+    role: bastion
+    kind: stand-in
+    satisfies: [C-01, C-02, C-06]
+    candidates: [HashiCorp Boundary]
+    notes: "Second stand-in bastion."
+
+  # --- infra roles (not the operator's substitution focus; one reference adapter each for now) ---
+  - id: lldap
+    role: facade
+    kind: reference
+    product: lldap
+    satisfies: [C-03]
+  - id: keycloak
+    role: broker
+    kind: reference
+    product: Keycloak
+    satisfies: [C-05]
+  - id: zot
+    role: mirror
+    kind: reference
+    product: zot
+    satisfies: [C-11]
+  - id: s3
+    role: org-store
+    kind: reference
+    product: "S3-compatible store"
+    satisfies: [C-12]
+
+  # --- ReliKey's own edge agent: provides C-07..C-10, never a stand-in ---
+  - id: relikey-agent
+    role: agent
+    kind: own
+    product: relikey-agent
+    satisfies: [C-07, C-08, C-09, C-10]

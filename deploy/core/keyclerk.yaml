@@ -1,0 +1,389 @@
+# KeyClerk's configuration for the ReliKey core: a starting point, taken from KeyClerk 0.23.0's own neutral
+# configuration (tests/fixtures/config.yaml) and validated against its schema (keyclerk/schema/config.schema.json).
+# A deployment keeps its own in its own repository and mounts it instead: KEYCLERK_CONFIG=path in core.env.
+roles:
+  infrastructure-admin:
+    plane: infrastructure
+    class: activation
+  site-sysadmin:
+    plane: infrastructure
+    class: activation
+    scope_max: host
+  platform-admin:
+    plane: platform
+    class: activation
+  identity-admin:
+    plane: platform
+    class: activation
+  release-officer:
+    plane: platform
+    class: functional
+  pki-officer:
+    plane: infrastructure
+    class: activation
+  auditor-read:
+    plane:
+    - infrastructure
+    - platform
+    class: activation
+  service-desk:
+    plane: platform
+    class: functional
+  tenant-admin:
+    plane: tenant
+    class: functional
+  tenant-admin-privileged:
+    plane: tenant
+    class: activation
+  tenant-user:
+    plane: tenant
+    class: baseline
+  consultant:
+    plane: tenant
+    class: functional
+  security-officer:
+    plane:
+    - infrastructure
+    - platform
+    - tenant
+    class: special
+  dpo:
+    plane: tenant
+    class: special
+  recovery-contact:
+    plane: tenant
+    class: special
+  agent-owner:
+    plane:
+    - platform
+    - tenant
+    class: special
+  sponsor:
+    plane: tenant
+    class: special
+grant_limits:
+  activation_max_hours:
+    infrastructure-admin: 4
+    platform-admin: 4
+    identity-admin: 2
+    pki-officer: 2
+    tenant-admin-privileged: 8
+    auditor-read: 24
+  functional_max_hours:
+    on-call: 168
+    duty-officer: 24
+    release-officer: 8
+    tenant-admin: 720
+  phase_one: true
+  operator_kind: operator
+  subject_kinds:
+  - operator
+  - tenant
+  - external
+  - edge-born
+  scope_levels:
+  - federation
+  - tenant
+  - host
+  - resource
+  operator_tenant_roles:
+  - consultant
+  tenant_infrastructure_roles:
+  - site-sysadmin
+external_access:
+  categories:
+    visitor:
+      max_days: 1
+    contractor:
+      max_days: 90
+    partner:
+      max_days: 365
+  steps:
+    during:
+      reminder_days:
+      - 7
+      - 1
+    offboarding:
+      retention:
+        account_delete_days: 30
+  totals:
+    window_days: 365
+    max_days: 180
+    visitor_max_days: 30
+    tombstone_days: 365
+delegation:
+  max_include_depth: 3
+  max_delegation_days: 180
+  retire_grace_days: 14
+  widenings_per_deputy_per_day: 20
+  widenings_per_subtree_per_day: 60
+  max_direct_delegates: 10
+  root_max_membership_days: 365
+  rule_change_second_key_above: 25
+  review_days:
+    privileged: 30
+    elevated: 90
+    low: 180
+attributes:
+  role:
+    provided_by:
+    - Keycloak
+    authority: tenant-admin via broker
+    ttl_hours: 24
+  tenant:
+    provided_by:
+    - Keycloak
+    authority: broker
+    ttl_hours: 24
+  clearance_internal:
+    provided_by:
+    - Keycloak
+    authority: tenant security officer
+    ttl_hours: 720
+  certification:
+    provided_by:
+    - Keycloak
+    authority: issuing body via verifiable credential
+    ttl_hours: 720
+  acr:
+    provided_by:
+    - Keycloak
+    authority: broker
+    ttl_hours: 1
+  device_posture:
+    provided_by:
+    - NetBird
+    - Keylime
+    authority: attestation (Keylime) and NetBird posture
+    ttl_hours: 1
+  evidence_state:
+    provided_by:
+    - evaluator
+    authority: green light evaluator
+    ttl_hours: 1
+  location_class:
+    provided_by:
+    - NetBird
+    authority: network and device
+    ttl_hours: 1
+  unit:
+    provided_by:
+    - HR source
+    - SCIM
+    authority: the tenant's HR source
+    ttl_hours: 24
+    self_write: false
+    pedigree: authoritative
+    may_widen: true
+    offline: absent
+  function:
+    provided_by:
+    - HR source
+    - SCIM
+    authority: the tenant's HR source
+    ttl_hours: 24
+    self_write: false
+    pedigree: authoritative
+    may_widen: true
+    offline: absent
+  upstream_group:
+    provided_by:
+    - corporate IdP
+    authority: the owner of that group in the corporate directory, an external authority
+      outside KeyClerk's tree
+    ttl_hours: 24
+    self_write: false
+    pedigree: derived
+    may_widen: true
+    offline: absent
+  stakeholder_level:
+    provided_by:
+    - Keycloak
+    authority: tenant service owner
+    ttl_hours: 720
+  break_glass_unlock:
+    provided_by:
+    - hardware
+    authority: break-glass tokens (2-of-3)
+    ttl_hours: 4
+  release_officer_qualified:
+    provided_by:
+    - Keycloak
+    authority: curriculum credential
+    ttl_hours: 720
+  tenant_unwrap_grant:
+    provided_by:
+    - OpenBao
+    authority: tenant key-share holders (signed
+    ttl_hours: 1
+  agent_model:
+    provided_by:
+    - Keycloak
+    authority: agent owner
+    ttl_hours: 720
+situation:
+  floor_raise:
+    external:
+      normal: 0
+      elevated: 0
+      high: 1
+      severe: 2
+    tenant:
+      normal: 0
+      elevated: 0
+      high: 0
+      severe: 1
+  visitors:
+    normal:
+      visitor: open
+      contractor: open
+      partner: open
+    elevated:
+      visitor: escort
+      contractor: open
+      partner: open
+    high:
+      visitor: pre_registered_escort
+      contractor: escort
+      partner: open
+    severe:
+      visitor: suspended
+      contractor: suspended
+      partner: escort
+  lease_max_days:
+    normal: null
+    elevated: null
+    high: 30
+    severe: 7
+  pause_derived_rules_from: high
+  rate_factor:
+    normal: 1.0
+    elevated: 1.0
+    high: 0.5
+    severe: 0
+  surge:
+    max_hours: 72
+    review_days_after_fall: 7
+    max_days_per_person: 14
+  feed:
+    max_level: high
+    max_age_hours: 24
+    min_interval_hours: 6
+  confirm_hours: 12
+  min_dwell_hours: 6
+risk_port:
+  floor_by_risk:
+    low:
+      identity: low
+    elevated:
+      identity: medium
+    privileged:
+      identity: high
+      likeness: medium
+  usable_risk_bands:
+  - green
+  - amber
+  no_acceptance_for:
+  - privileged
+  acceptance_max_band: medium
+  acceptance_max_days: 90
+  situation_levels:
+  - normal
+  - elevated
+  - high
+  - severe
+places:
+  kinds:
+  - region
+  - campus
+  - site
+  - building
+  - floor
+  - space
+  nest_same_kind:
+  - region
+  - campus
+  - building
+  - space
+access_paths:
+  min_independent_layers:
+    Internal: 1
+    Sensitive: 2
+    Restricted: 4
+  max_path_length: 24
+  scenarios:
+  - normal
+  - fire
+  - power
+  - cut_off
+  - break_glass
+  two_person_for:
+  - Restricted
+  obligations:
+  - read_only
+  - no_export
+  - masked
+  - view_only
+  - recorded
+  - escorted
+  - watermarked
+  - no_print
+  - no_clipboard
+  - remote_confirmed
+  - live_watched
+  - step_up
+  - review_24h
+  obligation_conflicts:
+  - - recorded
+    - unrecorded
+availability:
+  pool_factor: 2
+  site_office_entitlement: site-office
+  allowed_steps:
+    Internal:
+    - remote_confirm
+    - supervised
+    - deferred
+    Sensitive:
+    - remote_confirm
+    - supervised
+    - deferred
+    Restricted:
+    - remote_confirm
+    - deferred
+    - never
+  remote_steps_until_level:
+    Internal: severe
+    Sensitive: high
+    Restricted: elevated
+  steps:
+    remote_confirm:
+      obligations:
+      - recorded
+      - remote_confirmed
+    supervised:
+      obligations:
+      - recorded
+      - live_watched
+      - step_up
+      - review_24h
+    deferred:
+      obligations: []
+    never:
+      obligations: []
+approvals:
+  proofs: required          # contract C-05: an approval is the approver's own fresh broker sign-in (KeyClerk 0006)
+reconcile:
+  max_removals_per_run: 50
+  max_removal_share: 0.25
+  logout_retry_minutes: 5
+  keep_runs: 1000
+  managed_marker: keyclerk.managed
+  # the writer holds group membership only (fine-grained permissions, realm.py), so it cannot log people out; short
+  # access tokens (5 minutes, realm.py) bound how long a removed membership is still claimed
+  logout_on_removal: false
+identity_sources:
+  - {prefix: "idp:", name: "Staff sign-in", kind: oidc}
+  - {prefix: "ext:", name: "Guest accounts", kind: oidc}
+  - {prefix: "op:", name: "Operator accounts", kind: local}
+# identity: not set, so the engine's secure defaults hold (persona_rule enforce, KeyClerk decision 0011a).

@@ -1,0 +1,249 @@
+# Every network flow ReliKey allows. Anything not listed is refused (default deny, decision 0002).
+# The check refuses a flow into the legacy zone from anything but the bastion, and a flow out of it to anything but
+# the facade. Between edge and core, only the edge opens connections (decision 0005), so an edge behind NAT on a
+# switch needs no inbound port from the core.
+#
+# from/to: component ids from components.yaml. port: the listening port on `to` (defaults, configurable).
+# The core is one pod behind the front proxy (decision 0015): what reaches the broker, the desk or the mirror from a
+# network reaches the front on 443, and the front forwards on the pod's loopback.
+#
+# scope: loopback - both ends on the same host (the edge host, or the core pod), never reachable from a network (checked);
+#        local-port - only on the edge's dedicated wired access port, during a link-up window (decision 0009).
+# medium: physical - a person at the machine itself (its own panel), not a network path; exempt from the
+#         network wrapper rule but governed by the same lease (pattern P-D).
+
+flows:
+  - id: F-01
+    from: person
+    to: front
+    protocol: https
+    port: 443
+    purpose: Sign-in at the broker with a passkey; step-up and approval sign-ins (the broker's hostname on the front).
+
+  - id: F-02
+    from: person
+    to: front
+    protocol: https
+    port: 443
+    purpose: The KeyClerk desk - requests, approvals, the one-time hand-over of a lease credential (the desk's hostname
+      on the front).
+
+  - id: F-03
+    from: person
+    to: bastion
+    protocol: [ssh, mysql, postgres, rdp]
+    port: [2222, 33306, 55432, 3389]
+    purpose: Non-HTTP sessions to targets; Warpgate sign-in is OIDC against the broker.
+
+  - id: F-03b
+    from: person
+    to: proxy
+    protocol: https
+    port: 443
+    purpose: Web sign-in, web SSH and RDP, and HTTPS targets; the proxy refuses Warpgate's admin paths under /@warpgate and
+      /_warpgate (decision 0008).
+
+  - id: F-03c
+    from: proxy
+    to: bastion
+    protocol: https
+    port: 8888
+    purpose: Everything but the admin paths, to Warpgate on the edge's loopback.
+    scope: loopback
+
+  - id: F-04
+    from: bastion
+    to: front
+    protocol: https
+    port: 443
+    purpose: OIDC code exchange and keys for bastion sign-in, at the broker's hostname (edge to core, outbound).
+
+  - id: F-05
+    from: clerk
+    to: broker
+    protocol: http
+    port: 8080
+    purpose: Admin and SCIM API (reconciler), OIDC for desk sign-in and approval proofs (core internal; KeyClerk takes
+      plain http to loopback only).
+    scope: loopback
+
+  - id: F-06
+    from: agent
+    to: front
+    protocol: https
+    port: 443
+    purpose: Pull signed lease bundles, report applied state and drift, deliver one-time lease credentials (edge to core;
+      the edge-facing hostname, which serves the desk's edge routes only).
+
+  - id: F-07
+    from: agent
+    to: bastion
+    protocol: https
+    port: 8888
+    purpose: Warpgate admin API on the edge host only - role assignments with expiry, session approvals (C-01, C-02).
+    scope: loopback
+
+  - id: F-08
+    from: agent
+    to: facade
+    protocol: https
+    port: 17170
+    purpose: Set and rotate lease credentials through the facade's admin API (lldap http_host on loopback; C-03).
+      Never over the LDAP port the legacy system binds to (the model check refuses a shared port).
+    scope: loopback
+
+  - id: F-09
+    from: bastion
+    to: org-store
+    protocol: https
+    port: 443
+    purpose: Upload session recordings as they happen (Warpgate object storage); the edge keeps a sized local store
+      for what it cannot deliver (decision 0009).
+
+  - id: F-10
+    from: bastion
+    to: legacy
+    protocol: [ssh, rdp, vnc, mysql, postgres, https]
+    port: per-target
+    purpose: The only interactive path into the legacy system; recorded.
+
+  - id: F-11
+    from: legacy
+    to: facade
+    protocol: [ldaps, ldap]
+    port: [6360, 3890]                # lldap defaults; plain LDAP only on an isolated link (R-04)
+    purpose: The legacy system's own LDAP bind and search. Plain LDAP only on the isolated legacy link (R-04).
+
+  - id: F-12
+    from: broker
+    to: org-idp
+    protocol: https
+    port: 443
+    purpose: Optional brokering to the organisation's IdP.
+    optional: true
+
+  - id: F-13
+    from: clerk
+    to: org-store
+    protocol: [https, syslog-tls]
+    port: [443, 6514]
+    purpose: Export of audit events and evidence (required with the evidence store, decision 0009).
+
+  - id: F-14
+    from: clerk
+    to: vault
+    protocol: https
+    port: 8200
+    purpose: Optional core secret store for target credentials (core internal).
+    optional: true
+
+  - id: F-15
+    from: person
+    to: legacy
+    medium: physical
+    protocol: local-panel
+    port: none
+    purpose: A person at the machine's own panel (HMI) signing in with a lease credential; the panel binds to the facade (P-D).
+
+  - id: F-16
+    from: person
+    to: bastion
+    protocol: ssh
+    port: 2222
+    scope: local-port
+    purpose: The local access window (decision 0009) - Warpgate SSH only, never HTTP.
+
+  - id: F-17
+    from: person
+    to: agent
+    protocol: ssh
+    port: 2223
+    scope: local-port
+    purpose: Presenting a carried visit lease to the agent during the local access window (C-07).
+
+  - id: F-18
+    from: host
+    to: front
+    protocol: https
+    port: 443
+    purpose: Pull images and the signed update manifest from the core's mirror (edge to core, outbound; C-11; the
+      edge-facing hostname, read methods only).
+
+  - id: F-19
+    from: host
+    to: org-time
+    protocol: [nts, ntp, dns]
+    port: [4460, 123, 53]
+    purpose: Authenticated time and name resolution while online (decision 0007 point 4).
+
+  - id: F-20
+    from: clerk
+    to: org-escrow
+    protocol: https
+    port: 443
+    purpose: Hand break-glass ciphertexts (two custodians) to the escrow and record its acknowledgement (decision 0008).
+
+  - id: F-21
+    from: agent
+    to: org-store
+    protocol: https
+    port: 443
+    purpose: Backfill recordings the bastion could not deliver, with their hashes in the chained edge log (C-12).
+
+  # The core pod (decision 0015): the front forwards on loopback; nothing below is published.
+  - id: F-22
+    from: front
+    to: broker
+    protocol: http
+    port: 8080
+    purpose: Sign-in, OIDC endpoints and keys under the realm (public hostname); the admin console only from the
+      host-loopback listener.
+    scope: loopback
+
+  - id: F-23
+    from: front
+    to: clerk
+    protocol: http
+    port: 8091
+    purpose: The desk and its API (desk hostname); the edge routes /api/v1/edge/* and /api/v1/edge-key (edge hostname).
+    scope: loopback
+
+  - id: F-24
+    from: front
+    to: mirror
+    protocol: http
+    port: 5000
+    purpose: The mirror's read API (GET and HEAD under /v2/) on the edge hostname; nothing writes through the front.
+    scope: loopback
+
+  - id: F-25
+    from: broker
+    to: broker-db
+    protocol: postgres
+    port: 5432
+    purpose: Keycloak's own database.
+    scope: loopback
+
+  - id: F-26
+    from: broker
+    to: clerk
+    protocol: http
+    port: 8091
+    purpose: Back-channel logout - the broker tells the desk a session ended (KeyClerk decision 0007).
+    scope: loopback
+
+  - id: F-27
+    from: agent
+    to: front
+    protocol: https
+    port: 443
+    purpose: The edge's signed fleet report (decision 0026) - release, applied serial, drift, profile, link crypto - on
+      the edge-facing name, which routes it to the fleet service; outbound from the edge only.
+
+  - id: F-28
+    from: front
+    to: fleet
+    protocol: http
+    port: 8093
+    purpose: The front hands the fleet routes of the edge-facing name to the fleet service.
+    scope: loopback

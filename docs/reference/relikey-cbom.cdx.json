@@ -1,0 +1,994 @@
+{
+ "bomFormat": "CycloneDX",
+ "specVersion": "1.6",
+ "version": 1,
+ "metadata": {
+  "component": {
+   "type": "application",
+   "name": "ReliKey",
+   "bom-ref": "relikey"
+  }
+ },
+ "components": [
+  {
+   "type": "cryptographic-asset",
+   "bom-ref": "format:kc-edge-bundle-v3",
+   "name": "kc-edge-bundle-v3",
+   "cryptoProperties": {
+    "assetType": "protocol",
+    "protocolProperties": {
+     "type": "other"
+    }
+   },
+   "properties": [
+    {
+     "name": "relikey:algorithm",
+     "value": "Ed25519"
+    },
+    {
+     "name": "relikey:quantum",
+     "value": "classical"
+    },
+    {
+     "name": "relikey:owner",
+     "value": "keyclerk"
+    }
+   ]
+  },
+  {
+   "type": "cryptographic-asset",
+   "bom-ref": "format:kc-edge-ceiling-v2",
+   "name": "kc-edge-ceiling-v2",
+   "cryptoProperties": {
+    "assetType": "protocol",
+    "protocolProperties": {
+     "type": "other"
+    }
+   },
+   "properties": [
+    {
+     "name": "relikey:algorithm",
+     "value": "Ed25519"
+    },
+    {
+     "name": "relikey:quantum",
+     "value": "classical"
+    },
+    {
+     "name": "relikey:owner",
+     "value": "keyclerk"
+    }
+   ]
+  },
+  {
+   "type": "cryptographic-asset",
+   "bom-ref": "format:kc-edge-statement",
+   "name": "kc-edge-statement",
+   "cryptoProperties": {
+    "assetType": "protocol",
+    "protocolProperties": {
+     "type": "other"
+    }
+   },
+   "properties": [
+    {
+     "name": "relikey:algorithm",
+     "value": "Ed25519"
+    },
+    {
+     "name": "relikey:quantum",
+     "value": "classical"
+    },
+    {
+     "name": "relikey:owner",
+     "value": "keyclerk"
+    }
+   ]
+  },
+  {
+   "type": "cryptographic-asset",
+   "bom-ref": "format:kc-relay-v1",
+   "name": "kc-relay-v1",
+   "cryptoProperties": {
+    "assetType": "protocol",
+    "protocolProperties": {
+     "type": "other"
+    }
+   },
+   "properties": [
+    {
+     "name": "relikey:algorithm",
+     "value": "X25519"
+    },
+    {
+     "name": "relikey:quantum",
+     "value": "classical"
+    },
+    {
+     "name": "relikey:owner",
+     "value": "keyclerk"
+    }
+   ]
+  },
+  {
+   "type": "cryptographic-asset",
+   "bom-ref": "format:kc-unlock-v2",
+   "name": "kc-unlock-v2",
+   "cryptoProperties": {
+    "assetType": "protocol",
+    "protocolProperties": {
+     "type": "other"
+    }
+   },
+   "properties": [
+    {
+     "name": "relikey:algorithm",
+     "value": "P-256 static-static ECDH"
+    },
+    {
+     "name": "relikey:quantum",
+     "value": "classical"
+    },
+    {
+     "name": "relikey:owner",
+     "value": "keyclerk"
+    }
+   ]
+  },
+  {
+   "type": "cryptographic-asset",
+   "bom-ref": "format:break-glass escrow",
+   "name": "break-glass escrow",
+   "cryptoProperties": {
+    "assetType": "protocol",
+    "protocolProperties": {
+     "type": "other"
+    }
+   },
+   "properties": [
+    {
+     "name": "relikey:algorithm",
+     "value": "not built (C-09)"
+    },
+    {
+     "name": "relikey:quantum",
+     "value": "n/a"
+    },
+    {
+     "name": "relikey:owner",
+     "value": "keyclerk"
+    }
+   ]
+  },
+  {
+   "type": "cryptographic-asset",
+   "bom-ref": "format:approval proofs",
+   "name": "approval proofs",
+   "cryptoProperties": {
+    "assetType": "protocol",
+    "protocolProperties": {
+     "type": "other"
+    }
+   },
+   "properties": [
+    {
+     "name": "relikey:algorithm",
+     "value": "ES256 or RS256 (Keycloak tokens)"
+    },
+    {
+     "name": "relikey:quantum",
+     "value": "classical"
+    },
+    {
+     "name": "relikey:owner",
+     "value": "keyclerk"
+    }
+   ]
+  },
+  {
+   "type": "cryptographic-asset",
+   "bom-ref": "key:bundle key",
+   "name": "bundle key",
+   "cryptoProperties": {
+    "assetType": "related-crypto-material",
+    "relatedCryptoMaterialProperties": {
+     "type": "public-key"
+    }
+   },
+   "properties": [
+    {
+     "name": "relikey:algorithm",
+     "value": "Ed25519"
+    },
+    {
+     "name": "relikey:quantum",
+     "value": "classical"
+    },
+    {
+     "name": "relikey:custody",
+     "value": "KeyClerk signer"
+    }
+   ]
+  },
+  {
+   "type": "cryptographic-asset",
+   "bom-ref": "key:officer key",
+   "name": "officer key",
+   "cryptoProperties": {
+    "assetType": "related-crypto-material",
+    "relatedCryptoMaterialProperties": {
+     "type": "public-key"
+    }
+   },
+   "properties": [
+    {
+     "name": "relikey:algorithm",
+     "value": "Ed25519"
+    },
+    {
+     "name": "relikey:quantum",
+     "value": "classical"
+    },
+    {
+     "name": "relikey:custody",
+     "value": "the officer's hardware token"
+    }
+   ]
+  },
+  {
+   "type": "cryptographic-asset",
+   "bom-ref": "key:rotation anchor",
+   "name": "rotation anchor",
+   "cryptoProperties": {
+    "assetType": "related-crypto-material",
+    "relatedCryptoMaterialProperties": {
+     "type": "public-key"
+    }
+   },
+   "properties": [
+    {
+     "name": "relikey:algorithm",
+     "value": "SLH-DSA"
+    },
+    {
+     "name": "relikey:quantum",
+     "value": "post-quantum"
+    },
+    {
+     "name": "relikey:custody",
+     "value": "offline"
+    }
+   ]
+  },
+  {
+   "type": "cryptographic-asset",
+   "bom-ref": "key:enrolment key",
+   "name": "enrolment key",
+   "cryptoProperties": {
+    "assetType": "related-crypto-material",
+    "relatedCryptoMaterialProperties": {
+     "type": "public-key"
+    }
+   },
+   "properties": [
+    {
+     "name": "relikey:algorithm",
+     "value": "Ed25519"
+    },
+    {
+     "name": "relikey:quantum",
+     "value": "classical"
+    },
+    {
+     "name": "relikey:custody",
+     "value": "the edge (TPM on an assured edge)"
+    }
+   ]
+  },
+  {
+   "type": "cryptographic-asset",
+   "bom-ref": "key:unlock key",
+   "name": "unlock key",
+   "cryptoProperties": {
+    "assetType": "related-crypto-material",
+    "relatedCryptoMaterialProperties": {
+     "type": "public-key"
+    }
+   },
+   "properties": [
+    {
+     "name": "relikey:algorithm",
+     "value": "P-256"
+    },
+    {
+     "name": "relikey:quantum",
+     "value": "classical"
+    },
+    {
+     "name": "relikey:custody",
+     "value": "the edge's TPM where present"
+    }
+   ]
+  },
+  {
+   "type": "cryptographic-asset",
+   "bom-ref": "key:Keycloak realm keys",
+   "name": "Keycloak realm keys",
+   "cryptoProperties": {
+    "assetType": "related-crypto-material",
+    "relatedCryptoMaterialProperties": {
+     "type": "public-key"
+    }
+   },
+   "properties": [
+    {
+     "name": "relikey:algorithm",
+     "value": "RS256 or ES256"
+    },
+    {
+     "name": "relikey:quantum",
+     "value": "classical"
+    },
+    {
+     "name": "relikey:custody",
+     "value": "Keycloak"
+    }
+   ]
+  },
+  {
+   "type": "cryptographic-asset",
+   "bom-ref": "key:KeyClerk TLS pin",
+   "name": "KeyClerk TLS pin",
+   "cryptoProperties": {
+    "assetType": "related-crypto-material",
+    "relatedCryptoMaterialProperties": {
+     "type": "public-key"
+    }
+   },
+   "properties": [
+    {
+     "name": "relikey:algorithm",
+     "value": "the desk certificate's key (pin_sha256)"
+    },
+    {
+     "name": "relikey:quantum",
+     "value": "classical"
+    },
+    {
+     "name": "relikey:custody",
+     "value": "the core"
+    }
+   ]
+  },
+  {
+   "type": "cryptographic-asset",
+   "bom-ref": "link:F-01",
+   "name": "link F-01",
+   "cryptoProperties": {
+    "assetType": "protocol",
+    "protocolProperties": {
+     "type": "tls"
+    }
+   },
+   "properties": [
+    {
+     "name": "relikey:kex",
+     "value": "conditional"
+    },
+    {
+     "name": "relikey:policy",
+     "value": "visible"
+    }
+   ]
+  },
+  {
+   "type": "cryptographic-asset",
+   "bom-ref": "link:F-02",
+   "name": "link F-02",
+   "cryptoProperties": {
+    "assetType": "protocol",
+    "protocolProperties": {
+     "type": "tls"
+    }
+   },
+   "properties": [
+    {
+     "name": "relikey:kex",
+     "value": "conditional"
+    },
+    {
+     "name": "relikey:policy",
+     "value": "visible"
+    }
+   ]
+  },
+  {
+   "type": "cryptographic-asset",
+   "bom-ref": "link:F-03",
+   "name": "link F-03",
+   "cryptoProperties": {
+    "assetType": "protocol",
+    "protocolProperties": {
+     "type": "tls"
+    }
+   },
+   "properties": [
+    {
+     "name": "relikey:kex",
+     "value": "conditional"
+    },
+    {
+     "name": "relikey:policy",
+     "value": "visible"
+    }
+   ]
+  },
+  {
+   "type": "cryptographic-asset",
+   "bom-ref": "link:F-03b",
+   "name": "link F-03b",
+   "cryptoProperties": {
+    "assetType": "protocol",
+    "protocolProperties": {
+     "type": "tls"
+    }
+   },
+   "properties": [
+    {
+     "name": "relikey:kex",
+     "value": "conditional"
+    },
+    {
+     "name": "relikey:policy",
+     "value": "visible"
+    }
+   ]
+  },
+  {
+   "type": "cryptographic-asset",
+   "bom-ref": "link:F-03c",
+   "name": "link F-03c",
+   "cryptoProperties": {
+    "assetType": "protocol",
+    "protocolProperties": {
+     "type": "tls"
+    }
+   },
+   "properties": [
+    {
+     "name": "relikey:kex",
+     "value": "hybrid"
+    },
+    {
+     "name": "relikey:policy",
+     "value": "visible"
+    }
+   ]
+  },
+  {
+   "type": "cryptographic-asset",
+   "bom-ref": "link:F-04",
+   "name": "link F-04",
+   "cryptoProperties": {
+    "assetType": "protocol",
+    "protocolProperties": {
+     "type": "tls"
+    }
+   },
+   "properties": [
+    {
+     "name": "relikey:kex",
+     "value": "hybrid"
+    },
+    {
+     "name": "relikey:policy",
+     "value": "visible"
+    }
+   ]
+  },
+  {
+   "type": "cryptographic-asset",
+   "bom-ref": "link:F-05",
+   "name": "link F-05",
+   "cryptoProperties": {
+    "assetType": "protocol",
+    "protocolProperties": {
+     "type": "tls"
+    }
+   },
+   "properties": [
+    {
+     "name": "relikey:kex",
+     "value": "none"
+    },
+    {
+     "name": "relikey:policy",
+     "value": "required"
+    }
+   ]
+  },
+  {
+   "type": "cryptographic-asset",
+   "bom-ref": "link:F-06",
+   "name": "link F-06",
+   "cryptoProperties": {
+    "assetType": "protocol",
+    "protocolProperties": {
+     "type": "tls"
+    }
+   },
+   "properties": [
+    {
+     "name": "relikey:kex",
+     "value": "hybrid"
+    },
+    {
+     "name": "relikey:policy",
+     "value": "required"
+    }
+   ]
+  },
+  {
+   "type": "cryptographic-asset",
+   "bom-ref": "link:F-07",
+   "name": "link F-07",
+   "cryptoProperties": {
+    "assetType": "protocol",
+    "protocolProperties": {
+     "type": "tls"
+    }
+   },
+   "properties": [
+    {
+     "name": "relikey:kex",
+     "value": "hybrid"
+    },
+    {
+     "name": "relikey:policy",
+     "value": "required"
+    }
+   ]
+  },
+  {
+   "type": "cryptographic-asset",
+   "bom-ref": "link:F-08",
+   "name": "link F-08",
+   "cryptoProperties": {
+    "assetType": "protocol",
+    "protocolProperties": {
+     "type": "tls"
+    }
+   },
+   "properties": [
+    {
+     "name": "relikey:kex",
+     "value": "unverified"
+    },
+    {
+     "name": "relikey:policy",
+     "value": "visible"
+    }
+   ]
+  },
+  {
+   "type": "cryptographic-asset",
+   "bom-ref": "link:F-09",
+   "name": "link F-09",
+   "cryptoProperties": {
+    "assetType": "protocol",
+    "protocolProperties": {
+     "type": "tls"
+    }
+   },
+   "properties": [
+    {
+     "name": "relikey:kex",
+     "value": "conditional"
+    },
+    {
+     "name": "relikey:policy",
+     "value": "record"
+    }
+   ]
+  },
+  {
+   "type": "cryptographic-asset",
+   "bom-ref": "link:F-10",
+   "name": "link F-10",
+   "cryptoProperties": {
+    "assetType": "protocol",
+    "protocolProperties": {
+     "type": "tls"
+    }
+   },
+   "properties": [
+    {
+     "name": "relikey:kex",
+     "value": "conditional"
+    },
+    {
+     "name": "relikey:policy",
+     "value": "record"
+    }
+   ]
+  },
+  {
+   "type": "cryptographic-asset",
+   "bom-ref": "link:F-11",
+   "name": "link F-11",
+   "cryptoProperties": {
+    "assetType": "protocol",
+    "protocolProperties": {
+     "type": "tls"
+    }
+   },
+   "properties": [
+    {
+     "name": "relikey:kex",
+     "value": "conditional"
+    },
+    {
+     "name": "relikey:policy",
+     "value": "record"
+    }
+   ]
+  },
+  {
+   "type": "cryptographic-asset",
+   "bom-ref": "link:F-12",
+   "name": "link F-12",
+   "cryptoProperties": {
+    "assetType": "protocol",
+    "protocolProperties": {
+     "type": "tls"
+    }
+   },
+   "properties": [
+    {
+     "name": "relikey:kex",
+     "value": "unverified"
+    },
+    {
+     "name": "relikey:policy",
+     "value": "record"
+    }
+   ]
+  },
+  {
+   "type": "cryptographic-asset",
+   "bom-ref": "link:F-13",
+   "name": "link F-13",
+   "cryptoProperties": {
+    "assetType": "protocol",
+    "protocolProperties": {
+     "type": "tls"
+    }
+   },
+   "properties": [
+    {
+     "name": "relikey:kex",
+     "value": "conditional"
+    },
+    {
+     "name": "relikey:policy",
+     "value": "record"
+    }
+   ]
+  },
+  {
+   "type": "cryptographic-asset",
+   "bom-ref": "link:F-14",
+   "name": "link F-14",
+   "cryptoProperties": {
+    "assetType": "protocol",
+    "protocolProperties": {
+     "type": "tls"
+    }
+   },
+   "properties": [
+    {
+     "name": "relikey:kex",
+     "value": "conditional"
+    },
+    {
+     "name": "relikey:policy",
+     "value": "record"
+    }
+   ]
+  },
+  {
+   "type": "cryptographic-asset",
+   "bom-ref": "link:F-15",
+   "name": "link F-15",
+   "cryptoProperties": {
+    "assetType": "protocol",
+    "protocolProperties": {
+     "type": "tls"
+    }
+   },
+   "properties": [
+    {
+     "name": "relikey:kex",
+     "value": "n/a"
+    },
+    {
+     "name": "relikey:policy",
+     "value": "record"
+    }
+   ]
+  },
+  {
+   "type": "cryptographic-asset",
+   "bom-ref": "link:F-16",
+   "name": "link F-16",
+   "cryptoProperties": {
+    "assetType": "protocol",
+    "protocolProperties": {
+     "type": "tls"
+    }
+   },
+   "properties": [
+    {
+     "name": "relikey:kex",
+     "value": "conditional"
+    },
+    {
+     "name": "relikey:policy",
+     "value": "visible"
+    }
+   ]
+  },
+  {
+   "type": "cryptographic-asset",
+   "bom-ref": "link:F-17",
+   "name": "link F-17",
+   "cryptoProperties": {
+    "assetType": "protocol",
+    "protocolProperties": {
+     "type": "tls"
+    }
+   },
+   "properties": [
+    {
+     "name": "relikey:kex",
+     "value": "conditional"
+    },
+    {
+     "name": "relikey:policy",
+     "value": "visible"
+    }
+   ]
+  },
+  {
+   "type": "cryptographic-asset",
+   "bom-ref": "link:F-18",
+   "name": "link F-18",
+   "cryptoProperties": {
+    "assetType": "protocol",
+    "protocolProperties": {
+     "type": "tls"
+    }
+   },
+   "properties": [
+    {
+     "name": "relikey:kex",
+     "value": "conditional"
+    },
+    {
+     "name": "relikey:policy",
+     "value": "visible"
+    }
+   ]
+  },
+  {
+   "type": "cryptographic-asset",
+   "bom-ref": "link:F-19",
+   "name": "link F-19",
+   "cryptoProperties": {
+    "assetType": "protocol",
+    "protocolProperties": {
+     "type": "tls"
+    }
+   },
+   "properties": [
+    {
+     "name": "relikey:kex",
+     "value": "conditional"
+    },
+    {
+     "name": "relikey:policy",
+     "value": "record"
+    }
+   ]
+  },
+  {
+   "type": "cryptographic-asset",
+   "bom-ref": "link:F-20",
+   "name": "link F-20",
+   "cryptoProperties": {
+    "assetType": "protocol",
+    "protocolProperties": {
+     "type": "tls"
+    }
+   },
+   "properties": [
+    {
+     "name": "relikey:kex",
+     "value": "conditional"
+    },
+    {
+     "name": "relikey:policy",
+     "value": "record"
+    }
+   ]
+  },
+  {
+   "type": "cryptographic-asset",
+   "bom-ref": "link:F-21",
+   "name": "link F-21",
+   "cryptoProperties": {
+    "assetType": "protocol",
+    "protocolProperties": {
+     "type": "tls"
+    }
+   },
+   "properties": [
+    {
+     "name": "relikey:kex",
+     "value": "conditional"
+    },
+    {
+     "name": "relikey:policy",
+     "value": "visible"
+    }
+   ]
+  },
+  {
+   "type": "cryptographic-asset",
+   "bom-ref": "link:F-22",
+   "name": "link F-22",
+   "cryptoProperties": {
+    "assetType": "protocol",
+    "protocolProperties": {
+     "type": "tls"
+    }
+   },
+   "properties": [
+    {
+     "name": "relikey:kex",
+     "value": "none"
+    },
+    {
+     "name": "relikey:policy",
+     "value": "required"
+    }
+   ]
+  },
+  {
+   "type": "cryptographic-asset",
+   "bom-ref": "link:F-23",
+   "name": "link F-23",
+   "cryptoProperties": {
+    "assetType": "protocol",
+    "protocolProperties": {
+     "type": "tls"
+    }
+   },
+   "properties": [
+    {
+     "name": "relikey:kex",
+     "value": "none"
+    },
+    {
+     "name": "relikey:policy",
+     "value": "required"
+    }
+   ]
+  },
+  {
+   "type": "cryptographic-asset",
+   "bom-ref": "link:F-24",
+   "name": "link F-24",
+   "cryptoProperties": {
+    "assetType": "protocol",
+    "protocolProperties": {
+     "type": "tls"
+    }
+   },
+   "properties": [
+    {
+     "name": "relikey:kex",
+     "value": "none"
+    },
+    {
+     "name": "relikey:policy",
+     "value": "required"
+    }
+   ]
+  },
+  {
+   "type": "cryptographic-asset",
+   "bom-ref": "link:F-25",
+   "name": "link F-25",
+   "cryptoProperties": {
+    "assetType": "protocol",
+    "protocolProperties": {
+     "type": "tls"
+    }
+   },
+   "properties": [
+    {
+     "name": "relikey:kex",
+     "value": "none"
+    },
+    {
+     "name": "relikey:policy",
+     "value": "required"
+    }
+   ]
+  },
+  {
+   "type": "cryptographic-asset",
+   "bom-ref": "link:F-26",
+   "name": "link F-26",
+   "cryptoProperties": {
+    "assetType": "protocol",
+    "protocolProperties": {
+     "type": "tls"
+    }
+   },
+   "properties": [
+    {
+     "name": "relikey:kex",
+     "value": "none"
+    },
+    {
+     "name": "relikey:policy",
+     "value": "required"
+    }
+   ]
+  },
+  {
+   "type": "cryptographic-asset",
+   "bom-ref": "link:F-27",
+   "name": "link F-27",
+   "cryptoProperties": {
+    "assetType": "protocol",
+    "protocolProperties": {
+     "type": "tls"
+    }
+   },
+   "properties": [
+    {
+     "name": "relikey:kex",
+     "value": "hybrid"
+    },
+    {
+     "name": "relikey:policy",
+     "value": "required"
+    }
+   ]
+  },
+  {
+   "type": "cryptographic-asset",
+   "bom-ref": "link:F-28",
+   "name": "link F-28",
+   "cryptoProperties": {
+    "assetType": "protocol",
+    "protocolProperties": {
+     "type": "tls"
+    }
+   },
+   "properties": [
+    {
+     "name": "relikey:kex",
+     "value": "none"
+    },
+    {
+     "name": "relikey:policy",
+     "value": "required"
+    }
+   ]
+  }
+ ]
+}

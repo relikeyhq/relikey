@@ -1,0 +1,76 @@
+# A ReliKey edge as one pod (decision 0012, R-03): Warpgate, the LDAP facade, the front and the agent share one
+# network namespace. Warpgate's HTTPS listens on loopback (127.0.0.1:8899), so its admin API is reached by the agent
+# only; the published ports are SSH (Warpgate) and HTTPS (the front, which refuses the admin paths: decision 0008). Pinned upstream images, by digest (model/components.yaml). Secrets come from deploy/secrets/,
+# which install.py generates and git ignores. Works with `podman compose` and `docker compose`.
+name: relikey-edge
+
+services:
+  warpgate:
+    image: ghcr.io/warp-tech/warpgate:0.30.1@sha256:1c4b3dfd42f801b29e7e04ed98d15815eb7a9b96ed57552a4d71bd5db418eac7
+    command: ["--config", "/data/warpgate.yaml", "run", "--enable-admin-token"]
+    env_file: [../secrets/warpgate.env]          # WARPGATE_ADMIN_TOKEN, read by the agent through token_file too
+    ports:
+      - "2222:2222"                              # SSH to targets
+      - "8888:8888"                              # web sign-in (SSO) and web sessions, through the front
+    volumes: [warpgate:/data]
+    restart: unless-stopped
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+
+  front:
+    # Decision 0008 point 1 (decide loop D7): the published HTTPS port, refusing Warpgate's admin and self-service
+    # credential paths, forwarding the rest to Warpgate on loopback, checked against Warpgate's own certificate.
+    image: docker.io/library/caddy:2.11.7-alpine@sha256:eb4d35b7452d1ab6171fbdbe8d9275b2301dad6dad92115d91e19fb9b24d510f
+    network_mode: service:warpgate
+    env_file: [../secrets/front.env]             # WARPGATE_TLS_NAME: the name in Warpgate's certificate
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../secrets/front.crt:/etc/caddy/tls/front.crt:ro
+      - ../secrets/front.key:/etc/caddy/tls/front.key:ro
+      - ../secrets/warpgate.crt:/etc/caddy/tls/warpgate.crt:ro
+    read_only: true
+    tmpfs: [/data, /config]
+    restart: unless-stopped
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    # The image's caddy binary carries the file capability cap_net_bind_service; with no-new-privileges the kernel
+    # refuses to run it unless that capability is in the bounding set (full-stack run 5: "operation not permitted").
+    cap_add: [NET_BIND_SERVICE]
+
+  facade:
+    image: docker.io/lldap/lldap:v0.6.3-alpine-rootless@sha256:ba2c50930ea998eefd5454aa678a7977448019248b1827da87d330df0b71c284
+    network_mode: service:warpgate               # one pod: legacy systems reach it through the edge's own flows
+    env_file: [../secrets/lldap.env]
+    environment:
+      LLDAP_LDAP_PORT: "3890"
+      LLDAP_HTTP_PORT: "17170"
+      LLDAP_HTTP_HOST: "127.0.0.1"               # the facade's admin API is loopback only (flows F-07, F-08)
+    volumes: [facade:/data]
+    restart: unless-stopped
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+
+  agent:
+    build:
+      context: ../..
+      dockerfile: deploy/edge/Containerfile.agent
+    image: localhost/relikey-agent:dev
+    network_mode: service:warpgate
+    read_only: true
+    user: "65532:65532"
+    volumes:
+      - agent:/var/lib/relikey                   # floors, the verified bundle, status.json and status.html
+      - ../secrets/agent.json:/etc/relikey/agent.json:ro
+      - ../secrets/enrolment.key:/etc/relikey/enrolment.key:ro
+      - ../secrets/warpgate.token:/etc/relikey/warpgate.token:ro
+      - ../secrets/governed-roles.json:/etc/relikey/governed-roles.json:ro   # targets.py writes it; not secret (0644)
+    restart: unless-stopped
+    stop_grace_period: 15s                       # above the agent's removal grace (grace_seconds, default 5)
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    depends_on: [warpgate]
+
+volumes:
+  warpgate: {}
+  facade: {}
+  agent: {}

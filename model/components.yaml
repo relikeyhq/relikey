@@ -1,0 +1,247 @@
+# The components ReliKey composes. ReliKey forks none of them: each is an upstream image or binary pinned by version
+# (and by digest once the pin step runs), configured only through its own documented configuration and API (0001).
+#
+# tier:  edge  - runs next to the legacy system, on a switch's container host or a small board (decision 0005)
+#        core  - runs once per organisation (or per site), anywhere with normal compute; serves many edges
+#        none  - not part of ReliKey
+# zone:  appliance | legacy | user | org   (decision 0002)
+# plane: control | management | workload | user  (KeyClerk 0011a)
+# footprint: estimated resident memory and image size in MB, to be replaced by measurements (footprint.yaml).
+# kind: platform marks what is not an image ReliKey pins (the edge host itself).
+
+components:
+  - id: broker
+    name: Keycloak
+    role: Identity broker. Holds credentials, passkeys and sessions; brokers to the organisation's IdP when there is one.
+    tier: core
+    image: quay.io/keycloak/keycloak
+    version: "26.8.1"
+    digest: sha256:a78d6b79572168cb25886b80a8b5b8d4ed4390743e3eecb810538683e209dd6b
+    licence: Apache-2.0
+    zone: appliance
+    plane: control
+    arch: [amd64, arm64]
+    footprint: {ram_mb: 700, disk_mb: 450, measured: false}
+    upstream: https://github.com/keycloak/keycloak
+
+  - id: broker-db
+    name: Broker database
+    role: Keycloak's PostgreSQL, in the core pod on loopback only; nothing else reads or writes it (decision 0015).
+    tier: core
+    image: docker.io/library/postgres
+    version: "16.8-alpine"
+    digest: sha256:3b057e1c2c6dfee60a30950096f3fab33be141dbb0fdd7af3d477083de94166c
+    licence: PostgreSQL
+    zone: appliance
+    plane: control
+    arch: [amd64, arm64]
+    footprint: {ram_mb: 60, disk_mb: 250, measured: false}
+    upstream: https://www.postgresql.org
+
+  - id: front
+    name: Front proxy
+    role: >
+      The core's one published port: terminates TLS and routes by hostname to the broker's sign-in, the desk, and an
+      edge-facing name that serves only what an edge needs (the desk's edge routes and the mirror's read API); the
+      broker's admin console only on a host-loopback listener. Holds the TLS key and no other secret (decision 0015).
+    tier: core
+    image: docker.io/library/caddy
+    version: "2.11.7-alpine"
+    digest: sha256:eb4d35b7452d1ab6171fbdbe8d9275b2301dad6dad92115d91e19fb9b24d510f
+    licence: Apache-2.0
+    zone: appliance
+    plane: control
+    arch: [amd64, arm64]
+    footprint: {ram_mb: 40, disk_mb: 50, measured: false}
+    upstream: https://github.com/caddyserver/caddy
+
+  - id: clerk
+    name: KeyClerk
+    role: Governance engine. Decides who may reach what, until when, with whose second key; issues signed lease bundles.
+    tier: core
+    image: localhost/keyclerk        # built by install.py from the signed source tag (no registry image is published)
+    version: "0.26.3"               # 0.26.3 (cfc5793 on GitHub, signed tag): the 2026-10-26 review's fixes, the emSign CAs distrusted; edge protocol 1.3
+    digest: null
+    licence: EUPL-1.2               # relicensed from Apache-2.0 (KeyClerk going public, P2, 2026-10-24)
+    zone: appliance
+    plane: control
+    arch: [amd64]                 # amd64 only today: a single-box core plus edge needs an amd64 host
+    footprint: {ram_mb: 200, disk_mb: 250, measured: false}
+    upstream: https://github.com/keyclerk/keyclerk   # public since 2026-10-26; the edge protocol: github.com/keyclerk/edge-protocol
+
+  - id: agent
+    name: ReliKey edge agent
+    role: >
+      Pulls signed lease bundles from KeyClerk (outbound only), verifies them, and applies them locally - Warpgate role
+      assignments and session approvals, facade password rotation. Decides nothing KeyClerk did not sign.
+    tier: edge
+    image: null             # decision 0011: a static Go binary (relikey-agent), built in agent/
+    version: null
+    digest: null
+    licence: null
+    zone: appliance
+    plane: control
+    arch: [amd64, arm64, armv7]
+    footprint: {ram_mb: 30, disk_mb: 20, measured: false}
+    upstream: null
+
+  - id: bastion
+    name: Warpgate
+    role: Protocol bastion for SSH, RDP, VNC, databases, Kubernetes and HTTPS targets; records every session.
+    tier: edge
+    image: ghcr.io/warp-tech/warpgate
+    version: "0.30.1"
+    digest: sha256:1c4b3dfd42f801b29e7e04ed98d15815eb7a9b96ed57552a4d71bd5db418eac7
+    licence: Apache-2.0
+    zone: appliance
+    plane: control
+    arch: [amd64, arm64]           # glibc-linked, not static; no armv7 build (docs/component-facts.md)
+    footprint: {ram_mb: 86, disk_mb: 115, measured: true}    # docs/measurements.md: 85.2 MB peak at 25 terminal sessions, binary 95 MB (amd64)
+    upstream: https://github.com/warp-tech/warpgate
+
+  - id: proxy
+    name: Edge filtering proxy
+    role: >
+      Terminates TLS on the user HTTPS port and forwards everything except Warpgate's admin paths (under both /@warpgate and /_warpgate) to Warpgate on
+      loopback; holds only the TLS certificate (decision 0008). Removed when Warpgate has a separate admin listener (U-08).
+    tier: edge
+    image: null             # a minimal static Go binary (decision 0011), until warp-tech/warpgate#2782 lands
+    version: null
+    digest: null
+    licence: null
+    zone: appliance
+    plane: control
+    arch: [amd64, arm64, armv7]
+    footprint: {ram_mb: 15, disk_mb: 10, measured: false}
+    upstream: null
+
+  - id: facade
+    name: LDAP facade
+    upstream: https://github.com/lldap/lldap
+    role: The directory an LDAP-only system binds against; its passwords are lease credentials, never a person's own.
+    tier: edge
+    image: docker.io/lldap/lldap   # decision 0012 (R-02): lldap, with a compatibility test set of what legacy systems send
+    version: "0.6.3"
+    digest: null
+    licence: GPL-3.0
+    zone: appliance
+    plane: control
+    arch: [amd64, arm64, armv7]
+    footprint: {ram_mb: 56, disk_mb: 27, measured: true}    # docs/measurements.md: lldap 55.1 MiB peak over 2,000 binds, image 26.5 MB (amd64)
+
+  - id: vault
+    name: OpenBao
+    role: >
+      The organisation's own OpenBao or Vault, when it runs one, read by Warpgate's secret backend for target
+      credentials; ReliKey ships none (decision 0012, R-01: gaps go upstream, not into a new component).
+    tier: core
+    image: null
+    version: null
+    digest: null
+    licence: null
+    zone: appliance
+    plane: control
+    arch: [amd64, arm64]
+    optional: true
+    footprint: {ram_mb: 150, disk_mb: 120, measured: false}
+    upstream: https://github.com/openbao/openbao
+
+  - id: legacy
+    name: Encapsulated system
+    role: The system ReliKey wraps - a legacy application, hardware appliance or robot controller. Unchanged.
+    tier: none
+    image: null
+    zone: legacy
+    plane: workload
+
+  - id: person
+    name: Person and device
+    role: A person with a phishing-resistant key (passkey) on their own device.
+    tier: none
+    image: null
+    zone: user
+    plane: user
+
+  - id: org-idp
+    name: Organisation identity provider
+    role: Optional upstream IdP the broker federates with (OIDC or SAML); its signals only tighten.
+    tier: none
+    image: null
+    zone: org
+    plane: control
+    optional: true
+
+  - id: org-store
+    name: Organisation evidence store
+    role: >
+      Object storage and log receiver for session recordings and audit events. Required: recordings stream there and
+      the agent backfills what the edge could not deliver (decision 0009).
+    tier: none
+    image: null
+    zone: org
+    plane: management
+
+  - id: host
+    name: Edge host
+    role: >
+      The operating system and container runtime of the switch's app hosting or the small board; its own time source,
+      name resolution and image pulls. Counted in the footprint, pinned by the deployment, not by ReliKey.
+    kind: platform
+    tier: edge
+    image: null
+    zone: appliance
+    plane: control
+    arch: [amd64, arm64, armv7]
+    footprint: {ram_mb: 60, disk_mb: 150, measured: false}
+
+  - id: fleet
+    name: ReliKey fleet service
+    role: >
+      Fleet management, ReliKey's own (decision 0026): receives each edge's signed report (outbound from the edge,
+      through the front's edge-facing name), keeps the inventory - last seen, release, applied serial, drift, attested
+      profile, link crypto - serves the fleet view, and raises the silence alarm. Works with any clerk or none; a clerk
+      adds its governance facts. Evidence and governance events only, never device telemetry (0021).
+    tier: core
+    image: null             # a static Go binary (relikey-fleet), built in agent/ beside the agent
+    version: null
+    digest: null
+    licence: null
+    zone: appliance
+    plane: control
+    arch: [amd64, arm64]
+    footprint: {ram_mb: 30, disk_mb: 20, measured: false}
+    upstream: null
+
+  - id: mirror
+    name: Update mirror
+    role: >
+      The image registry mirror in the core that edges pull from, serving only digests named in a signed update
+      manifest whose key is separate from the lease-signing key (decision 0009, RT-19). zot, syncing only the pinned
+      digests; edges never pull from the internet (decision 0012, R-20).
+    tier: core
+    image: ghcr.io/project-zot/zot
+    version: "v2.1.22"              # the upstream tag carries the v
+    digest: sha256:96cda11459ce6f8c60da3b03f03e9f67fd11b3ae2d82c4c04c92b3c608996080
+    licence: Apache-2.0
+    zone: appliance
+    plane: control
+    arch: [amd64, arm64]
+    upstream: https://github.com/project-zot/zot
+
+  - id: org-escrow
+    name: Organisation escrow
+    role: >
+      The organisation's password manager holding break-glass values under dual control, as ciphertexts to two
+      custodians (decision 0008); never paper.
+    tier: none
+    image: null
+    zone: org
+    plane: control
+
+  - id: org-time
+    name: Organisation time and name service
+    role: Authenticated time (NTS) and DNS the edge uses while online; offline the time rules of decision 0007 apply.
+    tier: none
+    image: null
+    zone: org
+    plane: management

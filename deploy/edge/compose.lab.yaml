@@ -1,0 +1,7 @@
+# Lab override: the pod on the host network, so a desk on the host's loopback is reachable (lab/e2e).
+# Never in production: there the pod has its own namespace and only Warpgate's two ports are published.
+#   docker compose -f deploy/edge/compose.yaml -f deploy/edge/compose.lab.yaml up -d
+services:
+  warpgate:
+    network_mode: host
+    ports: !reset []

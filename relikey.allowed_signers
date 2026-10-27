@@ -1,0 +1,4 @@
+# The key that signs ReliKey's release tags (decision 0027); its private half is held by the maintainers.
+# Fingerprint SHA256:ugENH0rKcQ/BGb+Ta5q8ppAcwb6wXPYH4aQAhTGVcTY, created 2026-10-27. Verify a tag:
+#   git -c gpg.ssh.allowedSignersFile=relikey.allowed_signers tag -v vX.Y.Z
+relikey-releases namespaces="git" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBxXrcQw5ZZHQBU755C6l0YvNjd+vZlG0ErdmYwecv08

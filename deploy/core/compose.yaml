@@ -1,0 +1,220 @@
+# The ReliKey core as one pod (decision 0015): the front proxy (Caddy) owns the network namespace and is the only
+# service with published ports; the broker (Keycloak) and its database, the KeyClerk desk, its checking signer and the
+# reconciler, and the update mirror (zot) listen on the pod's loopback only. KeyClerk takes plain http to the broker
+# only on loopback, and only the edge opens connections to the core (decision 0005): nothing here dials an edge.
+# Pinned upstream images, by digest (model/components.yaml); KeyClerk is built locally from its tag by install.py.
+# Host names and secrets come from deploy/secrets/, which install.py generates and git ignores:
+#   podman compose --env-file deploy/secrets/core.env -f deploy/core/compose.yaml up -d
+name: relikey-core
+
+x-hardened: &hardened
+  restart: unless-stopped
+  security_opt: [no-new-privileges:true]
+  cap_drop: [ALL]
+
+x-clerk: &clerk
+  <<: *hardened
+  image: localhost/keyclerk:0.26.3              # install.py: git archive v0.26.3 | build (KeyClerk's own Containerfile)
+  pull_policy: never                            # built here, never fetched from a registry by that name
+  network_mode: service:front
+  read_only: true
+  user: "10001:10001"
+  tmpfs: [/tmp]
+
+services:
+  front:
+    <<: *hardened
+    image: docker.io/library/caddy:2.11.7-alpine@sha256:eb4d35b7452d1ab6171fbdbe8d9275b2301dad6dad92115d91e19fb9b24d510f
+    read_only: true
+    # The image's caddy binary carries the file capability cap_net_bind_service; with no-new-privileges the kernel
+    # refuses to run it unless that capability is in the bounding set (measured: "Operation not permitted").
+    cap_add: [NET_BIND_SERVICE]
+    environment:
+      BROKER_HOST: ${BROKER_HOST:?run deploy/core/install.py first}
+      DESK_HOST: ${DESK_HOST:?run deploy/core/install.py first}
+      EDGE_HOST: ${EDGE_HOST:?run deploy/core/install.py first}
+      REALM: ${REALM:?run deploy/core/install.py first}
+    ports:
+      - "443:8443"                               # broker sign-in, the desk, and the edge-facing name (Caddyfile)
+      - "127.0.0.1:8444:8444"                    # the broker's admin console: host loopback only (an SSH tunnel)
+      - "127.0.0.1:8092:8092"                    # the desk's management listener (metrics, readiness): loopback + bearer token (0018)
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../secrets/sites:/etc/caddy/sites:ro          # optional names (the fleet page), one file each
+      - ../secrets/front.crt:/etc/caddy/tls/front.crt:ro
+      - ../secrets/front.key:/etc/caddy/tls/front.key:ro
+      - front-data:/data
+      - front-config:/config
+    tmpfs: [/tmp]
+
+  broker-db:
+    <<: *hardened
+    image: docker.io/library/postgres:16.8-alpine@sha256:3b057e1c2c6dfee60a30950096f3fab33be141dbb0fdd7af3d477083de94166c
+    network_mode: service:front
+    read_only: true
+    user: "70:70"                                # the image's postgres user; its data directory is already its own
+    command: ["postgres", "-c", "listen_addresses=127.0.0.1", "-c", "password_encryption=scram-sha-256"]
+    env_file: [../secrets/broker-db.env]         # POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD
+    environment:
+      POSTGRES_INITDB_ARGS: "--auth-local=scram-sha-256 --auth-host=scram-sha-256"
+    volumes: [broker-db:/var/lib/postgresql/data]
+    tmpfs: [/tmp, /var/run/postgresql]
+    stop_grace_period: 30s
+    depends_on: [front]
+
+  broker:
+    <<: *hardened
+    image: quay.io/keycloak/keycloak:26.8.1@sha256:a78d6b79572168cb25886b80a8b5b8d4ed4390743e3eecb810538683e209dd6b
+    network_mode: service:front
+    # Not read_only: `start` builds Keycloak's optimised layout into the image's own directories on first boot.
+    command: ["start"]
+    env_file: [../secrets/broker.env, ../secrets/broker-admin.env]   # KC_DB_PASSWORD; the bootstrap admin (see README)
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://127.0.0.1:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_HTTP_ENABLED: "true"                    # plain http on the pod's loopback only; the front terminates TLS
+      KC_HTTP_HOST: 127.0.0.1
+      KC_HTTP_PORT: "8080"
+      KC_HTTP_MANAGEMENT_PORT: "9000"
+      KC_HEALTH_ENABLED: "true"
+      KC_CACHE: local                            # one broker per core: no JGroups cluster transport (the full-stack run
+                                                 # found it on the host's public address, 7800/57800, in the lab)
+      KC_PROXY_HEADERS: xforwarded
+      KC_HOSTNAME: ${BROKER_URL:?run deploy/core/install.py first}   # with the port when it is not 443 (the lab)
+      KC_HOSTNAME_ADMIN: https://localhost:8444
+    volumes: [broker:/opt/keycloak/data]
+    tmpfs: [/tmp]
+    depends_on: [broker-db]
+
+  signer:
+    <<: *clerk
+    # The checking signer (KeyClerk decision 0015): the records key lives here only, readable by this process alone;
+    # it signs a revision only after checking it against the last one it signed. The desk reaches it on a unix socket
+    # in a volume no other service mounts.
+    command: ["keyclerk.signer", "--key", "/run/secrets/records.key", "--state", "/var/lib/keyclerk",
+              "--config", "/etc/keyclerk/keyclerk.yaml", "--listen", "unix:/run/keyclerk/signer.sock",
+              # approvals.proofs is required (C-05): without these the signer checks no proof at all, silently -
+              # and it is the line behind a compromised desk (found by the full-stack run)
+              "--approval-issuer", "${BROKER_URL}/realms/${REALM}", "--approval-audience", "keyclerk-desk",
+              "--approval-jwks", "http://127.0.0.1:8080/realms/${REALM}/protocol/openid-connect/certs"]
+    volumes:
+      - ${KEYCLERK_CONFIG:-./keyclerk.yaml}:/etc/keyclerk/keyclerk.yaml:ro
+      - ../secrets/records.key:/run/secrets/records.key:ro
+      - signer:/var/lib/keyclerk                 # its own copy of the last revision it signed
+      - signer-socket:/run/keyclerk
+    depends_on: [front]
+
+  desk:
+    <<: *clerk
+    command: ["keyclerk.api", "--config", "/etc/keyclerk/keyclerk.yaml", "--store", "/var/lib/keyclerk",
+              "--signer", "unix:/run/keyclerk/signer.sock", "--seed", "/etc/keyclerk/seed.yaml",
+              "--broker-state", "/srv/reconcile",
+              "--host", "127.0.0.1", "--port", "8091",
+              "--allowed-host", "${DESK_HOST}", "--allowed-host", "${EDGE_HOST}",   # the front sends the bare host name
+              "--allowed-host", "127.0.0.1:8091",  # the broker's back-channel logout, from inside the pod
+              "--allowed-host", "${DESK_ORIGIN:?run deploy/core/install.py first}",   # a browser's Origin (host:port off 443)
+              "--oidc-public-issuer", "${BROKER_URL}/realms/${REALM}",
+              "--oidc-internal-issuer", "http://127.0.0.1:8080/realms/${REALM}",
+              "--oidc-client", "keyclerk-desk", "--oidc-redirect", "${DESK_URL:?run deploy/core/install.py first}/callback",
+              "--mgmt-host", "127.0.0.1", "--mgmt-port", "8092",   # metrics + readiness detail, behind a bearer token (0018)
+              "--mgmt-token-file", "/run/secrets/mgmt-token"]
+    # /healthz and /readyz answer on the desk's own port (8091) before the host check, so a pod probe reaches them
+    # by address (decision 0018 H1). urllib is in the python:3.12-slim base; it raises on a non-200, so 503 = unhealthy.
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8091/readyz', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    volumes:
+      - ${KEYCLERK_CONFIG:-./keyclerk.yaml}:/etc/keyclerk/keyclerk.yaml:ro
+      - ../secrets/keyclerk-seed.yaml:/etc/keyclerk/seed.yaml:ro   # read once, when the store is empty
+      - ../secrets/keyclerk-mgmt.token:/run/secrets/mgmt-token:ro  # the management listener's bearer (install.py, >=32 chars)
+      - desk:/var/lib/keyclerk                   # the store: signed revisions, the signed log, the published records
+      - reconcile:/srv/reconcile:ro              # usernames and verified e-mail as the reconciler read them
+      - signer-socket:/run/keyclerk
+    depends_on: [signer, broker]
+
+  reconcile:
+    <<: *clerk
+    # The one writer of the broker's managed groups: applies the desk's published records, signed by the signer's key.
+    command: ["keyclerk.reconcile", "--config", "/etc/keyclerk/keyclerk.yaml",
+              "--records", "/srv/desk/records.yaml", "--signing-key", "/etc/keyclerk/records.pub",
+              "--keycloak", "http://127.0.0.1:8080", "--realm", "${REALM}",
+              "--client", "keyclerk-writer", "--secret-file", "/run/secrets/writer",
+              "--reader-client", "keyclerk-reader", "--reader-secret-file", "/run/secrets/reader",
+              "--state", "/var/lib/keyclerk", "--interval", "60", "--apply",
+              # approvals.proofs is required (C-05): the reconciler verifies each approval's ID token itself and
+              # refuses every run without these (the broker's keys come from --keycloak above)
+              "--approval-issuer", "${BROKER_URL}/realms/${REALM}", "--approval-audience", "keyclerk-desk"]
+    volumes:
+      - ${KEYCLERK_CONFIG:-./keyclerk.yaml}:/etc/keyclerk/keyclerk.yaml:ro
+      - ../secrets/records.pub:/etc/keyclerk/records.pub:ro
+      - ../secrets/keyclerk-writer.secret:/run/secrets/writer:ro
+      - ../secrets/keyclerk-reader.secret:/run/secrets/reader:ro
+      - desk:/srv/desk:ro
+      - reconcile:/var/lib/keyclerk
+    depends_on: [desk]
+
+  setup:
+    <<: *clerk
+    # The realm, its clients and the first people (realm.py), once, by install.py:  compose run --rm setup
+    profiles: [setup]
+    restart: "no"
+    entrypoint: ["python", "/opt/relikey/realm.py"]
+    command: ["/run/secrets/people.json"]
+    env_file: [../secrets/broker-admin.env]      # the bootstrap admin, nothing else
+    environment:
+      REALM: ${REALM}
+      BROKER_URL: ${BROKER_URL}
+      DESK_URL: ${DESK_URL}
+    volumes:
+      - ./realm.py:/opt/relikey/realm.py:ro
+      - ../secrets/people.json:/run/secrets/people.json:ro
+      - ../secrets/relikey-setup.secret:/run/secrets/setup:ro   # the realm's setup client (later steps act as it)
+      - ../secrets/keyclerk-writer.secret:/run/secrets/writer:ro
+      - ../secrets/keyclerk-reader.secret:/run/secrets/reader:ro
+    depends_on: [broker]
+
+  mirror:
+    <<: *hardened
+    image: ghcr.io/project-zot/zot:v2.1.22@sha256:96cda11459ce6f8c60da3b03f03e9f67fd11b3ae2d82c4c04c92b3c608996080
+    network_mode: service:front
+    read_only: true                              # the image runs as uid 0 (distroless); no capabilities, read-only root
+    volumes:
+      - ./zot.json:/etc/zot/config.json:ro
+      - mirror:/var/lib/registry
+    tmpfs: [/tmp]
+    depends_on: [front]
+
+  fleet:
+    # ReliKey's fleet service (decision 0026): edges' signed reports in, through the front's edge-facing name (F-27,
+    # F-28); read-only towards edges. Loopback 8093 in the pod.
+    <<: *hardened
+    image: localhost/relikey-fleet:dev           # install.py builds it from agent/dist (R-21); pinned once releases are signed
+    pull_policy: never
+    build:
+      context: ../..
+      dockerfile: deploy/core/Containerfile.fleet
+    network_mode: service:front
+    read_only: true
+    user: "10002:10002"
+    volumes:
+      - fleet:/var/lib/relikey-fleet
+      - ../secrets/fleet:/etc/relikey/fleet:ro       # a directory: fleet_edge.py renames fleet.json atomically inside it
+    depends_on: [front]
+
+volumes:
+  front-data: {}
+  front-config: {}
+  broker-db: {}
+  broker: {}
+  signer: {}
+  desk: {}
+  reconcile: {}
+  mirror: {}
+  fleet: {}
+  signer-socket:                                 # only the signer and the desk mount it; owned by KeyClerk's uid
+    driver_opts: {type: tmpfs, device: tmpfs, o: "uid=10001,gid=10001,mode=0700"}

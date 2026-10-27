@@ -1,0 +1,31 @@
+#!/bin/sh
+# ReliKey's gate: the model check and its tests.
+set -e
+python tools/check_model.py
+python -m pytest -q
+
+# Decision 0027: what goes to the public repository is public at once. Scan each pushed range's added lines and
+# commit messages; a hard failure stops the push, flags must be read (re-run the check with --flags-ok, then push with
+# RELIKEY_FLAGS_READ=1).
+case "$2" in
+  *github.com*) ;;
+  *) exit 0 ;;
+esac
+zero=0000000000000000000000000000000000000000
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ "$local_sha" = "$zero" ] && continue
+  if [ "$remote_sha" = "$zero" ]; then
+    base=$(git merge-base "$local_sha" "refs/remotes/$1/main" 2>/dev/null || true)
+    if [ -z "$base" ] && [ "$local_ref" = refs/heads/publish/snapshot ]; then
+      echo "pre-push: first release push; publish_export.py --strict gated this snapshot" >&2; continue
+    fi
+    [ -n "$base" ] || { echo "pre-push: no base on $1/main for $local_ref; fetch first" >&2; exit 1; }
+  else
+    base=$remote_sha
+  fi
+  if [ "${RELIKEY_FLAGS_READ:-}" = 1 ]; then
+    python tools/public_text_check.py --strict --flags-ok --range "$base..$local_sha"
+  else
+    python tools/public_text_check.py --strict --range "$base..$local_sha"
+  fi
+done

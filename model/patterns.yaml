@@ -1,0 +1,94 @@
+# The ways ReliKey encapsulates a legacy system. A deployment picks one or more per system.
+
+patterns:
+  - id: P-A
+    name: Protocol bastion
+    when: The system is reached through SSH, RDP, VNC, a database console, Kubernetes or a web UI.
+    path: [person, bastion, legacy]
+    flows: [F-03, F-04, F-06, F-07, F-10]
+    governance: >
+      KeyClerk grants a lease and signs it into the edge's bundle; the agent turns it into a Warpgate role assignment
+      that expires with the lease (C-01) and approves sessions the lease covers (C-02).
+    evidence: Warpgate session recording (streamed off the edge, F-09); KeyClerk signed change log.
+
+  - id: P-E
+    name: Engineering workstation
+    when: >
+      The system can only be worked with a vendor engineering suite or an OT protocol the bastion cannot carry
+      (Modbus/TCP, S7comm, EtherNet/IP, OPC-DA, TIA Portal, Studio 5000); decision 0019.
+    path: [person, bastion, legacy]
+    flows: [F-03, F-04, F-06, F-07, F-10]
+    governance: >
+      The plant-owned workstation inside the system's zone is a target like any other (privileged by default): a lease,
+      RDP through Warpgate, KeyClerk's session-start approval by someone on site, the session on the edge's local page.
+      The workstation's own conduit to the controllers is declared and signed by the system owner; a safety system is a
+      separate entitlement. ReliKey carries no network reach into the zone. Variant (0020): a diagnostic workstation
+      whose conduit the plant makes read-only (an industrial firewall allowing only read functions per device, unit and
+      address, or a one-way replica), declared and owner-signed; ReliKey records the declaration and claims nothing about
+      the controller's state. ReliKey writes no industrial protocol parser.
+    evidence: Warpgate's recording of the workstation session (F-09); KeyClerk signed change log and approval proof.
+    residual: >
+      Inside the session the workstation's tools can do whatever they can to the controllers it reaches; the recording
+      shows it, the lease and approval bound who and when. The workstation's patching and hardening are the plant's.
+
+  - id: P-F
+    name: Legacy client jump target
+    when: >
+      The system is reached only by a client the bastion cannot carry: telnet or rlogin, a Java applet or KVM console,
+      or serial where no console server fits; decision 0024. Serial goes to a console server with SSH per
+      port first (P-A); old TLS to a firmware update, then a re-terminator in the zone behind an HTTPS target (P-A).
+    path: [person, bastion, legacy]
+    flows: [F-03, F-04, F-06, F-07, F-10]
+    governance: >
+      A hardened plant host inside one zone (never dual-homed), holding only the old clients, is a target like any
+      other (privileged by default): a lease, SSH through Warpgate for telnet, rlogin and serial (text recording), RDP
+      for Java and KVM consoles (video), session-start approval as for P-E. Its conduit and the zone-internal plaintext
+      leg to each device are declared and signed by the system owner. No port, agent or X11 forwarding, no sftp or
+      scp, no RDP clipboard, drive or USB redirection; kiosk browser on an allowlist; rebuilt from a signed image.
+      ReliKey writes no protocol code for it.
+    evidence: Warpgate's recording of the jump target session (F-09; whether SSH input is kept is a lab fact to
+      establish); KeyClerk signed change log and approval proof.
+    residual: >
+      The old clients are weak by nature; containment and rebuilds bound a compromise. Concurrent people share the
+      target's one account until the account mapping is established (one session at a time meanwhile). The old
+      system's shared credential is rotated by its owner after each lease or is a named residual. Java and KVM
+      consoles are evidenced as video only.
+
+  - id: P-B
+    name: LDAP lease credential
+    when: The system has its own login that can only check a password with an LDAP bind.
+    path: [person, proxy, bastion, legacy]
+    flows: [F-02, F-03b, F-03c, F-06, F-08, F-10, F-11]
+    governance: >
+      The person reaches the system's login through a Warpgate target (web UI as HTTPS, a thick client on a jump host
+      behind RDP) and types the lease credential (decision 0008). The system binds against the edge's facade instead of
+      the old directory. For a lease, the agent sets the person's
+      facade password to a fresh random value (C-03), shown once on the desk after a fresh passkey sign-in, and rotates
+      it again at lease end; outside a lease no known password exists. The account name stays the same, so the
+      system's own user mapping is unchanged.
+    evidence: KeyClerk change log (lease, hand-over, rotation); facade bind log reported by the agent.
+    residual: >
+      Between hand-over and lease end the credential is a password the person can copy. Short leases, rotation at
+      session end or lease end, one holder per account (R-15); per-user injection only once Warpgate offers it (U-09).
+
+  - id: P-C
+    name: Web front with injected identity
+    when: A web application that trusts an authenticating proxy (header or basic auth).
+    path: [person, proxy, bastion, legacy]
+    flows: [F-03b, F-03c, F-04, F-06, F-07, F-10]
+    governance: As P-A; the bastion's HTTPS target carries the identity. Header trust is decision register R-05.
+    evidence: Warpgate HTTPS session log.
+
+  - id: P-D
+    name: Machine panel (HMI) with an LDAP login
+    when: A machine, robot or appliance whose own touch panel or local console signs people in with an LDAP bind.
+    path: [person, legacy, facade]
+    flows: [F-15, F-11, F-08, F-06, F-02]
+    governance: >
+      The panel binds to the edge's facade. A lease sets the person's facade password, delivered to their phone
+      encrypted to their passkey-derived key (C-03), and rotated after the first bind. Offline only break-glass,
+      until an offline hand-over exists (R-11).
+    evidence: KeyClerk change log (lease, hand-over, rotation); facade bind log reported by the agent.
+    residual: >
+      The credential is typed on a shared panel (copyable, shoulder-surfable) for one bind; the panel's own session
+      after login is not recorded by ReliKey.

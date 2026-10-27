@@ -1,0 +1,26 @@
+# SPDX-License-Identifier: EUPL-1.2
+# Weekly updates, as pull requests that CI checks: the pinned workflow actions, the Go modules of the agent, its tools
+# and the fleet, and the hash-locked Python tools (requirements-ci.txt, requirements-test.txt).
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+  - package-ecosystem: gomod
+    directories: [/agent, /agent/tools, /fleet]
+    schedule:
+      interval: weekly
+    groups:
+      go:
+        patterns: ["*"]
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      python-tools:
+        patterns: ["*"]

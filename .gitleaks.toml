@@ -1,0 +1,25 @@
+# gitleaks configuration for ReliKey's leak gate (tools/publish_export.py).
+#
+# Default rules, plus a tightly scoped allowlist: the edge conformance vectors and the
+# Go test fixtures carry high-entropy TEST data (sealed objects, signatures, HMAC
+# codes, public keys) that gitleaks flags as generic-api-key but that are not secrets.
+# The allowlist is scoped to test data only - never to production config or deploy/.
+
+title = "ReliKey"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Edge conformance vectors (testdata/SOURCE) and Go test files carry high-entropy TEST data, not secrets"
+paths = [
+  '''agent/internal/kcedge/testdata/.*''',
+  '''.*_test\.go$''',
+]
+
+[[allowlists]]
+description = "The pinned KeyClerk commit: a public git object id (40 hex), the signed tag's target, not a secret"
+condition = "AND"
+paths = ['''deploy/core/install\.py$''']
+regexTarget = "line"
+regexes = ['''^KEYCLERK_COMMIT = "[0-9a-f]{40}"''']

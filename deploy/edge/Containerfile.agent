@@ -1,0 +1,16 @@
+# relikey-agent image: the static binary from agent/build.py (dist/), nothing else.
+# Build from the repository root:  podman build -f deploy/edge/Containerfile.agent -t relikey-agent:dev .
+FROM docker.io/library/busybox:1.37.0 AS prep
+# The state directory exists in the image 0700 and owned by the agent's user, so a fresh
+# named volume starts with the rights the agent insists on (it refuses anything looser).
+RUN mkdir -p /out/var/lib/relikey /out/etc/relikey && chmod 0700 /out/var/lib/relikey
+
+FROM scratch
+ARG TARGETARCH
+ARG TARGETVARIANT
+COPY --chmod=0555 agent/dist/relikey-agent-linux-${TARGETARCH}${TARGETVARIANT} /relikey-agent
+COPY --from=prep --chown=65532:65532 --chmod=0700 /out/var/lib/relikey /var/lib/relikey
+COPY --from=prep /out/etc/relikey /etc/relikey
+USER 65532:65532
+ENTRYPOINT ["/relikey-agent"]
+CMD ["run", "-config", "/etc/relikey/agent.json"]

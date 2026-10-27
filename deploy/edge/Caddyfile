@@ -1,0 +1,32 @@
+# The edge's front (decision 0008 point 1, decide loop 2026-10-25 D7): the published HTTPS port. Warpgate listens on
+# the pod's loopback only (127.0.0.1:8899); this front forwards everything people need (SSO sign-in, web sessions)
+# and refuses Warpgate's admin paths and its self-service credential routes, so neither is reachable from outside
+# (stack attack E6, and a second layer behind the agent's hardening, E1/E4). No admin API, no ACME.
+{
+	admin off
+	auto_https off
+	persist_config off
+}
+
+:8888 {
+	tls /etc/caddy/tls/front.crt /etc/caddy/tls/front.key {
+		protocols tls1.2 tls1.3
+	}
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+	@refused path /@warpgate/admin /@warpgate/admin/* /_warpgate/admin /_warpgate/admin/* /@warpgate/api/profile/credentials /@warpgate/api/profile/credentials/*
+	handle @refused {
+		respond 404
+	}
+	handle {
+		reverse_proxy https://127.0.0.1:8899 {
+			transport http {
+				tls_trust_pool file /etc/caddy/tls/warpgate.crt   # Warpgate's own certificate, and only it
+				tls_server_name {$WARPGATE_TLS_NAME}
+			}
+		}
+	}
+	log
+}
