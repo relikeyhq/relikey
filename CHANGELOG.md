@@ -24,11 +24,18 @@ Releases are semver tags, `v0.1.0` first. A ReliKey release is its pins and its 
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-27
+
+The first published release. It holds everything listed under 0.1.0 plus the fix below.
+
 ### Fixed
 - The release build refused the v0.1.0 tag: release.yml runs on vX.Y.Z tags, `agent/build.py release` only took
   agent-vX.Y.Z. It now takes both, and a test ties it to the workflow's tag filter.
 
 ## [0.1.0] - 2026-10-27
+
+Tagged and signed, but not released: its release build failed (fixed in 0.1.1). Release tags are never moved, so the
+tag stays where it is.
 
 ### Fixed
 - A lease that went live before the desk knew its person's verified address never got its SSO credential: the agent
