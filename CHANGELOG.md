@@ -24,6 +24,10 @@ Releases are semver tags, `v0.1.0` first. A ReliKey release is its pins and its 
 
 ## [Unreleased]
 
+### Added
+- CI hygiene: every workflow job has a `timeout-minutes`, `.github/CODEOWNERS` names the maintainer, and
+  `tests/test_doc_links.py` fails a pull request when a relative Markdown link or #anchor in the docs does not resolve.
+
 ## [0.1.2] - 2026-10-27
 
 The first published release. It holds everything listed under 0.1.0 plus the fix below.
