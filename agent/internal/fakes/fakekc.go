@@ -377,6 +377,14 @@ func (k *KeyClerk) SetFaults(down, replayOld bool) {
 	k.Down, k.ReplayOld = down, replayOld
 }
 
+// SetNoLongPoll makes the desk answer a long-poll at once (a desk older than KeyClerk 0026), under the lock the
+// handler reads it with.
+func (k *KeyClerk) SetNoLongPoll(on bool) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	k.NoLongPoll = on
+}
+
 // RefusedCount is the number of requests refused (bad signature, replayed nonce, skew).
 func (k *KeyClerk) RefusedCount() int {
 	k.mu.Lock()
