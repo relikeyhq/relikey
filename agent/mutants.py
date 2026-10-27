@@ -132,7 +132,7 @@ MUTANTS = [
     ("a 1.3 lease never gets its address", Path("internal/agent") / "agent.go",
      "l.leases = a.withEmails(ctx, l.leases)", "_ = l.leases"),
     ("the address is fetched on every tick", Path("internal/agent") / "agent.go",
-     "if !seen || (!f.ok && time.Since(f.tried) >= 15*time.Second) {", "if true {"),
+     "if !seen || (!f.ok && time.Since(f.tried) >= 15*time.Second) ||", "if true ||"),
     ("the fleet page admits without the client role", Path("../fleet/internal/page") / "page.go",
      "case !slices.Contains(cl.Resource[p.Cfg.ClientID].Roles, p.Cfg.Role):", "case false && !slices.Contains(cl.Resource[p.Cfg.ClientID].Roles, p.Cfg.Role):"),
     ("the fleet page takes another sign-in's ID token", Path("../fleet/internal/page") / "page.go",

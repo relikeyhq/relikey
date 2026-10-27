@@ -260,7 +260,7 @@ func TestALongPollBringsGrantsAndRevokesAtOnce(t *testing.T) {
 // A desk without long-poll answers at once; the agent then keeps its interval as the floor, never a tight loop.
 func TestWithoutLongPollTheIntervalIsTheFloor(t *testing.T) {
 	r := newRigTuned(t, func(a *Agent) { a.Pull, a.Wait = time.Minute, 5*time.Second })
-	r.kc.NoLongPoll = true
+	r.kc.SetNoLongPoll(true)
 	time.Sleep(time.Second)
 	if n := pulls(r.kc); n > 3 {
 		t.Fatalf("%d pulls in a second against a desk that answers at once", n)
@@ -275,8 +275,8 @@ func TestARefusedAnswerIsNotAChange(t *testing.T) {
 	r.eventually("ann gets the role", func() bool { _, ok := r.roles("ann")["plc-operator"]; return ok })
 	r.kc.SetLeases(nil, nil) // the agent accepts this one; the desk keeps the one before as its replay
 	r.eventually("ann is removed", func() bool { return r.roles("ann") == nil })
-	r.kc.NoLongPoll = true
-	r.kc.ReplayOld = true // every answer now: the older bundle, other content, refused as a replay
+	r.kc.SetNoLongPoll(true)
+	r.kc.SetFaults(false, true) // every answer now: the older bundle, other content, refused as a replay
 	before := pulls(r.kc)
 	time.Sleep(1500 * time.Millisecond)
 	if n := pulls(r.kc) - before; n > 3 {
