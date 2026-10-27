@@ -36,6 +36,18 @@ passphrase in Bitwarden and writes that file). The tag needs a `## [X.Y.Z]` sect
 `release.yml` builds the agent and the fleet service reproducibly, attests their provenance and publishes the GitHub
 release with that section as its notes.
 
+Tag the merge commit by its full hash, after the change it needs has merged, not `origin/main` from a clone that may
+be behind. Release tags are never moved or deleted (a ruleset enforces it): a tag whose release build fails stays,
+and the next version number carries the fix, as 0.1.0 and 0.1.1 did.
+
+## How main stays signed
+Every commit on `main` is a squash merge that GitHub makes and signs: the `main` ruleset requires a pull request and
+allows squash only, and blocks force pushes and deletion. The ruleset does not also require signed commits, because
+that rule checks every commit on a pull request's branch and would refuse unsigned contributions that are squashed
+anyway. So the guarantee rests on squash-only merging: turning merge commits or rebase merging back on (in the
+ruleset or in the repository's merge settings) would let unsigned commits reach `main`, and needs the signed-commits
+rule back first. The `release tags` ruleset keeps it: a `v*` tag must point at a signed commit.
+
 ## The bridge to v0.1.0: the curated export
 Before v0.1.0 ReliKey was built in the private repository. The first public release is cut from it by
 `python tools/publish_export.py --strict --snapshot v0.1.0`, which is fail-closed:
