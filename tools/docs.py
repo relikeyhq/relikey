@@ -179,11 +179,17 @@ def cli() -> str:
         if out.returncode != 0:
             raise SystemExit(f"{path} --help failed ({out.returncode}): every installer must print its usage without "
                              f"a running stack\n{out.stderr[-400:]}")
-        s += f"## {title}: `{path}`\n\n```text\n{out.stdout.rstrip()}\n```\n\n"
+        s += f"## {title}: `{path}`\n\n```text\n{help_text(out.stdout).rstrip()}\n```\n\n"
     doc = re.search(r'"""(.*?)"""', (ROOT / "deploy/core/realm.py").read_text(encoding="utf-8"), re.S).group(1)
     usage = "\n".join(ln for ln in doc.splitlines() if ln.strip().startswith("python realm.py"))
     s += f"## The broker's realm: `deploy/core/realm.py` (inside the core pod)\n\n```text\n{usage.strip()}\n```\n"
     return s
+
+
+def help_text(text: str) -> str:
+    """argparse --help in one form on every Python: before 3.13 an option with aliases repeats its metavar
+    ('--a X, --b X'), from 3.13 it is named once at the end ('--a, --b X'). The page uses the newer form."""
+    return re.sub(r"(-{1,2}[\w-]+) (\S+), (-{1,2}[\w-]+) \2\b", r"\1, \3 \2", text)
 
 
 def crypto() -> str:

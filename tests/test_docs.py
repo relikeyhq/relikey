@@ -52,3 +52,14 @@ def test_a_broken_link_is_found(tmp_path, monkeypatch):
 def test_generated_pages_name_no_local_path(page):
     text = (docs.OUT / page).read_text(encoding="utf-8")
     assert "C:\\" not in text and "/home/" not in text and "\\Users\\" not in text
+
+
+@pytest.mark.parametrize("before, after", [
+    ("  --security-officer OFFICER, --officer OFFICER", "  --security-officer, --officer OFFICER"),
+    ("  -o OUT, --out OUT  where", "  -o, --out OUT  where"),
+    ("  --a, --b X", "  --a, --b X"),
+    ("  --in X, --out Y", "  --in X, --out Y"),
+])
+def test_help_text_is_the_same_on_every_python(before, after):
+    # argparse before 3.13 repeats an aliased option's metavar; the generated page must not depend on the version
+    assert docs.help_text(before) == after
