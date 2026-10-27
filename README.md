@@ -53,9 +53,10 @@ broker, an edge enrolled with the officer's and the edge's signatures, a lease a
 a revoke that cuts a held session, Warpgate's admin interface unreachable on the published port, and signed fleet
 reports over post-quantum hybrid TLS. The fleet's enrolment by code and its officer anchor ceremony are built and
 tested, not yet walked on a deployed box. The decision records and model are the design of record. What is **not**
-done: production networking, high availability, signed releases, and several contracts still marked `needed` in the
-model. Not production-ready; treat it as a working architecture you can stand up in a lab. What comes next is in
-[ROADMAP.md](ROADMAP.md).
+done: production networking, high availability, fleet-enforced signed releases (decision 0026, slice 3), and several
+contracts still marked `needed` in the model. Releases themselves carry signed tags, reproducible builds, checksums and
+build provenance since 0.1.2 (see "Verifying a release"). Not production-ready; treat it as a working architecture
+you can stand up in a lab. What comes next is in [ROADMAP.md](ROADMAP.md).
 
 ## Quickstart: a lab on one box
 A core and one edge on the same Linux host, the way full-stack run 2 stood them up (`docs/reviews/`). You need Python
@@ -93,6 +94,26 @@ docker group. `--lab` puts both pods on the host network: never in production.
 Detail: `deploy/core/README.md` (the core, after-install steps, adding edges), `docs/agent.md` (the agent and its
 enrolment CLI), `docs/installation-checklist.md` (what a real installation must establish). Once a lease is on the
 edge, nothing needs the core or the cloud to keep it in force until it ends.
+
+## Verifying a release
+Check a release before you run it. Each check pins the identity it expects; the key behind the tag is
+`relikey.allowed_signers` in this repository (how releases are made: [docs/publishing.md](docs/publishing.md)). The
+example is v0.1.2; run the checks from a clone of this repository, the last two in an empty directory for the download.
+
+1. **The tag** is signed by ReliKey's release key. Expect `Good "git" signature for relikey-releases`:
+
+       git fetch origin tag v0.1.2 && git -c gpg.ssh.allowedSignersFile=relikey.allowed_signers tag -v v0.1.2
+
+2. **The checksums** match the downloaded files (each line should end in `OK`):
+
+       gh release download v0.1.2 -R relikeyhq/relikey
+       sha256sum -c SHA256SUMS
+
+3. **The provenance** shows a binary was built by this repository's release workflow. The command exits 0 when the
+   attestation matches and non-zero when it does not (piped or in a script it prints nothing on success):
+
+       gh attestation verify relikey-agent-linux-amd64 --repo relikeyhq/relikey \
+           --signer-workflow relikeyhq/relikey/.github/workflows/release.yml
 
 ## Security
 ReliKey is security infrastructure; treat findings responsibly. Report a weakness privately (see `SECURITY.md`), not
