@@ -122,10 +122,10 @@ A new agent version goes to one edge first, next to the version that enforces:
 ## Assurance
 | Check | What it proves |
 |---|---|
-| KeyClerk conformance (`testdata/edge.json`, KeyClerk v0.26.1 (aa29f6f, signed tag; sha256 5a2c03be...): 126 cases and 8 e-mail answers: 70 verifier with live leases, visit leases, governed roles and stored state; the families statements 10, ceilings 6, ended 6, unlock 5 (both sides reach one code), module_bytes 3, requests 8 (the signed bytes for every case, the header byte for byte where accepted, the long-poll query included); the ceiling policy cases) | the same verdicts and state as the reference, no exceptions |
+| KeyClerk conformance (`testdata/edge.json`, KeyClerk v0.26.3 (cfc5793, signed tag; sha256 5a2c03be...): 126 cases and 8 e-mail answers: 70 verifier with live leases, visit leases, governed roles and stored state; the families statements 10, ceilings 6, ended 6, unlock 5 (both sides reach one code), module_bytes 3, requests 8 (the signed bytes for every case, the header byte for byte where accepted, the long-poll query included); the ceiling policy cases) | the same verdicts and state as the reference, no exceptions |
 | interop with KeyClerk's CLI (2026-10-24) | a statement made and officer-signed by `edge_cli`, cosigned by `relikey-agent cosign`, is accepted by KeyClerk's `unseal_multi` |
 | 18 canonical cross vectors, signed-request vectors | byte-exact encoding and headers |
-| `regen.py <keyclerk> <tag>` | vectors rebuilt from the pinned tag; v0.19.0, v0.21.2, v0.22.0, v0.23.0 |
+| `regen.py <keyclerk> <tag>` | vectors rebuilt from the pinned tag; v0.19.0, v0.21.2, v0.22.0, v0.23.0, v0.26.3 |
 | 61/61 mutants killed (`mutants.py`) | every guard is caught by a test (0.23.0 added exact sealed members, canonical base64, the bound ended notice, exact statement signers and signatures, modules by hash, module bytes, unlock fields; 2026-10-25 added the governed roles: reported, ungoverned and expired grants left out, a malformed file or bundle member refused, the clerk's catalogue used) |
 | randomised convergence test (200 steps, with faults) | the plan always converges, never touches unmanaged users |
 | 10 end-to-end agent tests on the fakes | revocation, offline lease end, replay, ended edge, an ended notice for another enrolment key ignored, module fetched once by hash, shadow, restart, ceiling |

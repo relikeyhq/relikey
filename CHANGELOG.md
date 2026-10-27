@@ -24,6 +24,11 @@ Releases are semver tags, `v0.1.0` first. A ReliKey release is its pins and its 
 
 ## [Unreleased]
 
+### Changed
+
+- The agent's KeyClerk conformance vectors are regenerated from the signed 0.26.3 tag (cfc5793), the version the
+  release pins; `edge.json` is byte-identical to the 0.26.1 vectors and the agent passes all of it.
+
 ## [0.1.2] - 2026-10-27
 
 The first published release. It holds everything listed under 0.1.0 plus the fix below.
