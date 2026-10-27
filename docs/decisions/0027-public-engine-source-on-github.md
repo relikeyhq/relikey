@@ -27,9 +27,9 @@ lab tooling, deployment secrets and material that is not engine.
    hard failures, attack detail and infrastructure as flags a human reads), and runs in three places:
    - a pre-push hook, on each added diff line and each commit message bound for the public repository;
    - by hand, on every issue, pull request or comment text before it is posted;
-   - a workflow on pull requests, issues and comments, so outside contributions are checked too. It runs the trusted
-     base revision's check, never the proposed code, on the text and the diff only; patterns that would themselves
-     publish something are passed in as a secret.
+   - a workflow on pull requests, issues, discussions and comments, so outside contributions are checked too. It
+     runs the trusted base revision's check, never the proposed code, on the text and the diff only; patterns that
+     would themselves publish something are passed in as a secret.
 4. **Reasoning that would expose stays private.** A public change states what it changes, the threat it guards against
    at design level, and its tests. It may name a review finding by its identifier; the review itself stays private.
 5. **ReliKey signs its own releases** with a dedicated release key, not a person's key; its public half is published

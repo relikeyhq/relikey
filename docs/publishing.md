@@ -15,10 +15,13 @@ attack detail and infrastructure are flags a human reads. It runs in three place
   until read: run the check with `--flags-ok` on that range, then push with `RELIKEY_FLAGS_READ=1`.
 - **By hand, before posting:** `python tools/public_text_check.py --text body.md` for every issue, pull request or
   comment text a maintainer writes.
-- **The Public text workflow** (`.github/workflows/public-text.yml`) checks every pull request, issue, review and
-  comment, outside contributions included. It runs the base branch's check on the text and on the pull request's
-  commits fetched as data; the proposed code is never checked out or run. A hit labels the item
+- **The Public text workflow** (`.github/workflows/public-text.yml`) checks every pull request, issue, discussion,
+  review and comment, outside contributions included. It runs the base branch's check on the text and on the pull
+  request's commits fetched as data; the proposed code is never checked out or run. A hit labels the item
   `held-for-text-review` for a maintainer; the maintainer removes the label once the text is fine or changed.
+
+The repository's wiki stays off: wiki edits skip pull requests and this workflow. Documentation lives in `docs/`, where
+every change passes all three checks.
 
 Patterns that would publish what they guard live outside the public repository: in the companion's
 `tools/publish-private.yaml` for local runs and in the `RELIKEY_PRIVATE_PATTERNS` secret for the workflow (one regex per
