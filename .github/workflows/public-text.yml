@@ -1,7 +1,8 @@
 # Decision 0027: everything posted here is public at once. This checks pull requests (title, body, added lines, commit
-# messages), issues and comments with tools/public_text_check.py, including outside contributions, and labels a hit
-# for a maintainer. It runs the base branch's check on text and git objects only: the proposed code is fetched as data
-# and never checked out or run. Patterns that would publish themselves come from the RELIKEY_PRIVATE_PATTERNS secret.
+# messages), issues, discussions and comments with tools/public_text_check.py, including outside contributions, and
+# labels a hit for a maintainer. It runs the base branch's check on text and git objects only: the proposed code is
+# fetched as data and never checked out or run. Patterns that would publish themselves come from the
+# RELIKEY_PRIVATE_PATTERNS secret.
 name: Public text
 on:
   pull_request_target:
@@ -14,12 +15,16 @@ on:
     types: [submitted, edited]
   pull_request_review_comment:
     types: [created, edited]
+  discussion:
+    types: [created, edited]
+  discussion_comment:
+    types: [created, edited]
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.event.issue.number }}-${{ github.event.comment.id || github.event.review.id || 'body' }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.event.issue.number || format('d{0}', github.event.discussion.number) }}-${{ github.event.comment.id || github.event.review.id || 'body' }}
   cancel-in-progress: true
 
 jobs:
@@ -30,6 +35,7 @@ jobs:
       contents: read
       issues: write
       pull-requests: write
+      discussions: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -46,8 +52,8 @@ jobs:
       - name: Check the text
         env:
           # Event text arrives through the environment, never interpolated into the script.
-          TITLE: ${{ github.event.pull_request.title || (github.event_name == 'issues' && github.event.issue.title) || '' }}
-          BODY: ${{ github.event.comment.body || github.event.review.body || github.event.pull_request.body || github.event.issue.body || '' }}
+          TITLE: ${{ github.event.pull_request.title || (github.event_name == 'issues' && github.event.issue.title) || (github.event_name == 'discussion' && github.event.discussion.title) || '' }}
+          BODY: ${{ github.event.comment.body || github.event.review.body || github.event.pull_request.body || github.event.issue.body || (github.event_name == 'discussion' && github.event.discussion.body) || '' }}
           RELIKEY_PRIVATE_PATTERNS: ${{ secrets.RELIKEY_PRIVATE_PATTERNS }}
         run: |
           printf '%s\n%s\n' "$TITLE" "$BODY" > "$RUNNER_TEMP/text.md"
@@ -67,7 +73,17 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
+          DISCUSSION: ${{ github.event.discussion.node_id }}
         run: |
           gh label create held-for-text-review --color B60205 \
             --description "The public text check found something a maintainer must read" -R "$GITHUB_REPOSITORY" || true
-          gh issue edit "$NUMBER" --add-label held-for-text-review -R "$GITHUB_REPOSITORY"
+          if [ -n "$DISCUSSION" ]; then
+            # A discussion has no REST label endpoint: label it through GraphQL.
+            label=$(gh api graphql -f owner="${GITHUB_REPOSITORY%/*}" -f name="${GITHUB_REPOSITORY#*/}" \
+              -f query='query($owner:String!,$name:String!){repository(owner:$owner,name:$name){label(name:"held-for-text-review"){id}}}' \
+              --jq .data.repository.label.id)
+            gh api graphql -f labelable="$DISCUSSION" -f label="$label" \
+              -f query='mutation($labelable:ID!,$label:ID!){addLabelsToLabelable(input:{labelableId:$labelable,labelIds:[$label]}){clientMutationId}}'
+          else
+            gh issue edit "$NUMBER" --add-label held-for-text-review -R "$GITHUB_REPOSITORY"
+          fi
