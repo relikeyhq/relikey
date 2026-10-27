@@ -119,14 +119,19 @@ def build_into(src: Path, out: Path, version: str) -> dict:
     return sums
 
 
+def release_tag(top) -> str:
+    """The release tag on HEAD: vX.Y.Z, the tag release.yml runs on (agent-vX.Y.Z from before 0.1.0 still counts)."""
+    return subprocess.run(["git", "describe", "--tags", "--exact-match", "--match", "v[0-9]*", "--match", "agent-v[0-9]*"],
+                          cwd=top, capture_output=True, text=True).stdout.strip()
+
+
 def release():
     toolchain()
     top = subprocess.run(["git", "rev-parse", "--show-toplevel"], cwd=HERE, capture_output=True, text=True).stdout.strip()
     dirty = subprocess.run(["git", "status", "--porcelain"], cwd=top, capture_output=True, text=True).stdout.strip()
-    tag = subprocess.run(["git", "describe", "--tags", "--exact-match", "--match", "agent-v*"], cwd=top,
-                         capture_output=True, text=True).stdout.strip()
+    tag = release_tag(top)
     if dirty or not tag:
-        sys.exit("release builds come from a clean checkout at an agent-vX.Y.Z tag "
+        sys.exit("release builds come from a clean checkout at a vX.Y.Z tag "
                  f"({'uncommitted changes' if dirty else 'no tag on HEAD'})")
     version = tag.removeprefix("agent-")
     results = []
