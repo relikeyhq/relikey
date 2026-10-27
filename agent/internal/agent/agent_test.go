@@ -139,6 +139,40 @@ func TestALeaseIsAppliedAndReported(t *testing.T) {
 	})
 }
 
+// generation is the newest generation in the state slots: every slot write raises it by one.
+func (r *rig) generation() int64 {
+	var gen int64
+	for _, n := range []string{"state-a.json", "state-b.json"} {
+		var sl struct {
+			Gen int64 `json:"gen"`
+		}
+		b, _ := os.ReadFile(filepath.Join(r.dir, n))
+		if json.Unmarshal(b, &sl) == nil {
+			gen = max(gen, sl.Gen)
+		}
+	}
+	return gen
+}
+
+// AG-14: idle ticks and pulls that bring nothing new write no state (edge hardware often boots from flash).
+func TestIdleTicksWriteNoState(t *testing.T) {
+	r := newRig(t, Enforce)
+	r.kc.SetLeases([]fakes.FakeLease{lease("L-1", time.Now().Add(time.Hour))}, nil)
+	r.eventually("the bundle is applied", func() bool {
+		st := r.status()
+		return st.AppliedSerial > 0 && st.AppliedSerial == r.kc.Serial()
+	})
+	gen, ticks := r.generation(), r.status().Ticks
+	pulls, _ := r.kc.Counts()
+	r.eventually("20 idle ticks and 3 idle pulls", func() bool {
+		n, _ := r.kc.Counts()
+		return r.status().Ticks >= ticks+20 && n >= pulls+3
+	})
+	if got := r.generation(); gen == 0 || got != gen {
+		t.Fatalf("idle ticks wrote the state: generation %d -> %d", gen, got)
+	}
+}
+
 func TestTheClerksGovernedRolesAloneReportAnUnmanagedHolder(t *testing.T) {
 	r := newRig(t, Enforce) // no governed-roles file: the signed catalogue in the bundle is the only source
 	rogue := r.wg.AddUser("rogue", "made behind the agent's back")

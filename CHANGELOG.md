@@ -24,6 +24,11 @@ Releases are semver tags, `v0.1.0` first. A ReliKey release is its pins and its 
 
 ## [Unreleased]
 
+### Changed
+- The agent's state store skips a write when the record is unchanged, so idle ticks and pulls that bring nothing new
+  never rewrite the state slots, sparing the flash that edge hardware often boots from (AG-14). A test counts the
+  slot writes over idle ticks; a mutant that always writes is killed.
+
 ## [0.1.2] - 2026-10-27
 
 The first published release. It holds everything listed under 0.1.0 plus the fix below.
