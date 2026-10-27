@@ -24,6 +24,10 @@ Releases are semver tags, `v0.1.0` first. A ReliKey release is its pins and its 
 
 ## [Unreleased]
 
+### Changed
+- SECURITY.md: a supported-versions table (0.1.x, latest patch only), response-time targets and a direct link to
+  private vulnerability reporting.
+
 ## [0.1.2] - 2026-10-27
 
 The first published release. It holds everything listed under 0.1.0 plus the fix below.
