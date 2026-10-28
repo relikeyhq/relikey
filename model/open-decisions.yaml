@@ -8,6 +8,6 @@ open:
       proxy still to measure.
   - id: R-21
     question: How is the fleet service (relikey-fleet, decision 0026) packaged and pinned in the core pod?
-    lean: Decided 2026-10-25 (operator) - a scratch image like the agent's (deploy/core/Containerfile.fleet), built by
+    lean: Decided 2026-10-25 (operator) - a scratch image like the agent's (deploy/core/Dockerfile.fleet), built by
       install.py from agent/dist, a compose service in the core pod. Open only the digest pin, once releases are signed
       (0026 point 2); until then localhost/relikey-fleet:dev.

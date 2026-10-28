@@ -53,7 +53,7 @@ services:
   agent:
     build:
       context: ../..
-      dockerfile: deploy/edge/Containerfile.agent
+      dockerfile: deploy/edge/Dockerfile.agent
     image: localhost/relikey-agent:dev
     network_mode: service:warpgate
     read_only: true

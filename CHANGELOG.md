@@ -25,9 +25,9 @@ Releases are semver tags, `v0.1.0` first. A ReliKey release is its pins and its 
 ## [Unreleased]
 
 ### Changed
-- The model marks contracts C-01 (lease as role assignment), C-04 (signed lease bundles) and C-10 (per-edge ceiling)
-  as built, each naming the agent tests that show it; C-10 also names what is not yet applied (hardware attestation,
-  remote-reach mode and ports).
+- The base image of the fleet and agent images (busybox 1.37.0) is pinned by its multi-arch index digest, and the two
+  image files are renamed `Dockerfile.fleet` and `Dockerfile.agent` so Dependabot's docker ecosystem proposes updates
+  to the pin weekly.
 
 ## [0.1.2] - 2026-10-27
 
