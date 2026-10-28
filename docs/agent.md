@@ -124,8 +124,10 @@ metrics of its own, so `relikey_agent_observe_errors_total` is the only signal o
 | `relikey_agent_bundles_refused_total` | counter | bundles and notices refused by the verifier |
 | `relikey_agent_action_failures_total` | counter | Warpgate actions that failed |
 | `relikey_agent_observe_errors_total` | counter | failures to read Warpgate's state |
+| `relikey_agent_ended` | gauge | 1 when the desk ended this edge |
+| `relikey_agent_pulls_failed_total` | counter | pulls that failed (desk unreachable or refusing) |
 
-The other metrics in the file (the ended flag, pulls, the plan, actions executed, module failures, heap and
+The other metrics in the file (successful pulls, the plan, actions executed, module failures, heap and
 goroutines) are diagnostics and may change in any release.
 
 ## Canary: shadow mode and the gate

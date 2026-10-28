@@ -20,6 +20,8 @@ var stableMetrics = map[string]string{
 	"relikey_agent_bundles_refused_total":  "counter",
 	"relikey_agent_action_failures_total":  "counter",
 	"relikey_agent_observe_errors_total":   "counter",
+	"relikey_agent_ended":                  "gauge",
+	"relikey_agent_pulls_failed_total":     "counter",
 }
 
 func TestTheStableMetricNamesStay(t *testing.T) {
