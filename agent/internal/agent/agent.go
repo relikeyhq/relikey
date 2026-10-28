@@ -66,6 +66,9 @@ type Agent struct {
 	Wait        time.Duration
 	Grace       time.Duration // removals may finish this long after a shutdown signal (default 5s)
 	StatusEvery int           // write status.json every N ticks (default 1)
+	// MetricsDir, when set, receives a copy of metrics.prom as relikey-agent.prom each time it is written, readable by
+	// a site's collector while the state directory stays private (WriteMetricsDir). Empty writes no copy.
+	MetricsDir string
 	// The key exchange each role's link negotiated (decision 0022 A3); nil leaves it out of the status.
 	ClerkTLS, BastionTLS *httpx.Group
 	// Governed loads the bastion roles only leases grant, read every tick (apply.ParseGoverned); an unmanaged account
@@ -206,6 +209,10 @@ type Status struct {
 	HeapSys    uint64   `json:"heap_sys"`
 	NumGC      uint32   `json:"num_gc"`
 	OpenFDs    int      `json:"open_fds"`
+	// Why the last metrics copy to metrics_dir failed (empty when it was written, or none is configured), and how
+	// many copies failed. A failed copy never stops the loop.
+	MetricsDirError    string `json:"metrics_dir_error,omitempty"`
+	MetricsDirFailures int64  `json:"metrics_dir_failures"`
 }
 
 func (a *Agent) defaults() {
@@ -613,10 +620,32 @@ func (a *Agent) writeStatus() {
 		}
 	}
 	if err == nil {
-		err = a.Store.WriteStatus("metrics.prom", Metrics(a.st, a.st.Health(a.st.Updated, 2, 2*time.Minute)))
+		m := Metrics(a.st, a.st.Health(a.st.Updated, 2, 2*time.Minute))
+		if err = a.Store.WriteStatus("metrics.prom", m); err == nil && a.MetricsDir != "" {
+			a.copyMetrics(m)
+		}
 	}
 	if err != nil {
 		a.Log.Warn("cannot write the status files", "err", err)
+	}
+}
+
+// copyMetrics writes the copy of metrics.prom for the site's collector. A failure is logged when it starts or its
+// cause changes, counted, and kept in the status (the next status.json carries it); the return is logged once. It
+// is not part of the health: the loop and the leases do not depend on it, and the collector already sees a copy
+// that stops changing (node_textfile_mtime_seconds, relikey_agent_status_updated_seconds).
+func (a *Agent) copyMetrics(m []byte) {
+	err := WriteMetricsDir(a.MetricsDir, m)
+	switch {
+	case err != nil:
+		a.st.MetricsDirFailures++
+		if msg := err.Error(); msg != a.st.MetricsDirError {
+			a.st.MetricsDirError = msg
+			a.Log.Warn("cannot write the metrics copy; leases are still applied", "err", err)
+		}
+	case a.st.MetricsDirError != "":
+		a.st.MetricsDirError = ""
+		a.Log.Info("the metrics copy is written again", "dir", a.MetricsDir)
 	}
 }
 
