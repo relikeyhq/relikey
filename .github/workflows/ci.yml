@@ -40,6 +40,8 @@ jobs:
         with:
           python-version: "3.12"
       - run: python agent/build.py check    # gofmt, vet (three targets), staticcheck, tests, mutants
+      - run: go run ./cmd/relikey-demo -headless    # the demo story end to end (docs/demo.md)
+        working-directory: agent
       - run: python agent/build.py race
       - run: python agent/build.py vuln
 

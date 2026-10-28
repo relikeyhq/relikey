@@ -5,6 +5,7 @@ Docs as code: these pages live beside the code, change in the same commits, and 
 by hand.
 
 ## Run it (guides)
+- [The demo](demo.md): one command, the real agent against stand-ins, nothing to install but Go
 - [Install the core](../deploy/core/README.md): the shared core pod, an edge's registration at the broker, a vendor's
   own sign-in, approval proofs on an existing core
 - [Installation checklist](installation-checklist.md)
