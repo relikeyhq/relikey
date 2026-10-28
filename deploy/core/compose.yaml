@@ -197,7 +197,7 @@ services:
     pull_policy: never
     build:
       context: ../..
-      dockerfile: deploy/core/Containerfile.fleet
+      dockerfile: deploy/core/Dockerfile.fleet
     network_mode: service:front
     read_only: true
     user: "10002:10002"
