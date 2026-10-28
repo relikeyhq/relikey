@@ -38,6 +38,7 @@ public:
   - agent/
   - fleet/
   - brand/
+  - changelog.d/
   - deploy/
   - docs/
   - hooks/

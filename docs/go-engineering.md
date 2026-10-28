@@ -28,8 +28,10 @@ GE-20, all taken in). Each rule says why.
   tested there (0011, footprint).
 - Release builds come from a clean tagged checkout; the script refuses `vcs.modified=true` and a `+dirty` version
   (stamped since 1.24). Reproducibility is checked, not assumed: two clean checkouts, two builds, identical bytes.
-- `go version -m` output is **build info** (provenance), not an SBOM; a CycloneDX SBOM is produced separately when one
-  is promised, together with the image and the policy modules it cannot see.
+- `go version -m` output is **build info** (provenance), not an SBOM. A release gives each binary a CycloneDX SBOM
+  made from that module data by `cyclonedx-gomod` (pinned in its own module, `agent/tools/sbom/go.mod`), without serial
+  number or timestamp so it is as reproducible as the binary; the image and the policy modules it cannot see need
+  their own SBOM when one is promised.
 - Do not set `GOMAXPROCS` (container-aware since 1.25). Green Tea GC is the default and the 64-bit heap base is
   randomised since 1.26.
 - Image: `scratch` or distroless static; numeric `USER 65532:65532` (no `/etc/passwd`); read-only root; all

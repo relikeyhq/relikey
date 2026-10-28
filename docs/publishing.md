@@ -36,12 +36,17 @@ each code comment states the threat and the guard itself.
 A release is a signed tag `vX.Y.Z` on `main`, signed with ReliKey's own release key (its public half,
 `relikey.allowed_signers`, is in the repository root; `tools/release_key.py create` makes the key, keeps it and its
 passphrase in Bitwarden and writes that file). The tag needs a `## [X.Y.Z]` section in CHANGELOG.md;
-`release.yml` builds the agent and the fleet service reproducibly, attests their provenance and publishes the GitHub
-release with that section as its notes.
+`release.yml` first checks that CI passed on the tagged commit on `main` (`tools/release_gate.py`, which waits for a
+run still in progress), then builds the agent and the fleet service reproducibly with a CycloneDX SBOM for each
+binary, smoke-tests them (`build.py smoke`: the binaries for the runner's architecture must run and report the tag's
+version and commit, the others must be ELF files for their target), attests their provenance and each SBOM, and
+publishes the GitHub release with that section as its notes. How to verify one: README.md, "Verifying a release".
 
-Tag the merge commit by its full hash, after the change it needs has merged, not `origin/main` from a clone that may
-be behind. Release tags are never moved or deleted (a ruleset enforces it): a tag whose release build fails stays,
-and the next version number carries the fix, as 0.1.0 and 0.1.1 did.
+Tag the merge commit by its full hash, after the change it needs has merged and CI has passed on it on `main`, not
+`origin/main` from a clone that may be behind. A merge that lands soon after cancels the CI run of the one before it;
+re-run that run before tagging, or the release stops at the CI check. Release tags are never moved or deleted (a
+ruleset enforces it): a tag whose release build fails stays, and the next version number carries the fix, as 0.1.0
+and 0.1.1 did.
 
 ## How main stays signed
 Every commit on `main` is a squash merge that GitHub makes and signs: the `main` ruleset requires a pull request and
