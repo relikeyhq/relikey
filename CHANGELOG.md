@@ -24,6 +24,11 @@ Releases are semver tags, `v0.1.0` first. A ReliKey release is its pins and its 
 
 ## [Unreleased]
 
+### Changed
+- The base image of the fleet and agent images (busybox 1.37.0) is pinned by its multi-arch index digest, and the two
+  image files are renamed `Dockerfile.fleet` and `Dockerfile.agent` so Dependabot's docker ecosystem proposes updates
+  to the pin weekly.
+
 ## [0.1.2] - 2026-10-27
 
 The first published release. It holds everything listed under 0.1.0 plus the fix below.
