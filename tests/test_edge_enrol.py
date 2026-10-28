@@ -99,6 +99,7 @@ def fleet(tmp_path):
     srv = http.server.HTTPServer(("127.0.0.1", 0), H)
     srv.handle_error = lambda *a: None   # the pin probe connects and leaves without a request
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    ctx.minimum_version = ssl.TLSVersion.TLSv1_3   # what the installer's pinned client requires
     ctx.load_cert_chain(crt, k)
     srv.socket = ctx.wrap_socket(srv.socket, server_side=True)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
