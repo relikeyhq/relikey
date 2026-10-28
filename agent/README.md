@@ -4,6 +4,12 @@ The edge agent (decision 0011), built by the rules in `../docs/go-engineering.md
 
     GOTOOLCHAIN=local go test ./...      # unit tests and the reference vectors
     python mutants.py                    # every verifier guard must be caught by a test
+    python mutants.py --changed main     # only the mutants a change since main can affect (as CI on a pull request)
+
+CI runs the mutants a pull request can affect in the edge agent gate: those in a changed file, every mutant of a
+package whose tests or test data changed (a mutant is judged by its own package's tests only), and all of them when a
+shared test helper, the harness or go.mod/go.sum changed. On main, nightly and on demand it runs every mutant in four
+parallel parts (`--shard i/4`).
 
 `internal/kcedge` is `keyclerk.edge` (KeyClerk v0.19.0) in Go. Its test data comes from the reference, so it can
 falsify the port: `testdata/edge.json` is KeyClerk's conformance set unchanged; `canon.json` and `verifier.json` are
