@@ -18,9 +18,9 @@ the public roots come from --ca-bundle, or certifi, or the host's bundle.
 
 With --enrol-code-file (decision 0026 point 15), the edge also enrols into its fleet: the file holds the one-time code
 from the fleet page (carried as a QR code or on a USB stick, never typed, never on the command line). The installer
-presents this edge's enrolment key with proof of the code's secret, over TLS that trusts only the code's pin, and
-prints the key's fingerprint for whoever reads it to the approving officer. Nothing is admitted until an officer
-approves with their passkey. To present again for an installed edge (the fleet was unreachable, say):
+presents this edge's enrolment key with proof of the code's secret, over TLS that trusts only the fleet's CA the
+code pins (this needs Python 3.13 or later), and prints the key's fingerprint for whoever reads it to the approving
+officer. Nothing is admitted until an officer approves with their passkey. To present again for an installed edge (the fleet was unreachable, say):
 
     python deploy/edge/install.py enrol --code-file <the code's file>
 """
@@ -141,19 +141,40 @@ def presentation(code: dict, seed: bytes) -> dict:
             "secret": code["secret"], "sig": priv.sign(msg).hex()}
 
 
+def require_ca_pin_support() -> None:
+    """Enrolment by code needs Python 3.13: the code pins the fleet's CA (0026 point 27), and only from 3.13 does ssl
+    give the chain the fleet presents, where that CA is found; before it, only the leaf can be read."""
+    if sys.version_info < (3, 13):
+        raise SystemExit(f"enrolment by code needs Python 3.13 or later (this is {sys.version.split()[0]}): the code "
+                         "pins the fleet's CA, and only Python 3.13's ssl reads the chain the fleet presents to find "
+                         "it. Install Python 3.13 or later (Debian 13 and current Raspberry Pi OS ship it), then run "
+                         "the installer with it")
+
+
+def is_ca(der: bytes) -> bool:
+    from cryptography import x509
+    try:
+        return x509.load_der_x509_certificate(der).extensions.get_extension_for_class(x509.BasicConstraints).value.ca
+    except x509.ExtensionNotFound:
+        return False
+
+
 def pinned_context(host: str, port: int, pin: str, timeout: float = 20) -> ssl.SSLContext:
-    """A TLS context that trusts only the certificate the code pins (the fleet's long-term key or CA, 0026 point
-    27): the chain the fleet presents is read once, the certificate whose sha256 is the pin becomes the only root, and
-    the real connection is verified against it, the host name included. A chain without it is refused."""
+    """A TLS context that trusts only the CA the code pins (0026 point 27): the chain the fleet presents is read once,
+    the certificate whose sha256 is the pin becomes the only root, and the real connection is verified against it,
+    the host name included. A chain without it is refused, and so is a pinned certificate that is not a CA."""
+    require_ca_pin_support()
     probe = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     probe.check_hostname, probe.verify_mode = False, ssl.CERT_NONE   # only to read the chain; nothing is sent
     probe.minimum_version = ssl.TLSVersion.TLSv1_3
     with socket.create_connection((host, port), timeout=timeout) as raw:
         with probe.wrap_socket(raw, server_hostname=host) as t:
-            # the whole chain from Python 3.13; before it, the leaf only (a pinned CA then needs 3.13)
-            chain = t.get_unverified_chain() if hasattr(t, "get_unverified_chain") else [t.getpeercert(True)]
+            chain = t.get_unverified_chain()   # the whole chain the fleet sent (Python 3.13)
     for der in chain or []:   # DER bytes, as the fleet sent them
         if hashlib.sha256(der).hexdigest() == pin.lower():
+            if not is_ca(der):
+                raise ssl.SSLError("the code pins a certificate that is not a CA: a code pins the fleet's CA, never "
+                                   "its leaf. Ask for a new code")
             ctx = ssl.create_default_context(cadata=der)   # this certificate alone; no system roots
             ctx.verify_flags |= ssl.VERIFY_X509_PARTIAL_CHAIN   # the pinned certificate is the root, CA or not
             ctx.minimum_version = ssl.TLSVersion.TLSv1_3
@@ -190,10 +211,11 @@ def present(code: dict, seed: bytes, timeout: float = 20) -> str:
 
 def enrol_by_code(code_file: str, seed: bytes) -> None:
     """Enrols this edge into the fleet its code names, and prints the fingerprint (shown only after presenting)."""
+    require_ca_pin_support()
     code = parse_code(Path(code_file).read_text(encoding="utf-8"))
     fp = present(code, seed)
     print(f"enrolment into fleet {code['fleet']}: key presented. Read this fingerprint from this screen to the "
-          f"approving officer, who types at least 16 of its characters:\n  {fp}")
+          f"approving officer, who types 16 of its characters (not the last 16) or all of it:\n  {fp}")
 
 
 def enrol_main(argv: list[str]) -> int:
@@ -243,6 +265,7 @@ def main() -> int:
     if bool(o.desk_ca) == bool(o.desk_pin):
         sys.exit("give exactly one of --desk-ca and --desk-pin")
     if o.enrol_code_file:
+        require_ca_pin_support()   # before anything is written, as the code below
         try:   # checked before anything is written: a code that cannot be read stops the install at its start
             parse_code(Path(o.enrol_code_file).read_text(encoding="utf-8"))
         except (OSError, ValueError) as e:

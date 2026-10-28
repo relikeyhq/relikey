@@ -25,11 +25,13 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
 	"relikey/agent/pkg/events"
 	"relikey/fleet/internal/admin"
+	"relikey/fleet/internal/enrol"
 	"relikey/fleet/internal/fleet"
 	"relikey/fleet/internal/page"
 )
@@ -82,6 +84,12 @@ func load(path string) (config, map[string]ed25519.PublicKey, error) {
 	}
 	if a := c.Admin; a != nil && (a.State == "" || a.Fleet == "" || a.State == c.State) {
 		return c, nil, errors.New("admin: state (a file of its own, not the inventory's) and fleet (this fleet's id)")
+	}
+	if c.Admin != nil && c.Page != nil && (!strings.HasPrefix(c.Page.EnrolURL, "https://") || c.Page.PinCAFile == "") {
+		// otherwise the page would open slots whose codes no edge can use: no address to present at, or no CA to trust
+		return c, nil, errors.New("page: enrolment by code (the admin section) needs page.enrol_url " +
+			"(https://EDGE_HOST/fleet/v1/enrol) and page.pin_ca_file (the fleet's CA certificate, which the codes pin); " +
+			"set both, or remove the admin section")
 	}
 	if c.State == "" {
 		return c, nil, errors.New("state: the inventory file's path")
@@ -155,6 +163,17 @@ func main() {
 			fmt.Fprintln(os.Stderr, "relikey-fleet: page:", err)
 			os.Exit(2)
 		}
+		pin := ""
+		if c.Page.PinCAFile != "" { // the codes pin the fleet's CA, never its leaf (0026 point 27)
+			b, err := os.ReadFile(c.Page.PinCAFile)
+			if err == nil {
+				pin, err = enrol.CAPin(b)
+			}
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "relikey-fleet: page.pin_ca_file:", err)
+				os.Exit(2)
+			}
+		}
 		pg, err := page.New(page.WithClient(ctx, hc), *c.Page, secret, func() (string, any) {
 			return "self-reported, not attested (no clerk facts yet)", inv.View()
 		}, log)
@@ -163,6 +182,7 @@ func main() {
 		} else {
 			pg.HTTP = hc
 			pg.Admin = st
+			pg.Pin = pin
 			psrv := &http.Server{Addr: c.Page.Listen, Handler: pg.Handler(), ReadHeaderTimeout: 10 * time.Second,
 				ReadTimeout: 20 * time.Second, WriteTimeout: 20 * time.Second}
 			go func() { <-ctx.Done(); _ = psrv.Close() }()

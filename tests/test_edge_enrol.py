@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: EUPL-1.2
 """The edge installer's side of enrolment by code (deploy/edge/install.py, decision 0026 point 15): it reads the code,
-presents the edge's key with proof of the secret over TLS that trusts only the code's pin, prints the fingerprint,
+presents the edge's key with proof of the secret over TLS that trusts only the CA the code pins, prints the fingerprint,
 and never prints the code. The fleet's own end, with this code, is fleet/internal/fleet/enrolled_test.go."""
 import base64
 import datetime
@@ -10,6 +10,7 @@ import importlib.util
 import ipaddress
 import json
 import ssl
+import sys
 import threading
 from pathlib import Path
 
@@ -59,29 +60,55 @@ def test_a_code_is_read_and_a_bad_one_refused_without_repeating_it():
         assert CODE_SECRET not in str(e.value) and text not in str(e.value)
 
 
+def test_enrolment_before_python_3_13_is_refused_and_says_why(monkeypatch, tmp_path):
+    m = load()
+    monkeypatch.setattr(m.sys, "version_info", (3, 12, 9))
+    f = tmp_path / "code"
+    f.write_text(code_text(VECTOR), encoding="utf-8")
+    with pytest.raises(SystemExit) as e:
+        m.enrol_by_code(str(f), SEED)
+    assert "Python 3.13" in str(e.value) and "CA" in str(e.value) and CODE_SECRET not in str(e.value)
+
+
+needs_313 = pytest.mark.skipif(sys.version_info < (3, 13), reason="enrolment by code needs Python 3.13's ssl")
+
+
 @pytest.fixture
 def fleet(tmp_path):
-    """A fleet's enrolment route on loopback TLS (a self-signed certificate naming 127.0.0.1): it checks the
-    presentation as fleet/internal/enrol Accept does and answers 204, or the status a test sets."""
+    """A fleet's enrolment route on loopback TLS (a leaf naming 127.0.0.1, sent with the fleet's CA): it checks the
+    presentation as fleet/internal/enrol Accept does and answers 204, or the status a test sets. The code pins the
+    CA; the state holds the leaf's hash for the test that pins it."""
     from cryptography import x509
     from cryptography.hazmat.primitives import hashes, serialization
     from cryptography.hazmat.primitives.asymmetric import ec
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
     from cryptography.x509.oid import NameOID
-    key = ec.generate_private_key(ec.SECP256R1())
-    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "fleet test")])
     now = datetime.datetime.now(datetime.timezone.utc)
-    cert = (x509.CertificateBuilder().subject_name(name).issuer_name(name).public_key(key.public_key())
-            .serial_number(1).not_valid_before(now - datetime.timedelta(hours=1))
+    ca_key, key = ec.generate_private_key(ec.SECP256R1()), ec.generate_private_key(ec.SECP256R1())
+    ca_name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "fleet test CA")])
+    ca = (x509.CertificateBuilder().subject_name(ca_name).issuer_name(ca_name).public_key(ca_key.public_key())
+          .serial_number(1).not_valid_before(now - datetime.timedelta(hours=1))
+          .not_valid_after(now + datetime.timedelta(hours=1))
+          .add_extension(x509.BasicConstraints(ca=True, path_length=0), True)
+          .add_extension(x509.KeyUsage(digital_signature=False, content_commitment=False, key_encipherment=False,
+                                       data_encipherment=False, key_agreement=False, key_cert_sign=True,
+                                       crl_sign=True, encipher_only=False, decipher_only=False), True)
+          .add_extension(x509.SubjectKeyIdentifier.from_public_key(ca_key.public_key()), False)
+          .sign(ca_key, hashes.SHA256()))
+    leaf = (x509.CertificateBuilder().subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "fleet")]))
+            .issuer_name(ca_name).public_key(key.public_key())
+            .serial_number(2).not_valid_before(now - datetime.timedelta(hours=1))
             .not_valid_after(now + datetime.timedelta(hours=1))
             .add_extension(x509.SubjectAlternativeName([x509.IPAddress(ipaddress.ip_address("127.0.0.1"))]), False)
-            .add_extension(x509.BasicConstraints(ca=True, path_length=None), True)
-            .sign(key, hashes.SHA256()))
+            .add_extension(x509.BasicConstraints(ca=False, path_length=None), True)
+            .add_extension(x509.AuthorityKeyIdentifier.from_issuer_public_key(ca_key.public_key()), False)
+            .sign(ca_key, hashes.SHA256()))
     crt, k = tmp_path / "c.pem", tmp_path / "k.pem"
-    crt.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
+    crt.write_bytes(leaf.public_bytes(serialization.Encoding.PEM) + ca.public_bytes(serialization.Encoding.PEM))
     k.write_bytes(key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
                                     serialization.NoEncryption()))
-    state = {"status": 204, "seen": []}
+    state = {"status": 204, "seen": [],
+             "leaf_pin": hashlib.sha256(leaf.public_bytes(serialization.Encoding.DER)).hexdigest()}
 
     class H(http.server.BaseHTTPRequestHandler):
         def do_POST(self):
@@ -104,11 +131,12 @@ def fleet(tmp_path):
     srv.socket = ctx.wrap_socket(srv.socket, server_side=True)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     code = {**VECTOR, "url": f"https://127.0.0.1:{srv.server_address[1]}/fleet/v1/enrol",
-            "pin": hashlib.sha256(cert.public_bytes(serialization.Encoding.DER)).hexdigest()}
+            "pin": hashlib.sha256(ca.public_bytes(serialization.Encoding.DER)).hexdigest()}
     yield code, state
     srv.shutdown()
 
 
+@needs_313
 def test_the_edge_presents_to_the_pinned_fleet_and_prints_only_the_fingerprint(fleet, tmp_path, capsys):
     code, state = fleet
     m = load()
@@ -121,6 +149,7 @@ def test_the_edge_presents_to_the_pinned_fleet_and_prints_only_the_fingerprint(f
     assert [p["key"] for p in state["seen"]] == [EDGE_PUB]
 
 
+@needs_313
 def test_another_certificate_gets_no_presentation(fleet):
     code, state = fleet
     with pytest.raises(SystemExit) as e:
@@ -129,6 +158,16 @@ def test_another_certificate_gets_no_presentation(fleet):
     assert state["seen"] == []   # refused before the request: the secret never left
 
 
+@needs_313
+def test_a_pinned_leaf_gets_no_presentation(fleet):
+    code, state = fleet
+    with pytest.raises(SystemExit) as e:
+        load().present({**code, "pin": state["leaf_pin"]}, SEED, timeout=5)
+    assert "not a CA" in str(e.value)
+    assert state["seen"] == []   # refused before the request: the secret never left
+
+
+@needs_313
 @pytest.mark.parametrize("status,says", [(409, "slot already taken"), (429, "try again in a minute"),
                                          (403, "refused the presentation")])
 def test_the_fleets_refusals_are_shown(fleet, status, says):

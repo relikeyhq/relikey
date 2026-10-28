@@ -55,17 +55,20 @@ func TestActivationThroughThePage(t *testing.T) {
 	if _, body, _ := get(t, dan, srv+"/"); strings.Contains(body, `id="activate-sign"`) {
 		t.Error("a non-officer is offered the activation")
 	}
-	if c, _ := call(t, dan, srv, "/activate/begin", srv, "application/json", item(flat[len(flat)-16:])); c != 403 {
+	if c, _ := call(t, dan, srv, "/activate/begin", srv, "application/json", item(flat[:16])); c != 403 {
 		t.Errorf("a non-officer began an activation: %d", c)
 	}
 	if c, _ := call(t, ann, srv, "/activate/begin", srv, "application/json", item("AAAAAAAAAAAAAAAA")); c != 400 {
 		t.Errorf("a typed check not from the fingerprint: %d, want 400 before any passkey", c)
 	}
-	if c, _ := call(t, ann, srv, "/activate/begin", srv, "https://evil.example", item(flat[len(flat)-16:])); c != 403 && c != 415 {
+	if c, _ := call(t, ann, srv, "/activate/begin", srv, "application/json", item(flat[len(flat)-16:])); c != 400 {
+		t.Errorf("the last 16 characters (76 bits): %d, want 400 before any passkey", c)
+	}
+	if c, _ := call(t, ann, srv, "/activate/begin", srv, "https://evil.example", item(flat[:16])); c != 403 && c != 415 {
 		t.Errorf("another origin began an activation: %d", c)
 	}
 	signWith := func(key *regtest.Authenticator) (int, map[string]any) {
-		c, o := call(t, ann, srv, "/activate/begin", srv, "application/json", item(flat[len(flat)-16:]))
+		c, o := call(t, ann, srv, "/activate/begin", srv, "application/json", item(flat[:16]))
 		if c != 200 {
 			t.Fatalf("activate begin: %d %v", c, o)
 		}

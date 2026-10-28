@@ -84,7 +84,7 @@ func (g *enrolRig) approve(slot, keyHex string) error {
 	fp := enrol.Fingerprint(keyHex)
 	flat := strings.ReplaceAll(fp, " ", "")
 	a := enrol.Activation{Fleet: "fleet-1", Approver: "ann", Items: []enrol.Item{{Slot: slot, Fingerprint: fp,
-		Typed: flat[len(flat)-16:], ReadBy: "the installer", ReadHow: "phone"}}}
+		Typed: flat[:16], ReadBy: "the installer", ReadHow: "phone"}}}
 	st := registry.Statement{Kind: "activate", Fleet: "fleet-1", Registry: 1, Body: a.Hash(),
 		Expires: time.Now().Add(5 * time.Minute), Nonce: "n-" + slot}
 	_, err := g.st.Activate(stmtRP, a, st, g.ann.Sign(stmtRP, "ann", st, regtest.Tweak{}), admin.Event{At: time.Now(), Subject: "ann"}, time.Now())
@@ -162,7 +162,7 @@ func TestAnActivationNeedsTheApproversPasskeyOverThisStatement(t *testing.T) {
 	fp := enrol.Fingerprint(keyHex)
 	flat := strings.ReplaceAll(fp, " ", "")
 	a := enrol.Activation{Fleet: "fleet-1", Approver: "ann", Items: []enrol.Item{{Slot: code.Slot, Fingerprint: fp,
-		Typed: flat[len(flat)-16:], ReadBy: "the installer", ReadHow: "phone"}}}
+		Typed: flat[:16], ReadBy: "the installer", ReadHow: "phone"}}}
 	st := registry.Statement{Kind: "activate", Fleet: "fleet-1", Registry: 1, Body: a.Hash(), Expires: time.Now().Add(time.Minute), Nonce: "x"}
 	other := st
 	other.Nonce = "y"

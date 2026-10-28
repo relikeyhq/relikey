@@ -137,9 +137,9 @@ the public roots come from --ca-bundle, or certifi, or the host's bundle.
 
 With --enrol-code-file (decision 0026 point 15), the edge also enrols into its fleet: the file holds the one-time code
 from the fleet page (carried as a QR code or on a USB stick, never typed, never on the command line). The installer
-presents this edge's enrolment key with proof of the code's secret, over TLS that trusts only the code's pin, and
-prints the key's fingerprint for whoever reads it to the approving officer. Nothing is admitted until an officer
-approves with their passkey. To present again for an installed edge (the fleet was unreachable, say):
+presents this edge's enrolment key with proof of the code's secret, over TLS that trusts only the fleet's CA the
+code pins (this needs Python 3.13 or later), and prints the key's fingerprint for whoever reads it to the approving
+officer. Nothing is admitted until an officer approves with their passkey. To present again for an installed edge (the fleet was unreachable, say):
 
     python deploy/edge/install.py enrol --code-file <the code's file>
 

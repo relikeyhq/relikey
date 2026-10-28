@@ -431,7 +431,7 @@ func TestOpeningASlot(t *testing.T) {
 	_, p, srv, browser := rig(t)
 	st, _ := admin.Open(filepath.Join(t.TempDir(), "admin.json"), "fleet-1")
 	p.Admin = st
-	p.Cfg.EnrolURL, p.Cfg.Pin = "https://edge.example/fleet/v1/enrol", strings.Repeat("a", 64)
+	p.Cfg.EnrolURL, p.Pin = "https://edge.example/fleet/v1/enrol", strings.Repeat("a", 64)
 	if code, _, _ := get(t, browser, srv.URL+"/"); code != 200 {
 		t.Fatal("sign-in")
 	}
