@@ -49,6 +49,14 @@ type Key struct {
 	OpenSSH string
 }
 
+// Credential is any other way an account can sign in: a password, a one-time-password seed, a client certificate. No
+// lease grants one, so a managed account holds none, whatever its history (an administrator, a person while
+// self-service was on, an import). Kind is what the bastion calls it, for the reports.
+type Credential struct {
+	ID   string `json:"id"`
+	Kind string `json:"kind"`
+}
+
 // Target is a system the bastion fronts.
 type Target struct {
 	ID   string
@@ -93,6 +101,11 @@ type Admin interface {
 	Keys(ctx context.Context, accountID string) ([]Key, error)
 	AddKey(ctx context.Context, accountID, label, openssh string) error
 	RemoveKey(ctx context.Context, accountID, id string) error
+
+	// Credentials lists every credential of the account that is neither an identity nor a key. An adapter that cannot
+	// list one kind returns an error, so the account counts as unreadable, never as holding none.
+	Credentials(ctx context.Context, accountID string) ([]Credential, error)
+	RemoveCredential(ctx context.Context, accountID string, c Credential) error
 
 	ActiveSessions(ctx context.Context) ([]Session, error)
 	CloseSession(ctx context.Context, id string) error

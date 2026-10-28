@@ -15,8 +15,9 @@ for linux amd64, arm64, armv7). How it is written and built: `docs/go-engineerin
   bundle says more time has passed; then the later time wins and the skew is reported. A wall clock set back cannot
   keep a lease alive. After a reboot (boot id changed) nothing is live until a fresh bundle verifies.
 - **The plan**: close sessions that no live lease reaches (or that ran past `max_session_hours`, or whose user no longer
-  exists), then remove roles and SSO credentials, delete users without leases, then create users (stripping
-  Warpgate's default roles), add SSO credentials (provider and e-mail, decision 0010) and roles with `expires_at`.
+  exists), then remove roles, SSO credentials and every other credential, delete users without leases, then create
+  users (stripping Warpgate's default roles), add SSO credentials (provider and e-mail, decision 0010) and roles
+  with `expires_at`.
   Since edge protocol 1.3 the bundle carries no address: the agent fetches each live lease's verified address from the
   desk, sealed for that request, and keeps it in memory only. A failed fetch is retried after 15 s; an answer without
   an address is asked again no sooner than a minute later, because the desk can learn the address after the lease went
@@ -30,6 +31,14 @@ only reports): no self-service credentials (a person could add a password, key o
 make their account unreadable to the agent), no password SSH, API tokens of at most an hour. A bastion adapter
 offers this through the optional `bastion.Hardener`; without it the settings are unchecked. An account the agent
 cannot read is still closed and deleted once no lease is live; with a live lease nothing is changed blind.
+
+The settings stop new credentials; the plan removes the ones already there. A managed account signs in only through
+the lease's SSO credential or a visit lease's key, so every other credential on it (on Warpgate: passwords,
+one-time-password seeds, client certificates) is removed on the next tick in enforce mode, however it got there:
+made before the agent ran or before the settings were restored, by an administrator, or by an import. The same
+holds for a key no live visit lease installs and an SSO credential that is not the lease's. Unmanaged accounts keep
+theirs. A credential list that cannot be read makes the account unreadable for that tick, never "holds none". API
+tokens are not listed by Warpgate's admin API; the one-hour cap bounds them.
 
 ## A role reaches only its leases' targets
 A bastion role grants every target bound to it, and the ceiling checks only the lease's target. So the agent assigns
@@ -94,10 +103,11 @@ apart by `"specversion"`: a CloudEvents 1.0 envelope (type `relikey.<noun>.<verb
 `account:<edge>/<name>`) whose data is an OCSF 1.6.0 event, with a monitoring platform's alert-event fields (`ts`,
 `solution`, `event`, `outcome`, `severity`, `reason`, `entity`) as extension attributes. Emitted: each change the agent
 made on the bastion (`relikey.account.created`, `deleted`, `role_granted`, `role_revoked`, `role_extended`,
-`sso_bound`, `sso_unbound`, `key_added`, `key_removed`; `relikey.session.closed`), an unmanaged account holding a
-governed role (`relikey.drift.rogue_account`, once when found and once when gone; which roles stays in the local
-drift report), a refused bundle (`relikey.bundle.refused`) and an ended edge (`relikey.edge.ended`). Events name
-bastion accounts and lease ids, never an e-mail; they are not yet chained or sequenced (the evidence log, 0025 point 2).
+`sso_bound`, `sso_unbound`, `key_added`, `key_removed`, `credential_removed`; `relikey.session.closed`), an
+unmanaged account holding a governed role (`relikey.drift.rogue_account`, once when found and once when gone; which
+roles stays in the local drift report), a refused bundle (`relikey.bundle.refused`) and an ended edge
+(`relikey.edge.ended`). Events name bastion accounts and lease ids, never an e-mail; they are not yet chained or
+sequenced (the evidence log, 0025 point 2).
 
 `fleet.url` (optional): the agent sends ReliKey's fleet service its signed report every pull interval
 (`docs/fleet.md`, decision 0026); it must be the clerk's own host, and the agent takes nothing back from it.

@@ -200,11 +200,14 @@ type Observed struct {
 }
 
 type ObservedUser struct {
-	ID       string
-	Roles    map[string]bastion.Grant // by role name
-	SSO      []bastion.Identity
-	Keys     []bastion.Key
-	Sessions []bastion.Session
+	ID    string
+	Roles map[string]bastion.Grant // by role name
+	SSO   []bastion.Identity
+	Keys  []bastion.Key
+	// Credentials are the account's passwords, one-time-password seeds and certificates: none is the lease's, so all
+	// go, the ones made before the agent or behind its back too.
+	Credentials []bastion.Credential
+	Sessions    []bastion.Session
 }
 
 // Observe reads the bastion. Sessions are read for managed users only.
@@ -257,6 +260,9 @@ func Observe(ctx context.Context, bas bastion.Admin) (*Observed, error) {
 		}
 		if err == nil {
 			ou.Keys, err = bas.Keys(ctx, u.ID)
+		}
+		if err == nil {
+			ou.Credentials, err = bas.Credentials(ctx, u.ID)
 		}
 		if err != nil {
 			if ctx.Err() != nil {
@@ -348,6 +354,7 @@ const (
 	CloseSession Kind = iota
 	RemoveRole
 	DeleteSSO
+	DeleteCredential
 	DeleteUser
 	DeleteKey
 	CreateUser // grants from here on
@@ -357,8 +364,8 @@ const (
 	SetExpiry
 )
 
-var kindNames = [...]string{"close-session", "remove-role", "delete-sso", "delete-user", "delete-key", "create-user",
-	"add-sso", "add-key", "add-role", "set-expiry"}
+var kindNames = [...]string{"close-session", "remove-role", "delete-sso", "delete-credential", "delete-user",
+	"delete-key", "create-user", "add-sso", "add-key", "add-role", "set-expiry"}
 
 func (k Kind) String() string { return kindNames[k] }
 
@@ -379,7 +386,9 @@ type Action struct {
 	Email    string    `json:"email,omitempty"`
 	KeyID    string    `json:"key_id,omitempty"`
 	Key      string    `json:"key,omitempty"`
-	Why      string    `json:"why"`
+	// Credential is a password, one-time-password seed or certificate to remove (DeleteCredential).
+	Credential bastion.Credential `json:"credential,omitzero"`
+	Why        string             `json:"why"`
 }
 
 func (a Action) String() string {
@@ -450,6 +459,9 @@ func Compute(d Desired, o *Observed, provider string) Plan {
 			for _, c := range ou.SSO {
 				add(Action{Kind: DeleteSSO, Username: name, UserID: ou.ID, SSOID: c.ID, Email: c.Email, Why: "no live lease"})
 			}
+			for _, c := range ou.Credentials {
+				add(Action{Kind: DeleteCredential, Username: name, UserID: ou.ID, Credential: c, Why: "no live lease"})
+			}
 			add(Action{Kind: DeleteUser, Username: name, UserID: ou.ID, Why: "no live lease"})
 			continue
 		}
@@ -483,6 +495,12 @@ func Compute(d Desired, o *Observed, provider string) Plan {
 				add(Action{Kind: DeleteSSO, Username: name, UserID: ou.ID, SSOID: c.ID, Email: c.Email,
 					Why: "not the lease's e-mail and provider"})
 			}
+		}
+		// A lease signs in through SSO or a visit key only: any other credential is out of policy, however it got
+		// there (made before the agent ran, by an administrator, by the person while self-service was on).
+		for _, c := range ou.Credentials {
+			add(Action{Kind: DeleteCredential, Username: name, UserID: ou.ID, Credential: c,
+				Why: "no lease grants a credential of kind " + c.Kind})
 		}
 		for _, k := range ou.Keys {
 			if norm, _ := normaliseKey(k.OpenSSH); norm == "" || !du.Keys[norm] {
@@ -614,6 +632,8 @@ func run(ctx context.Context, bas bastion.Admin, provider string, a Action, crea
 		return ignoreNotFound(bas.Revoke(ctx, a.UserID, a.RoleID))
 	case DeleteSSO:
 		return ignoreNotFound(bas.RemoveIdentity(ctx, a.UserID, a.SSOID))
+	case DeleteCredential:
+		return ignoreNotFound(bas.RemoveCredential(ctx, a.UserID, a.Credential))
 	case DeleteUser:
 		return ignoreNotFound(bas.DeleteAccount(ctx, a.UserID))
 	case CreateUser:
