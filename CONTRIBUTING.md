@@ -6,6 +6,8 @@
   upstream.
 - ReliKey names no deployment, customer or site; the model check fails if a file does.
 - How issues, pull requests, checks and releases work: [docs/maintaining.md](docs/maintaining.md).
+- A change worth a line in the changelog adds a fragment, `changelog.d/<issue>.<section>.md`, instead of editing
+  `CHANGELOG.md` (`changelog.d/README.md`); open pull requests then never conflict over it.
 - Design decisions go in `docs/decisions/`; open questions in `model/open-decisions.yaml`; review records stay with the
   maintainer.
 - AI-assisted contributions say so in an `Assisted-by:` trailer and tick the AI-use level in the pull request
