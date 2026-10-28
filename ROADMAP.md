@@ -65,3 +65,4 @@ Accepted or proposed direction that waits on a partner release, a prototype or a
 - Sign-in gateway part B: a Kerberos prototype ([#35](https://github.com/relikeyhq/relikey/issues/35))
 - Vendor sign-in through the vendor's own identity provider ([#36](https://github.com/relikeyhq/relikey/issues/36))
 - Production networking and high availability for the core ([#37](https://github.com/relikeyhq/relikey/issues/37))
+- Edge on Windows: what it takes, behind Warpgate's Windows port ([#81](https://github.com/relikeyhq/relikey/issues/81))
