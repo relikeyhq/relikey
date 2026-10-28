@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: EUPL-1.2
 """Repository metadata: links to this repository name its real owner, and the issue forms are well formed.
 
-The issue chooser's private-report link pointed at github.com/relikey/relikey, an owner that is not ours, from the
+The issue chooser's private-report link named another owner ("relikey" instead of "relikeyhq") from the
 first public commit until 0.1.2: a reporter following it would not reach the maintainer.
 """
 import re
