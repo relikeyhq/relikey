@@ -6,6 +6,7 @@
 
 - Decision records touched or added:
 - Model files touched (`model/`):
+- Changelog fragment (`changelog.d/<issue>.<section>.md`), or why none is needed:
 - `python tools/check_model.py` and `python -m pytest` pass: [ ]
 
 ## AI use

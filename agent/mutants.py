@@ -7,8 +7,16 @@ A guard whose removal leaves the tests green is untested. Equivalent mutants are
 - the pinned-key comparison in Unseal: the signature is verified with the pinned key right after, so a different key
   is refused either way; the comparison stays for the reference's message. Run from agent/:  python mutants.py
 Each mutant names the file, the exact text and its replacement; the file is restored after every run.
+
+    python mutants.py                   every mutant (main, the nightly run, before a release)
+    python mutants.py --changed BASE    the mutants a change since BASE can affect (a pull request): those in a changed
+                                        file or in a package whose tests or test data changed; a change to a shared
+                                        test helper, this script, build.py or a go.mod/go.sum runs all of them
+    python mutants.py --shard 2/4       the second of four deterministic parts of the list (CI runs them in parallel)
 """
+import argparse
 import os
+import posixpath
 import subprocess
 import sys
 from pathlib import Path
@@ -300,10 +308,101 @@ MUTANTS = [
 ]
 
 
-def main() -> int:
+# Which mutants a change can affect (--changed). A mutant is judged only by the tests of its own package (main() runs
+# `go test ./<package>/`), so a weakened test or test data reaches only the mutants of that package. Shared test code
+# reaches every package: a change to any of these runs every mutant. Paths are relative to the repository.
+HARNESS_DIRS = ("agent/internal/fakes/", "agent/internal/testemit/", "fleet/internal/registry/regtest/")
+HARNESS_FILES = ("agent/mutants.py", "agent/build.py")
+# Files a package's tests read from outside the package (tests/test_mutants.py finds every "..": keep this complete).
+TEST_INPUTS = {
+    "agent/internal/agent": ("brand/mark/geometry.json",),   # page_test.go: the mark's geometry
+    "agent/internal/apply": ("agent/internal/agent/",),       # seam_test.go: the agent package's imports
+}
+
+
+def repo_path(path: Path) -> str:
+    """The mutated file relative to the repository root, as git names it (the mutant paths are relative to agent/)."""
+    return posixpath.normpath("agent/" + path.as_posix())
+
+
+def shared(f: str) -> bool:
+    """Whether a changed file (repository-relative) is test code or build input shared by every package."""
+    return f.startswith(HARNESS_DIRS) or f in HARNESS_FILES or posixpath.basename(f) in ("go.mod", "go.sum")
+
+
+def tested_packages(f: str) -> set[str]:
+    """The packages whose tests a changed file is part of: its own for a _test.go or test data, and any package that
+    reads it from outside (TEST_INPUTS)."""
+    pkgs = {p for p, inputs in TEST_INPUTS.items() if any(f == i or (i.endswith("/") and f.startswith(i))
+                                                          for i in inputs)}
+    if f.endswith("_test.go"):
+        pkgs.add(posixpath.dirname(f))
+    elif "/testdata/" in "/" + f:
+        pkgs.add(("/" + f).split("/testdata/")[0].lstrip("/"))
+    return pkgs
+
+
+def select_changed(mutants: list, changed: list[str]) -> tuple[list, str]:
+    """The mutants a change can affect, and why: all of them (shared test code changed), those in a changed file or in
+    a package whose tests changed, or none."""
+    harness = sorted(f for f in changed if shared(f))
+    if harness:
+        more = f" and {len(harness) - 1} more" if len(harness) > 1 else ""
+        return list(mutants), f"shared test code or the harness changed ({harness[0]}{more}): every mutant"
+    files = set(changed)
+    pkgs = set().union(*(tested_packages(f) for f in changed))
+    picked = [m for m in mutants if repo_path(m[1]) in files or posixpath.dirname(repo_path(m[1])) in pkgs]
+    if not picked:
+        return [], "no mutated file and no test of a mutated package changed: no mutant to run"
+    mutated = {repo_path(m[1]) for m in picked} & files
+    tested = {posixpath.dirname(repo_path(m[1])) for m in picked} & pkgs
+    return picked, f"{len(mutated)} mutated file(s) and the tests of {len(tested)} package(s) changed"
+
+
+def parse_shard(spec: str) -> tuple[int, int]:
+    """'i/n' with 1 <= i <= n."""
+    try:
+        i, n = (int(x) for x in spec.split("/"))
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"--shard takes i/n, such as 2/4: {spec!r}") from None
+    if not 1 <= i <= n:
+        raise argparse.ArgumentTypeError(f"--shard i/n needs 1 <= i <= n: {spec!r}")
+    return i, n
+
+
+def shard(mutants: list, i: int, n: int) -> list:
+    """Part i of n, round robin over the list: the parts are disjoint, cover the list and differ by one at most."""
+    return mutants[i - 1::n]
+
+
+def changed_files(base: str) -> list[str]:
+    """Files changed on this branch since it left BASE (git diff BASE...HEAD), plus uncommitted changes to tracked
+    files. A failing git (an unknown BASE, a shallow clone) stops the run: it must never select nothing by accident."""
+    mb = subprocess.run(["git", "merge-base", base, "HEAD"], capture_output=True, text=True)
+    if mb.returncode != 0:
+        sys.exit(f"git merge-base {base} HEAD failed (a shallow clone needs fetch-depth: 0): {mb.stderr.strip()}")
+    r = subprocess.run(["git", "diff", "--name-only", "--no-renames", mb.stdout.strip()],
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        sys.exit(f"git diff against {base} failed: {r.stderr.strip()}")
+    return [f for f in r.stdout.splitlines() if f]
+
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(description="Remove one guard at a time; the tests must fail every time.")
+    ap.add_argument("--changed", metavar="BASE", help="only the mutants a change since BASE can affect")
+    ap.add_argument("--shard", type=parse_shard, metavar="I/N", help="run part I of N of the (selected) mutants")
+    args = ap.parse_args(argv)
+    mutants = MUTANTS
+    if args.changed:
+        mutants, why = select_changed(MUTANTS, changed_files(args.changed))
+        print(f"since {args.changed}: {why}")
+    if args.shard:
+        mutants = shard(mutants, *args.shard)
+        print(f"shard {args.shard[0]}/{args.shard[1]}: {len(mutants)} mutants")
     env = {**os.environ, "GOTOOLCHAIN": "local"}
     survived = []
-    for name, path, old, new in MUTANTS:
+    for name, path, old, new in mutants:
         src = path.read_text(encoding="utf-8")
         if src.count(old) != 1:
             print(f"STALE  {name}: the text to mutate is not found exactly once in {path}")
@@ -322,7 +421,7 @@ def main() -> int:
         print(("killed " if killed else "ALIVE  ") + name + ("" if killed or r.returncode == 0 else " (build failed)"))
         if not killed:
             survived.append(name)
-    print(f"{len(MUTANTS) - len(survived)}/{len(MUTANTS)} mutants killed")
+    print(f"{len(mutants) - len(survived)}/{len(mutants)} mutants killed")
     return 1 if survived else 0
 
 
