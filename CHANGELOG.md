@@ -25,9 +25,9 @@ Releases are semver tags, `v0.1.0` first. A ReliKey release is its pins and its 
 ## [Unreleased]
 
 ### Changed
-- The agent's state store skips a write when the record is unchanged, so idle ticks and pulls that bring nothing new
-  never rewrite the state slots, sparing the flash that edge hardware often boots from (AG-14). A test counts the
-  slot writes over idle ticks; a mutant that always writes is killed.
+- The base image of the fleet and agent images (busybox 1.37.0) is pinned by its multi-arch index digest, and the two
+  image files are renamed `Dockerfile.fleet` and `Dockerfile.agent` so Dependabot's docker ecosystem proposes updates
+  to the pin weekly.
 
 ## [0.1.2] - 2026-10-27
 
