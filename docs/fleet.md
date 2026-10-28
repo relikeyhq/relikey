@@ -35,7 +35,7 @@ with OCSF data like the agent's (0025 point 1), under the solution `relikey-flee
 
 ## Packaging (R-21)
 `python agent/build.py dist` builds `relikey-fleet-linux-amd64` and `-arm64` beside the agent; `install.py` builds the
-image (`deploy/core/Containerfile.fleet`: scratch, uid 10002, read-only root, no capabilities; the build context is
+image (`deploy/core/Dockerfile.fleet`: scratch, uid 10002, read-only root, no capabilities; the build context is
 allowlisted by `.dockerignore`/`.containerignore`, so only the binaries reach the builder), writes
 `deploy/secrets/fleet/fleet.json` with no known edges, and starts the `fleet` service in the core pod; a rebuilt image is
 recreated. Each enrolled edge is made known with `python deploy/core/fleet_edge.py --edge <name> --key <its enrolment
