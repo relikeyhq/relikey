@@ -35,9 +35,10 @@ each code comment states the threat and the guard itself.
 ## Releases
 A release is a signed tag `vX.Y.Z` on `main`, signed with ReliKey's own release key (its public half,
 `relikey.allowed_signers`, is in the repository root; `tools/release_key.py create` makes the key, keeps it and its
-passphrase in Bitwarden and writes that file). The tag needs a `## [X.Y.Z]` section in CHANGELOG.md;
-`release.yml` builds the agent and the fleet service reproducibly, attests their provenance and publishes the GitHub
-release with that section as its notes.
+passphrase in Bitwarden and writes that file). The tag needs a `## [X.Y.Z]` section in CHANGELOG.md: a release pull
+request runs `python tools/changelog.py release X.Y.Z`, which folds the fragments in `changelog.d/` into that section
+and removes them, and the tag follows its merge; `release.yml` builds the agent and the fleet service reproducibly,
+attests their provenance and publishes the GitHub release with that section as its notes.
 
 Tag the merge commit by its full hash, after the change it needs has merged, not `origin/main` from a clone that may
 be behind. Release tags are never moved or deleted (a ruleset enforces it): a tag whose release build fails stays,
