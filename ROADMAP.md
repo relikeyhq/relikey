@@ -41,6 +41,7 @@ Finish what 0.1.x started. Suggested order:
 25. Agent: metrics a site's monitoring can read, without a listener ([#60](https://github.com/relikeyhq/relikey/issues/60))
 26. Agent: the writes left on idle ticks and unchanged pulls ([#54](https://github.com/relikeyhq/relikey/issues/54))
 27. Core installer: write the fleet's enrolment-by-code settings ([#74](https://github.com/relikeyhq/relikey/issues/74))
+28. Edge: Warpgate 0.30.2, and decision 0010 brought up to date ([#78](https://github.com/relikeyhq/relikey/issues/78))
 
 ## Then: [0.3.0](https://github.com/relikeyhq/relikey/milestone/2)
 Work that needs 0.2.0 first, a lab installation, hardware or a second component:
