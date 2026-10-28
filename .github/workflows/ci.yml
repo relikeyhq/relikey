@@ -5,12 +5,15 @@ on:
   push:
     branches: [main]
   pull_request:
+  schedule:
+    - cron: '23 2 * * *'   # nightly: every mutant, sharded (a pull request runs only the ones it can affect)
+  workflow_dispatch:       # every mutant on demand
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}   # a push does not cancel the nightly
   cancel-in-progress: true
 
 jobs:
@@ -30,8 +33,11 @@ jobs:
   agent:
     name: Edge agent gate
     runs-on: ubuntu-24.04
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0              # the mutant selection diffs the pull request against its base
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: "1.27.3"        # build.py refuses any other toolchain (GE-9)
@@ -39,11 +45,39 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
-      - run: python agent/build.py check    # gofmt, vet (three targets), staticcheck, tests, mutants
+      # gofmt, vet (three targets), staticcheck, tests; on a pull request the mutants it can affect (agent/mutants.py
+      # --changed); elsewhere every mutant runs in the sharded job below
+      - run: |
+          if [ -n "$BASE" ]; then python agent/build.py check --changed "$BASE"
+          else python agent/build.py check --no-mutants; fi
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}   # empty outside a pull request
       - run: go run ./cmd/relikey-demo -headless    # the demo story end to end (docs/demo.md)
         working-directory: agent
       - run: python agent/build.py race
       - run: python agent/build.py vuln
+
+  agent-mutants:
+    name: Edge agent mutants (shard ${{ matrix.shard }}/4)
+    if: github.event_name != 'pull_request'   # main, nightly and on demand: every mutant, in four parallel parts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.27.3"
+          cache-dependency-path: agent/go.sum
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - run: python agent/build.py mutants --shard ${{ matrix.shard }}/4
 
   leak-gate:
     name: Export leak gate
