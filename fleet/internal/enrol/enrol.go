@@ -10,10 +10,12 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/x509"
 	"encoding/base32"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json/v2"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"regexp"
@@ -29,7 +31,7 @@ const (
 	MaxBatch       = 10  // slots one activation may carry (point 24)
 	MaxOpen        = 200 // open slots per fleet
 	MaxOpenPerUser = 20  // open slots per operator
-	MinTyped       = 16  // base32 characters typed from the edge's screen: 80 bits (point 24)
+	MinTyped       = 16  // base32 characters typed from the edge's screen: 80 bits, one more at the end (point 24)
 	MaxRefused     = 3   // refused presentations that close a slot: a code is not guessed at, it is reissued
 	CodePrefix     = "relikey-enrol-v1:"
 	presentContext = "relikey-enrol-present-v1"
@@ -67,7 +69,7 @@ type Slot struct {
 type Code struct {
 	Fleet  string `json:"fleet"`
 	URL    string `json:"url"`    // the fleet's enrolment route, https
-	Pin    string `json:"pin"`    // the fleet's long-term key or CA, hex sha256 (point 27)
+	Pin    string `json:"pin"`    // the fleet's CA, hex sha256 of its certificate (point 27; CAPin)
 	Anchor string `json:"anchor"` // the anchor registry's hash (point 30): a re-anchored fleet is another fleet
 	Slot   string `json:"slot"`
 	Secret string `json:"secret"` // base64url, single use
@@ -100,6 +102,24 @@ func random(n int) string {
 func hash(s string) string {
 	sum := sha256.Sum256([]byte(s))
 	return hex.EncodeToString(sum[:])
+}
+
+// CAPin is the pin a code carries: the sha256 of the fleet's CA certificate (PEM), never of its leaf (point 27), so
+// the leaf can be renewed without voiding the codes in circulation. A certificate that is not a CA is refused.
+func CAPin(pemCert []byte) (string, error) {
+	block, _ := pem.Decode(pemCert)
+	if block == nil {
+		return "", errors.New("not a PEM certificate")
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return "", err
+	}
+	if !cert.IsCA {
+		return "", errors.New("not a CA certificate: the code pins the fleet's CA, never its leaf (decision 0026 point 27)")
+	}
+	sum := sha256.Sum256(cert.Raw)
+	return hex.EncodeToString(sum[:]), nil
 }
 
 // Open makes a slot and its code. open are the slots not yet active or expired, to enforce the caps.
@@ -199,6 +219,17 @@ func Fingerprint(keyHex string) string {
 
 func plain(s string) string { return strings.ToUpper(strings.NewReplacer(" ", "", "-", "").Replace(s)) }
 
+// typedEnough: the typed check is a run of the fingerprint carrying at least 80 bits (point 24). Every base32
+// character carries five bits but the last, which carries one (256 = 51 * 5 + 1): 16 characters anywhere else carry
+// 80 bits, the last 16 only 76, so a run that ends there needs one character more. The whole fingerprint passes.
+// fp is a whole fingerprint (52 characters), already matched to the presented key.
+func typedEnough(fp, typed string) bool {
+	if len(typed) < MinTyped {
+		return false
+	}
+	return strings.Contains(fp[:len(fp)-1], typed) || len(typed) > MinTyped && strings.Contains(fp, typed)
+}
+
 // Item is one slot in an activation: what the approver saw and typed, and who read the screen.
 type Item struct {
 	Slot        string `json:"slot"`
@@ -224,7 +255,8 @@ func (a Activation) Hash() string {
 
 // Activate checks an activation against the slots, the registry in force and the officer's signature, and returns
 // the slots now active. Every item must name a presented slot with the fingerprint of its key and a typed check of
-// at least 16 characters taken from it; a relay or site fleet only when the approver read the screen in person.
+// at least 80 bits taken from it (see typedEnough); a relay or site fleet only when the approver read the screen in
+// person.
 func Activate(rp registry.RP, reg registry.Registry, slots map[string]Slot, a Activation, st registry.Statement,
 	sig registry.Signature, now time.Time) ([]Slot, error) {
 	switch {
@@ -262,8 +294,8 @@ func Check(slots map[string]Slot, a Activation, now time.Time) ([]Slot, error) {
 			return nil, fmt.Errorf("slot %s (%s): not presented, expired, or already active", it.Slot, s.Name)
 		case plain(it.Fingerprint) != plain(Fingerprint(s.Key)):
 			return nil, fmt.Errorf("slot %s (%s): the statement's fingerprint is not the presented key's", it.Slot, s.Name)
-		case len(plain(it.Typed)) < MinTyped || !strings.Contains(plain(it.Fingerprint), plain(it.Typed)):
-			return nil, fmt.Errorf("slot %s (%s): type at least %d characters of the fingerprint from the edge's screen", it.Slot, s.Name, MinTyped)
+		case !typedEnough(plain(it.Fingerprint), plain(it.Typed)):
+			return nil, fmt.Errorf("slot %s (%s): type %d characters of the fingerprint from the edge's screen, not the last %d, or all of it", it.Slot, s.Name, MinTyped, MinTyped)
 		case it.ReadBy == "" || it.ReadHow == "":
 			return nil, fmt.Errorf("slot %s (%s): record who read the screen and how", it.Slot, s.Name)
 		case (s.Kind == Relay || s.Kind == Site) && (it.ReadBy != a.Approver || it.ReadHow != "on site"):

@@ -64,8 +64,9 @@ Then compose runs the core as usual:
   tunnel. A core installed before the setup client existed: run `realm.py setup-client` once, while the bootstrap
   admin is still there.
 - Enrolment by code (docs/fleet.md): with `--fleet-host` the installer also writes fleet.json's `admin` section once
-  (kept on later runs, so the fleet keeps its id) and the page's `enrol_url` (the edge-facing name) and `pin` (the CA
-  that issued the front's certificate, sha256), and prints them. The named officers then register their passkeys and
+  (kept on later runs, so the fleet keeps its id) and the page's `enrol_url` (the edge-facing name) and `pin_ca_file`
+  (`deploy/secrets/fleet/pin-ca.crt`, the CA that issued the front's certificate, whose sha256 the codes pin), and
+  prints the pin. The named officers then register their passkeys and
   sign the anchor on the fleet page; after that an operator opens a slot there and carries its code to the edge. With
   `--cert`, the file must hold the certificate followed by its issuing CA, or enrolment stays off and the installer
   says so; fix the file and run `python deploy/core/fleet_page.py --host <name>` again. An edge whose Python is older

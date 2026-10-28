@@ -51,11 +51,13 @@ slots and the evidence log in that file, and takes enrolment by code: presentati
 activations on the page. `fleet_page.py --host` (and so `install.py --fleet-host`) writes it once, with the state in
 the fleet's volume and a new random fleet id, and keeps it on every later run: a new id would be a new fleet (0026
 point 30). It writes the page's `enrol_url` (`https://<edge-facing name>/fleet/v1/enrol`, the route the front passes
-to the fleet) and `pin`, the sha256 of the CA certificate that issued the front's certificate (0026 point 27): the
-second certificate in `deploy/secrets/front.crt`, which the front presents with its own. The local CA's `front.crt`
-holds that chain (an older install gets it on the next run); with `--cert`, give the certificate followed by its
-issuing CA. Without such a CA the installer leaves enrolment off and says why. If the CA changes, it says the pin
-changed: codes opened before carry the old pin and fail at the edge. The rate cap is the fleet's own, one for the
+to the fleet) and `pin_ca_file` (`deploy/secrets/fleet/pin-ca.crt`, mounted read-only): the CA certificate that
+issued the front's certificate (0026 point 27), the second certificate in `deploy/secrets/front.crt`, which the front
+presents with its own. The local CA's `front.crt` holds that chain (an older install gets it on the next run); with
+`--cert`, give the certificate followed by its issuing CA. Without such a CA the installer leaves enrolment off and
+says why; on a core that already has enrolment it keeps the last CA, so the fleet still starts, and says new codes
+will fail at the edge until the chain is fixed. If the CA changes, it says the pin changed: codes opened before carry
+the old pin and fail at the edge. The rate cap is the fleet's own, one for the
 whole fleet, and needs no setting.
 
 ## The fleet page (0026 point 13)
@@ -107,13 +109,19 @@ Playwright is installed).
 2. The edge's installer takes the code from a file, never from the command line:
    `python deploy/edge/install.py ... --enrol-code-file <file>`, or for an installed edge
    `python deploy/edge/install.py enrol --code-file <file>`. It presents the edge's enrolment key with the code's
-   secret and its own signature on `POST /fleet/v1/enrol`, over TLS that trusts only the certificate whose sha256 the
-   code pins (read from the chain the fleet presents, then the only root, the host name checked; a pinned CA needs
-   Python 3.13 or later, a pinned leaf works on any). Then it prints the key's fingerprint. It prints and logs neither
-   the code nor its secret, and reads nothing the fleet answers but the status: 409 is "slot already taken", 429 a
-   retry in a minute.
-3. The page lists the presented keys with their source address. An officer of the registry in force types at least
-   16 characters of the fingerprint as read from the edge's screen, records who read it and how, and signs the
+   secret and its own signature on `POST /fleet/v1/enrol`, over TLS that trusts only the fleet's CA, whose sha256 the
+   code pins (0026 point 27): the CA is read from the chain the fleet presents and becomes the only root, the host
+   name checked. The code never pins a leaf: the page makes it from `pin_ca_file`, refused unless it is a CA, so the
+   leaf can be renewed without voiding codes, and the installer refuses a pinned certificate that is not a CA.
+   Reading that chain needs Python 3.13 or later, so on an older Python the installer refuses enrolment and says to
+   install 3.13 (Debian 13 and current Raspberry Pi OS ship it). Hybrid post-quantum key exchange is used when both
+   ends negotiate it, not required: the code's secret is single use and the edge's key is public, so a recording
+   decrypted later yields nothing that can still be used. Then it prints the key's fingerprint. It prints and logs
+   neither the code nor its secret, and reads nothing the fleet answers but the status: 409 is "slot already taken",
+   429 a retry in a minute.
+3. The page lists the presented keys with their source address. An officer of the registry in force types 16
+   characters of the fingerprint (80 bits; not the last 16, which carry 76 as the last character carries one bit),
+   or all of it, as read from the edge's screen, records who read it and how, and signs the
    activation (up to ten slots) with their officer passkey (`/activate/begin`, `/activate/sign`; the statement is
    bound to this fleet, the registry version, the activation's hash, five minutes and a nonce, and used once).
 4. The fleet verifies the signature against the registry in force and records the activation, signed, in the evidence
@@ -122,9 +130,10 @@ Playwright is installed).
 Guards: the enrolment route takes at most 20 presentations a minute for the whole fleet; three refused presentations
 close a slot; a second key for a used slot is refused and shown. An enrolled name cannot be opened again (a new key is
 a rotation, slice 5) nor activated under a second key; a name configured in `edges` and enrolled by code under
-another key is refused for both until one is removed. Tested in Go (`fleet/internal/fleet/enrolled_test.go`, with
-`deploy/edge/install.py` itself presenting where Python has cryptography, set by `build.py check`;
-`fleet/internal/page/activate_test.go`) and in Python (`tests/test_edge_enrol.py`, one vector shared with Go).
+another key is refused for both, and logged with what to do, until one is removed. Tested in Go
+(`fleet/internal/fleet/enrolled_test.go`, with `deploy/edge/install.py` itself presenting where Python is 3.13 or later
+with cryptography, set by `build.py check`; `fleet/internal/page/activate_test.go`; `fleet/internal/enrol`, the typed
+check's 80 bits and the CA pin) and in Python (`tests/test_edge_enrol.py`, one vector shared with Go).
 
 ## The officer registry and enrolment (0026 points 14-33), the packages
 - `fleet/internal/registry`: the officer registry and bound passkey statements. A statement's challenge is a hash of
@@ -135,11 +144,11 @@ another key is refused for both until one is removed. Tested in Go (`fleet/inter
   a majority to remove anyone, every added officer's own signature, at least three officers after, and takes effect
   after 48 hours or at once as break-glass by a majority with a device-bound passkey.
 - `fleet/internal/enrol`: slots (24 hours, capped per fleet and per operator), the enrolment code (fleet, https
-  address, pin, anchor hash, slot, single-use secret), the edge's presentation (its key, the secret, and its signature
-  over the fleet, slot and commitment) with a second key for a used slot refused and recorded, and activation by one
-  officer's passkey over the activation's hash: at most ten slots, each with its whole fingerprint, at least 16 typed
-  base32 characters from the edge's screen, and who read it and how; a relay or site fleet only with the approver
-  reading its screen on site.
+  address, CA pin, anchor hash, slot, single-use secret), the edge's presentation (its key, the secret, and its
+  signature over the fleet, slot and commitment) with a second key for a used slot refused and recorded, and
+  activation by one officer's passkey over the activation's hash: at most ten slots, each with its whole fingerprint,
+  a typed check of 80 bits from the edge's screen (16 base32 characters, not the last 16, or the whole fingerprint),
+  and who read it and how; a relay or site fleet only with the approver reading its screen on site.
 
 ## Not built yet (0026's slices)
 The digest pin (once releases are signed), a clerk's governance facts,

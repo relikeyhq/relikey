@@ -8,10 +8,12 @@ It makes the fleet's client secret (deploy/secrets/fleet/page.secret, readable b
 client relikey-fleet (confidential, PKCE, a client role fleet-operator in the ID token, back-channel logout to the
 pod's loopback), fleet.json's page section, and the front's site for the name, which proxies only the page's routes.
 With it, enrolment by code (0026 points 14-33): fleet.json's admin section, written once and kept, and the page's
-enrol_url (the edge-facing name) and pin (the CA that issued the front's certificate, the second one in front.crt);
-without that CA in front.crt it says why and leaves enrolment off. The front's certificate must name the host:
-install.py --fleet-host puts it in a local CA's certificate; with --cert, the organisation's certificate must carry it.
-Who may see the page: the client role fleet-operator, granted at the broker (python deploy/core/fleet_page.py --grant <username>) or by the clerk's governance.
+enrol_url (the edge-facing name) and pin_ca_file (deploy/secrets/fleet/pin-ca.crt: the CA that issued the front's
+certificate, the second one in front.crt, which the codes pin); without that CA in front.crt it says why and leaves
+enrolment off. The front's certificate must name the host: install.py --fleet-host puts it in a local CA's
+certificate; with --cert, the organisation's certificate must carry it. Who may see the page: the client role
+fleet-operator, granted at the broker (python deploy/core/fleet_page.py --grant <username>) or by the clerk's
+governance.
 """
 import argparse
 import hashlib
@@ -29,6 +31,7 @@ CORE = ROOT / "deploy" / "core"
 FLEET_UID = 10002
 PAGE_PORT = 8094
 ADMIN_STATE = "/var/lib/relikey-fleet/admin.json"   # the fleet's volume (compose.yaml), beside the inventory's state
+PIN_CA = "/etc/relikey/fleet/pin-ca.crt"   # deploy/secrets/fleet/pin-ca.crt, mounted read-only (compose.yaml)
 HOST = re.compile(r"[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+")
 sys.path.insert(0, str(CORE))
 from fleet_edge import save   # noqa: E402  the same locked, atomic write as the known edges
@@ -51,10 +54,10 @@ def names_in(cert_pem: str) -> set:
         return set()
 
 
-def ca_pin(front_crt: str) -> tuple[str, str]:
-    """The pin an enrolment code carries (0026 point 27): the sha256 of the DER of the CA certificate that issued the
-    front's certificate, as the front presents it (front.crt holds the leaf, then its CA). Pinning the CA, not the
-    leaf, keeps codes valid across a leaf's renewal. Returns (pin, "") or ("", why and what to do)."""
+def issuing_ca(front_crt: str) -> tuple[str, str]:
+    """What an enrolment code pins (0026 point 27): the CA certificate that issued the front's certificate, as the
+    front presents it (front.crt holds the leaf, then its CA); the fleet takes its sha256 as the pin. Pinning the CA,
+    not the leaf, keeps codes valid across a leaf's renewal. Returns (its PEM, "") or ("", why and what to do)."""
     from cryptography import x509
     from cryptography.exceptions import InvalidSignature
     from cryptography.hazmat.primitives import serialization
@@ -72,22 +75,37 @@ def ca_pin(front_crt: str) -> tuple[str, str]:
     if not ca:
         return "", ("the second certificate in deploy/secrets/front.crt is not the CA that issued the first. Put the "
                     "front's certificate first and its issuing CA second, " + again)
-    return hashlib.sha256(certs[1].public_bytes(serialization.Encoding.DER)).hexdigest(), ""
+    return certs[1].public_bytes(serialization.Encoding.PEM).decode(), ""
 
 
-def enrolment(cfg: dict, before: dict, url: str, pin: str, why: str) -> str:
+def pin_of(pem_text: str) -> str:
+    """The pin as the fleet computes it from pin_ca_file: the sha256 of the certificate's DER."""
+    from cryptography import x509
+    from cryptography.hazmat.primitives import serialization
+    der = x509.load_pem_x509_certificate(pem_text.encode()).public_bytes(serialization.Encoding.DER)
+    return hashlib.sha256(der).hexdigest()
+
+
+def enrolment(cfg: dict, before: dict, url: str, pin: str, old_pin: str, why: str) -> str:
     """Enrolment by code (0026 points 14-33) in fleet.json: the admin section (the officer registry, the slots and
-    the evidence log, in a state file of its own) and the page's enrol_url and pin, which every code carries. Only
-    with a CA pin: without one the page hands out no code. An admin section already there is kept as it is: a new
-    fleet id would make a new fleet (point 30), so a second run never re-keys one. Returns what to tell."""
+    the evidence log, in a state file of its own) and the page's enrol_url and pin_ca_file, from which every code
+    gets its pin. Only with a CA: without one the page hands out no code. An admin section already there is kept as
+    it is: a new fleet id would make a new fleet (point 30), so a second run never re-keys one. Returns what to tell.
+    pin is that of the CA now written to pin_ca_file ("" for none), old_pin that of the one it replaced."""
     if not pin:
-        kept = " (the fleet's id and its state are kept)" if "admin" in cfg else ""
+        if "admin" in cfg and before.get("pin_ca_file"):
+            # the fleet refuses an admin section without both: keep the last ones, so it still starts
+            cfg["page"]["enrol_url"], cfg["page"]["pin_ca_file"] = before.get("enrol_url"), before["pin_ca_file"]
+            return (f"enrolment by code keeps its last CA, but the front no longer presents a usable one, so new "
+                    f"codes fail at the edge: {why}")
+        kept = (" (the fleet's id and its state are kept, but the fleet will not start without pin_ca_file)"
+                if "admin" in cfg else "")
         return f"enrolment by code is off{kept}: {why}"
     cfg.setdefault("admin", {"state": ADMIN_STATE, "fleet": str(uuid.uuid4())})
-    cfg["page"]["enrol_url"], cfg["page"]["pin"] = url, pin
+    cfg["page"]["enrol_url"], cfg["page"]["pin_ca_file"] = url, PIN_CA
     said = f"enrolment by code: edges present at {url}; codes pin the front's CA, sha256 {pin}"
-    if before.get("pin") not in (None, pin):
-        said += (f". The pin changed from {before['pin']}: codes opened before it fail at the edge; open new slots "
+    if old_pin not in ("", pin):
+        said += (f". The pin changed from {old_pin}: codes opened before it fail at the edge; open new slots "
                  "for those edges")
     return said
 
@@ -130,7 +148,13 @@ def page(o) -> None:
               "run as root)", file=sys.stderr)
     subprocess.run(compose(o) + ["run", "--rm", "--no-deps", "-T", "setup", "fleet", page_url],
                    input=_read_secret(o, d), text=True, check=True)
-    pin, why = ca_pin((SECRETS / "front.crt").read_text(encoding="utf-8"))
+    ca_pem, why = issuing_ca((SECRETS / "front.crt").read_text(encoding="utf-8"))
+    pin_file, pin, old_pin = d / "pin-ca.crt", "", ""
+    if ca_pem:   # a certificate, no secret: the fleet's uid reads it as "other", like front-ca.crt
+        old_pin = pin_of(pin_file.read_text(encoding="utf-8")) if pin_file.exists() else ""
+        pin_file.write_text(ca_pem, encoding="utf-8")
+        pin_file.chmod(0o644)
+        pin = pin_of(ca_pem)
     said = []
 
     def write(cfg):
@@ -143,7 +167,7 @@ def page(o) -> None:
             "redirect_url": f"{page_url}/callback", "role": "fleet-operator",
             "ca_file": "/etc/relikey/fleet/front-ca.crt", "front": "127.0.0.1:8443", "officers": officers}
         # edges present on the edge-facing name, where the front routes /fleet/v1/enrol (Caddyfile)
-        said[:] = [enrolment(cfg, before, f"https://{env('EDGE_HOST')}{suffix}/fleet/v1/enrol", pin, why)]
+        said[:] = [enrolment(cfg, before, f"https://{env('EDGE_HOST')}{suffix}/fleet/v1/enrol", pin, old_pin, why)]
     save(write)
     sites = SECRETS / "sites"
     sites.mkdir(exist_ok=True)

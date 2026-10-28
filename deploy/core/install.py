@@ -9,7 +9,7 @@ broker's realm and the desk's first records.
 Writes deploy/secrets/ (git-ignored; files 0600, those KeyClerk reads owned by its uid 10001), once: running it again
 keeps every secret it finds there. Without --cert and --key it makes a local CA and a leaf for the three names
 (front.crt holds the leaf, then the CA). With --fleet-host it also gives the fleet its page and enrolment by code
-(fleet_page.py): fleet.json's admin section, once, and the page's enrol_url and pin, the CA after the leaf in front.crt.
+(fleet_page.py): fleet.json's admin section, once, and the page's enrol_url and pin_ca_file (the CA after the leaf).
 Builds KeyClerk from its tag with KeyClerk's own Containerfile, starts the broker, sets up the realm (realm.py), then
 starts the rest and prints what an edge's install.py needs: the desk's certificate pin (or the CA) and its bundle key.
 """

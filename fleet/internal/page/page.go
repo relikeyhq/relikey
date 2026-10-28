@@ -56,9 +56,9 @@ type Config struct {
 	Role        string `json:"role"`         // the client role that admits, "fleet-operator"
 	CAFile      string `json:"ca_file"`      // the front's CA (or chain): the only roots the page trusts for the broker
 	Front       string `json:"front"`        // the front on the pod's loopback, e.g. 127.0.0.1:8443: the broker is reached there
-	// Enrolment (0026 point 15): where edges present their keys, and the fleet's pin, as the codes carry them.
-	EnrolURL string `json:"enrol_url,omitempty"` // https://EDGE_HOST/fleet/v1/enrol
-	Pin      string `json:"pin,omitempty"`       // hex sha256 of the fleet's long-term key or CA (point 27)
+	// Enrolment (0026 point 15): where edges present their keys, and the fleet's CA, which the codes pin.
+	EnrolURL  string `json:"enrol_url,omitempty"`   // https://EDGE_HOST/fleet/v1/enrol
+	PinCAFile string `json:"pin_ca_file,omitempty"` // the fleet's CA (PEM): the codes pin it, never a leaf (point 27)
 	// The first officers (points 16 and 30): broker usernames, at least three; each registers a passkey here and
 	// signs the anchor. The installer names them; only they can complete the anchor.
 	Officers []string `json:"officers,omitempty"`
@@ -150,6 +150,7 @@ type Page struct {
 	Now      func() time.Time
 	HTTP     *http.Client // to the broker; nil: the request's context decides (tests)
 	Admin    *admin.Store // the registry, slots and evidence log; nil: no enrolment on this page
+	Pin      string       // what the codes pin: enrol.CAPin of Cfg.PinCAFile, set by the fleet service at start
 
 	aead        cipher.AEAD // seals pending sign-ins; a restart voids those in flight (start again)
 	mu          sync.Mutex
@@ -618,8 +619,8 @@ Until all have signed, no edge can be enrolled. Check that the list below is the
 <td data-k="Opened by">{{.OpenedBy}}</td><td data-k="Open until">{{.Expires}}</td></tr>{{end}}
 </tbody></table>{{end}}
 {{if .Presented}}<h2 class="sec">Approve</h2>
-{{if .MeOfficer}}<p class="basis">For each edge to admit: type at least 16 characters of the fingerprint exactly as read from the
-edge's own screen, not from this page, and record who read it and how. A relay or site fleet is admitted only when you
+{{if .MeOfficer}}<p class="basis">For each edge to admit: type 16 characters of the fingerprint (not the last 16, which carry
+less), or all of it, exactly as read from the edge's own screen, not from this page, and record who read it and how. A relay or site fleet is admitted only when you
 read its screen yourself, on site. Then sign with your officer passkey: up to ten at once.</p>
 <form id="activate"><table><thead><tr><th>Admit</th><th>Fingerprint, as read from the edge</th><th>Read by</th><th>How</th></tr></thead><tbody>
 {{range .Presented}}<tr data-slot="{{.ID}}"><td><label><input type="checkbox" name="admit"> <span class="edge">{{.Name}}</span></label><span class="st">{{.Kind}}, from {{.Source}}</span></td>
@@ -698,7 +699,7 @@ func (p *Page) openSlot(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
 	name, kind := r.PostFormValue("name"), enrol.Kind(r.PostFormValue("kind"))
 	ev := admin.Event{At: p.Now(), Subject: s.sub, Source: r.Header.Get("X-Forwarded-For")}
-	sl, code, err := p.Admin.OpenSlot(p.Cfg.EnrolURL, p.Cfg.Pin, name, kind, "basic", ev, p.Now())
+	sl, code, err := p.Admin.OpenSlot(p.Cfg.EnrolURL, p.Pin, name, kind, "basic", ev, p.Now())
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)

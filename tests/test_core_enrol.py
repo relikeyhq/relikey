@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: EUPL-1.2
 """The core installer writes enrolment by code (#74, decision 0026 points 14-33): install.py --fleet-host, in a
 temporary directory with the container engine stubbed, leaves a fleet.json the fleet service and its page accept
-(the keys their Go structs read), an enrolment URL on the edge-facing name, and a pin on the front's CA that the edge
-installer's own pinned TLS accepts. A second run keeps the fleet's id; without a CA in front.crt enrolment stays off
-and the installer says why."""
+(the keys their Go structs read), an enrolment URL on the edge-facing name, and the front's CA in pin_ca_file, inside
+the fleet's mount, whose pin the edge installer's own pinned TLS accepts. A second run keeps the fleet's id; without a
+CA in front.crt enrolment stays off and the installer says why."""
 import datetime
 import hashlib
 import http.server
@@ -85,6 +85,19 @@ def serve(crt: Path, key: Path):
     return srv
 
 
+def pinned(core, cfg) -> tuple[str, "object"]:
+    """The pin the fleet computes from page.pin_ca_file (enrol.CAPin), read where compose mounts it from, and the
+    certificate itself."""
+    from cryptography import x509
+    from cryptography.hazmat.primitives import serialization
+    mounts = re.findall(r"- \.\./secrets/(\S+?):(/\S+?):ro", (CORE / "compose.yaml").read_text(encoding="utf-8"))
+    path = cfg["page"]["pin_ca_file"]
+    host = [core.secrets / src / path[len(dst) + 1:] for src, dst in mounts if path.startswith(dst + "/")]
+    assert host, f"{path} is not inside a directory compose mounts into the fleet"
+    cert = x509.load_pem_x509_certificate(host[0].read_bytes())
+    return hashlib.sha256(cert.public_bytes(serialization.Encoding.DER)).hexdigest(), cert
+
+
 def test_a_fresh_core_writes_what_the_fleet_and_its_page_read(core):
     cfg = core()
     assert set(cfg) <= go_tags("fleet/cmd/relikey-fleet/main.go", "config")
@@ -94,14 +107,12 @@ def test_a_fresh_core_writes_what_the_fleet_and_its_page_read(core):
     assert cfg["admin"]["state"] not in ("", cfg["state"]) and cfg["admin"]["fleet"]
     # the front routes the enrolment route on the edge-facing name (Caddyfile), on the port people and edges use
     assert cfg["page"]["enrol_url"] == "https://edge.example/fleet/v1/enrol"
-    assert re.fullmatch(r"[0-9a-f]{64}", cfg["page"]["pin"])
-    front = (core.secrets / "front.crt").read_text(encoding="utf-8")
-    ca = (core.secrets / "front-ca.crt").read_text(encoding="utf-8")
     from cryptography import x509
-    from cryptography.hazmat.primitives import serialization
-    der = x509.load_pem_x509_certificate(ca.encode()).public_bytes(serialization.Encoding.DER)
-    assert cfg["page"]["pin"] == hashlib.sha256(der).hexdigest()           # the CA (0026 point 27) ...
-    assert cfg["page"]["pin"] != core.install.leaf_pin(front)               # ... not the leaf
+    pin, cert = pinned(core, cfg)
+    assert cert.extensions.get_extension_for_class(x509.BasicConstraints).value.ca   # the fleet refuses a non-CA
+    front = (core.secrets / "front.crt").read_text(encoding="utf-8")
+    assert pin == core.page.pin_of((core.secrets / "front-ca.crt").read_text(encoding="utf-8"))  # the CA ...
+    assert pin != core.install.leaf_pin(front)                                                 # ... not the leaf
 
 
 @pytest.mark.skipif(sys.version_info < (3, 13), reason="a pinned CA needs the presented chain (Python 3.13)")
@@ -111,7 +122,7 @@ def test_the_edge_installer_trusts_the_front_by_the_pin_written(core):
     try:
         edge = load("edge_install", ROOT / "deploy" / "edge" / "install.py")
         port = srv.server_address[1]
-        ctx = edge.pinned_context("127.0.0.1", port, cfg["page"]["pin"])
+        ctx = edge.pinned_context("127.0.0.1", port, pinned(core, cfg)[0])
         with ctx.wrap_socket(socket.create_connection(("127.0.0.1", port), timeout=5),
                              server_hostname="127.0.0.1") as t:
             assert t.version() == "TLSv1.3"
@@ -131,7 +142,7 @@ def test_a_local_ca_installed_before_the_chain_gets_it_and_enrolment(core):
     crt.write_text(leaf, encoding="utf-8")   # how a core installed before this change holds it
     cfg = core()
     assert crt.read_text(encoding="utf-8").startswith(leaf) and crt.read_text(encoding="utf-8").count("BEGIN") == 2
-    assert cfg["page"]["pin"] != core.install.leaf_pin(leaf)
+    assert pinned(core, cfg)[0] != core.install.leaf_pin(leaf)
 
 
 def leaf_only(tmp_path):
@@ -157,7 +168,7 @@ def leaf_only(tmp_path):
 def test_a_certificate_without_its_ca_leaves_enrolment_off_and_says_why(core, tmp_path, capsys):
     crt, key = leaf_only(tmp_path)
     cfg = core("--cert", str(crt), "--key", str(key))
-    assert "admin" not in cfg and "pin" not in cfg["page"] and "enrol_url" not in cfg["page"]
+    assert "admin" not in cfg and "pin_ca_file" not in cfg["page"] and "enrol_url" not in cfg["page"]
     err = capsys.readouterr().err
     assert "enrolment by code is off" in err and "--cert the chain" in err and "fleet_page.py --host again" in err
 
@@ -166,6 +177,15 @@ def test_a_chain_in_the_wrong_order_is_refused(core):
     core()
     crt = (core.secrets / "front.crt").read_text(encoding="utf-8")
     leaf, ca = [c.strip("\n") + "\n-----END CERTIFICATE-----\n" for c in crt.split("-----END CERTIFICATE-----")[:2]]
-    assert core.page.ca_pin(leaf + ca)[0]
-    pin, why = core.page.ca_pin(ca + leaf)
-    assert not pin and "not the CA that issued the first" in why
+    assert core.page.issuing_ca(leaf + ca)[0]
+    pem, why = core.page.issuing_ca(ca + leaf)
+    assert not pem and "not the CA that issued the first" in why
+
+
+def test_a_core_that_loses_its_ca_keeps_the_last_one_so_the_fleet_starts(core, tmp_path, capsys):
+    first = core()
+    crt, key = leaf_only(tmp_path)
+    cfg = core("--cert", str(crt), "--key", str(key))
+    # the fleet refuses an admin section without enrol_url and pin_ca_file: the last ones stay, with the fleet's id
+    assert cfg["admin"] == first["admin"] and cfg["page"]["pin_ca_file"] == first["page"]["pin_ca_file"]
+    assert "keeps its last CA" in capsys.readouterr().err
