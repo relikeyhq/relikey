@@ -16,6 +16,7 @@ public:
   - .gitignore
   - .gitleaks.toml
   - CHANGELOG.md
+  - changelog.d/
   - CODE_OF_CONDUCT.md
   - .containerignore
   - .dockerignore
