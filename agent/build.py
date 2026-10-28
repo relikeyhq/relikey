@@ -2,6 +2,9 @@
 """Checks and release builds for the edge agent, by docs/go-engineering.md.
 
     python build.py check      gofmt, vet (three targets), staticcheck, tests, mutants   (every change)
+                               --changed BASE: only the mutants a change since BASE can affect (a pull request)
+                               --no-mutants: none (CI runs them as parallel jobs on main and nightly)
+    python build.py mutants    every mutant; --shard I/N runs part I of N (see mutants.py)
     python build.py race       go test -race (needs cgo and a C compiler: Linux amd64/arm64 only)
     python build.py vuln       govulncheck on the source
     python build.py dist       a development build of the three binaries into dist/ (for images and labs)
@@ -57,7 +60,9 @@ def tool(name, *args, cwd=None):
     return r.returncode, (r.stdout + r.stderr).strip()
 
 
-def check():
+def check(*args):
+    if args not in ((), ("--no-mutants",)) and not (len(args) == 2 and args[0] == "--changed"):
+        sys.exit(__doc__)
     toolchain()
     unformatted = subprocess.run(["gofmt", "-l", ".", str(FLEET)], cwd=HERE, capture_output=True, text=True).stdout.strip()
     if unformatted:
@@ -82,10 +87,16 @@ def check():
        **({"RELIKEY_PYTHON": sys.executable} if browser or installer else {}))
     print("tests: pass" + ("" if browser else " (the browser ceremony skipped: no Python Playwright here)")
           + ("" if installer else " (the installer's enrolment skipped: no Python cryptography here)"))
-    r = subprocess.run([sys.executable, "mutants.py"], cwd=HERE, env=env(), capture_output=True, text=True)
+    if args != ("--no-mutants",):
+        mutants(*args)
+
+
+def mutants(*args):
+    """mutants.py with these arguments (--changed BASE, --shard I/N) in this script's Go environment."""
+    r = subprocess.run([sys.executable, "mutants.py", *args], cwd=HERE, env=env(), capture_output=True, text=True)
     if r.returncode != 0:
-        sys.exit("mutants:\n" + r.stdout)
-    print(r.stdout.strip().splitlines()[-1])
+        sys.exit("mutants:\n" + r.stdout + r.stderr)
+    print("\n".join(line for line in r.stdout.strip().splitlines() if not line.startswith("killed ")))
 
 
 def race():
@@ -170,7 +181,8 @@ def dist():
 
 
 if __name__ == "__main__":
-    cmds = {"check": check, "race": race, "vuln": vuln, "release": release, "dist": dist}
-    if len(sys.argv) != 2 or sys.argv[1] not in cmds:
+    cmds = {"check": check, "race": race, "vuln": vuln, "release": release, "dist": dist,
+            "mutants": lambda *a: (toolchain(), mutants(*a))}
+    if len(sys.argv) < 2 or sys.argv[1] not in cmds or (len(sys.argv) > 2 and sys.argv[1] not in ("check", "mutants")):
         sys.exit(__doc__)
-    cmds[sys.argv[1]]()
+    cmds[sys.argv[1]](*sys.argv[2:])
