@@ -127,3 +127,25 @@ def test_a_loopback_flow_cannot_cross_hosts(patched):
 
 def test_the_docs_are_scanned_for_deployment_names():
     assert "docs/decisions/*.md" in cm.NAME_SCAN_GLOBS and "README.md" in cm.NAME_SCAN_GLOBS
+
+
+def _component(d, cid):
+    return next(c for c in d["components"] if c["id"] == cid)
+
+
+def test_a_deployed_image_no_component_names_is_refused(patched):
+    patched("components.yaml", lambda d: _component(d, "proxy").update(image=None, version=None, digest=None))
+    errors, _ = cm.check()
+    assert any("deploy/edge/compose.yaml front" in e and "no edge component" in e for e in errors)
+
+
+def test_a_deployed_digest_the_model_does_not_pin_is_refused(patched):
+    patched("components.yaml", lambda d: _component(d, "facade").update(digest=None))
+    errors, _ = cm.check()
+    assert any("deploy/edge/compose.yaml facade" in e and "component facade pins" in e for e in errors)
+
+
+def test_a_deployed_tag_of_another_release_is_refused(patched):
+    patched("components.yaml", lambda d: _component(d, "mirror").update(version="v2.1.21"))
+    errors, _ = cm.check()
+    assert any("deploy/core/compose.yaml mirror" in e and "same release" in e for e in errors)
