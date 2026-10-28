@@ -25,9 +25,9 @@ Releases are semver tags, `v0.1.0` first. A ReliKey release is its pins and its 
 ## [Unreleased]
 
 ### Changed
-
-- The agent's KeyClerk conformance vectors are regenerated from the signed 0.26.3 tag (cfc5793), the version the
-  release pins; `edge.json` is byte-identical to the 0.26.1 vectors and the agent passes all of it.
+- The base image of the fleet and agent images (busybox 1.37.0) is pinned by its multi-arch index digest, and the two
+  image files are renamed `Dockerfile.fleet` and `Dockerfile.agent` so Dependabot's docker ecosystem proposes updates
+  to the pin weekly.
 
 ## [0.1.2] - 2026-10-27
 
