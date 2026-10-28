@@ -8,3 +8,4 @@ deploy/secrets/
 agent/dist/
 build/
 deploy/edge/targets.yaml
+_site/
