@@ -151,10 +151,11 @@ type Page struct {
 	HTTP     *http.Client // to the broker; nil: the request's context decides (tests)
 	Admin    *admin.Store // the registry, slots and evidence log; nil: no enrolment on this page
 
-	aead       cipher.AEAD // seals pending sign-ins; a restart voids those in flight (start again)
-	mu         sync.Mutex
-	sessions   map[string]session
-	challenges map[string]challenge // passkey registrations in flight, by session
+	aead        cipher.AEAD // seals pending sign-ins; a restart voids those in flight (start again)
+	mu          sync.Mutex
+	sessions    map[string]session
+	challenges  map[string]challenge         // passkey registrations in flight, by session
+	activations map[string]pendingActivation // activations being signed, by session
 }
 
 // New discovers the broker and builds the page. secret is the client secret's content.
@@ -196,6 +197,8 @@ func (p *Page) Handler() http.Handler {
 	m.HandleFunc("POST /officer/finish", p.officerFinish)
 	m.HandleFunc("POST /anchor/begin", p.anchorBegin)
 	m.HandleFunc("POST /anchor/sign", p.anchorSign)
+	m.HandleFunc("POST /activate/begin", p.activateBegin)
+	m.HandleFunc("POST /activate/sign", p.activateSign)
 	m.HandleFunc("POST /backchannel-logout", p.backchannel)
 	return fleet.LoopbackOnly(headers(m)) // DNS rebinding: loopback names only (the front sets Host)
 }
@@ -263,7 +266,7 @@ func (p *Page) index(w http.ResponseWriter, r *http.Request) {
 		_ = json.Unmarshal(raw, &rows)
 		v := board(rows, p.Now())
 		v.Name, v.Basis, v.Style, v.Mark = s.name, basis, template.CSS(style), mark
-		v.Enrol = p.enrolView()
+		v.Enrol = p.enrolView(s)
 		v.Anchor = p.anchorView(s)
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_ = view.Execute(w, v)
@@ -613,16 +616,38 @@ Until all have signed, no edge can be enrolled. Check that the list below is the
 {{if .Slots}}<table><thead><tr><th>Slot</th><th>State</th><th>Opened by</th><th>Open until</th></tr></thead><tbody>
 {{range .Slots}}<tr><td><span class="edge">{{.Name}}</span><span class="st">{{.Kind}}</span></td><td>{{.State}}{{if .Fingerprint}}<span class="st">{{.Fingerprint}}</span>{{end}}{{if .Refused}}<span class="behind">{{.Refused}} refused</span>{{end}}</td>
 <td data-k="Opened by">{{.OpenedBy}}</td><td data-k="Open until">{{.Expires}}</td></tr>{{end}}
-</tbody></table>{{end}}{{end}}{{end}}
+</tbody></table>{{end}}
+{{if .Presented}}<h2 class="sec">Approve</h2>
+{{if .MeOfficer}}<p class="basis">For each edge to admit: type at least 16 characters of the fingerprint exactly as read from the
+edge's own screen, not from this page, and record who read it and how. A relay or site fleet is admitted only when you
+read its screen yourself, on site. Then sign with your officer passkey: up to ten at once.</p>
+<form id="activate"><table><thead><tr><th>Admit</th><th>Fingerprint, as read from the edge</th><th>Read by</th><th>How</th></tr></thead><tbody>
+{{range .Presented}}<tr data-slot="{{.ID}}"><td><label><input type="checkbox" name="admit"> <span class="edge">{{.Name}}</span></label><span class="st">{{.Kind}}, from {{.Source}}</span></td>
+<td data-k="Fingerprint"><input name="typed" autocomplete="off" spellcheck="false" minlength="16" maxlength="80" aria-label="fingerprint characters for {{.Name}}"></td>
+<td data-k="Read by"><input name="read_by" maxlength="120" aria-label="who read the screen of {{.Name}}"></td>
+<td data-k="How"><select name="read_how" aria-label="how the screen of {{.Name}} was read"><option>on site</option><option>phone</option><option>video call</option><option>message</option></select></td></tr>{{end}}
+</tbody></table></form>
+<p class="open"><button type="button" id="activate-sign">Admit the selected with my officer passkey</button></p>
+<p id="activate-msg" role="status" aria-live="polite"></p><noscript><p>The passkey step needs JavaScript in this browser.</p></noscript>
+<script>{{.Script}}</script>{{else}}<p class="basis">Keys are waiting for approval: an officer admits them here with their officer passkey.</p>{{end}}{{end}}{{end}}{{end}}
 <footer>This page commands no edge: a slot it opens admits nothing until an officer approves with their passkey. It does not refresh on its own; reload to see the latest reports.</footer>
 </main></body></html>
 `))
 
 // enrolView is the page's enrolment section: whether the fleet is anchored, and its slots.
 type enrolView struct {
-	Anchored bool
-	Slots    []slotRow
-	Error    string
+	Anchored  bool
+	Slots     []slotRow
+	Error     string
+	Presented []presentedRow // keys awaiting approval
+	MeOfficer bool           // the signed-in person is an officer of the registry in force
+	Script    template.JS
+}
+
+// presentedRow is a slot whose edge presented its key, with the source address it came from (point 15). The officer
+// types the fingerprint as read from the edge's own screen: no tap-to-approve.
+type presentedRow struct {
+	ID, Name, Kind, Source string
 }
 
 type slotRow struct {
@@ -630,20 +655,22 @@ type slotRow struct {
 	Refused                                           int
 }
 
-func (p *Page) enrolView() *enrolView {
+func (p *Page) enrolView(s session) *enrolView {
 	if p.Admin == nil {
 		return nil
 	}
 	now := p.Now()
-	v := &enrolView{Anchored: p.Admin.Anchor() != ""}
+	v := &enrolView{Anchored: p.Admin.Anchor() != "", Script: template.JS(script)}
+	_, _, v.MeOfficer = p.officer(s)
 	for _, sl := range p.Admin.Slots() {
 		r := slotRow{Name: sl.Name, Kind: string(sl.Kind), OpenedBy: sl.OpenedBy, Expires: sl.Expires.UTC().Format("2006-01-02 15:04Z"),
 			Refused: len(sl.Refused)}
 		switch {
 		case sl.Active:
 			r.State = "active"
-		case sl.Key != "":
+		case sl.Key != "" && now.Before(sl.Expires):
 			r.State, r.Fingerprint = "key presented, awaiting approval", enrol.Fingerprint(sl.Key)
+			v.Presented = append(v.Presented, presentedRow{ID: sl.ID, Name: sl.Name, Kind: string(sl.Kind), Source: sl.Source})
 		case !now.Before(sl.Expires):
 			r.State = "expired"
 		default:

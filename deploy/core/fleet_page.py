@@ -98,7 +98,8 @@ def page(o) -> None:
     (sites / "fleet.caddy").write_text(
         f"# The fleet page (0026 point 13), written by deploy/core/fleet_page.py: only its routes.\n"
         f"https://{host}:8443 {{\n\timport tls_core\n"
-        f"\t@page path / /callback /logout /slots /officer/begin /officer/finish /anchor/begin /anchor/sign\n"
+        f"\t@page path / /callback /logout /slots /officer/begin /officer/finish /anchor/begin /anchor/sign "
+        f"/activate/begin /activate/sign\n"
         f"\thandle @page {{\n"
         f"\t\treverse_proxy 127.0.0.1:{PAGE_PORT} {{\n\t\t\theader_up Host 127.0.0.1:{PAGE_PORT}\n\t\t}}\n\t}}\n"
         f"\thandle {{\n\t\trespond 404\n\t}}\n}}\n", encoding="utf-8")

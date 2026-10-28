@@ -30,6 +30,7 @@ const (
 	MaxOpen        = 200 // open slots per fleet
 	MaxOpenPerUser = 20  // open slots per operator
 	MinTyped       = 16  // base32 characters typed from the edge's screen: 80 bits (point 24)
+	MaxRefused     = 3   // refused presentations that close a slot: a code is not guessed at, it is reissued
 	CodePrefix     = "relikey-enrol-v1:"
 	presentContext = "relikey-enrol-present-v1"
 )
@@ -57,6 +58,7 @@ type Slot struct {
 	SecretHash string    `json:"secret_hash"`   // hex sha256 of the single-use secret: the commitment
 	Key        string    `json:"key,omitempty"` // the presented public key, hex, once presented
 	Presented  time.Time `json:"presented,omitzero"`
+	Source     string    `json:"source,omitempty"` // the address the presentation came from, shown to the approver
 	Active     bool      `json:"active"`
 	Refused    []string  `json:"refused,omitempty"` // what was refused for this slot: shown and alarmed, never silent
 }
@@ -164,6 +166,8 @@ func Accept(fleet string, s Slot, p Presentation, now time.Time) (Slot, error) {
 	case s.Active || s.Key != "":
 		s.Refused = append(s.Refused, now.UTC().Format(time.RFC3339)+" a second key for this slot")
 		return s, ErrTaken
+	case len(s.Refused) >= MaxRefused:
+		return refuse("the slot is closed after refused presentations: open a new one")
 	case !now.Before(s.Expires):
 		return refuse("the slot has expired")
 	case p.Slot != s.ID || !hmac.Equal([]byte(hash(p.Secret)), []byte(s.SecretHash)):
@@ -224,8 +228,6 @@ func (a Activation) Hash() string {
 func Activate(rp registry.RP, reg registry.Registry, slots map[string]Slot, a Activation, st registry.Statement,
 	sig registry.Signature, now time.Time) ([]Slot, error) {
 	switch {
-	case len(a.Items) == 0 || len(a.Items) > MaxBatch:
-		return nil, fmt.Errorf("an activation carries 1 to %d slots", MaxBatch)
 	case a.Fleet != reg.Fleet || st.Fleet != reg.Fleet:
 		return nil, errors.New("an activation for another fleet")
 	case st.Kind != "activate" || st.Body != a.Hash() || st.Registry != reg.Version:
@@ -239,6 +241,15 @@ func Activate(rp registry.RP, reg registry.Registry, slots map[string]Slot, a Ac
 	}
 	if _, err := rp.Verify(sig, reg.Officers[i], st, now); err != nil {
 		return nil, fmt.Errorf("the approver's passkey: %w", err)
+	}
+	return Check(slots, a, now)
+}
+
+// Check is Activate without the signature: whether every item names a presented slot with its key's whole
+// fingerprint, a typed check taken from it and who read the screen. The page runs it before asking for the passkey.
+func Check(slots map[string]Slot, a Activation, now time.Time) ([]Slot, error) {
+	if len(a.Items) == 0 || len(a.Items) > MaxBatch {
+		return nil, fmt.Errorf("an activation carries 1 to %d slots", MaxBatch)
 	}
 	var out []Slot
 	seen := map[string]bool{}

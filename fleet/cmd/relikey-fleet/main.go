@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"relikey/agent/pkg/events"
+	"relikey/fleet/internal/admin"
 	"relikey/fleet/internal/fleet"
 	"relikey/fleet/internal/page"
 )
@@ -39,6 +40,14 @@ type config struct {
 	SilenceSeconds int               `json:"silence_seconds"`
 	Edges          map[string]string `json:"edges"`
 	Page           *page.Config      `json:"page,omitempty"` // the fleet page (0026 point 13); absent: no page
+	// Admin is enrolment by code (0026 points 14-33): the officer registry, the slots and the evidence log, in a
+	// file of its own. Absent: no enrolment, the edges come from "edges" only.
+	Admin *adminConfig `json:"admin,omitempty"`
+}
+
+type adminConfig struct {
+	State string `json:"state"` // the administrative state file
+	Fleet string `json:"fleet"` // this fleet's id: a re-anchored fleet is a new one (point 30)
 }
 
 func loopback(addr string) bool {
@@ -71,6 +80,9 @@ func load(path string) (config, map[string]ed25519.PublicKey, error) {
 			p.Role = "fleet-operator"
 		}
 	}
+	if a := c.Admin; a != nil && (a.State == "" || a.Fleet == "" || a.State == c.State) {
+		return c, nil, errors.New("admin: state (a file of its own, not the inventory's) and fleet (this fleet's id)")
+	}
 	if c.State == "" {
 		return c, nil, errors.New("state: the inventory file's path")
 	}
@@ -97,16 +109,28 @@ func main() {
 		fmt.Fprintln(os.Stderr, "relikey-fleet:", err)
 		os.Exit(2)
 	}
+	var st *admin.Store
+	if c.Admin != nil {
+		if st, err = admin.Open(c.Admin.State, c.Admin.Fleet); err != nil {
+			fmt.Fprintln(os.Stderr, "relikey-fleet: admin:", err)
+			os.Exit(1)
+		}
+	}
 	known := make([]string, 0, len(keys))
 	for e := range keys {
 		known = append(known, e)
+	}
+	if st != nil {
+		for e := range st.Enrolled() { // edges enrolled by code stay in the inventory across restarts
+			known = append(known, e)
+		}
 	}
 	inv, err := fleet.Open(c.State, known, time.Duration(c.SilenceSeconds)*time.Second)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "relikey-fleet:", err)
 		os.Exit(1)
 	}
-	s := &fleet.Server{Inv: inv, Keys: keys, Now: time.Now, Log: log, Emit: (&events.Writer{W: os.Stdout}).Emit}
+	s := &fleet.Server{Inv: inv, Keys: keys, Now: time.Now, Log: log, Emit: (&events.Writer{W: os.Stdout}).Emit, Admin: st}
 	srv := &http.Server{Addr: c.Listen, Handler: s.Handler(), ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout: 20 * time.Second, WriteTimeout: 20 * time.Second}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -138,6 +162,7 @@ func main() {
 			log.Error("fleet page not started", "err", err, "next", "check page.issuer and that the broker is up, then restart the fleet service")
 		} else {
 			pg.HTTP = hc
+			pg.Admin = st
 			psrv := &http.Server{Addr: c.Page.Listen, Handler: pg.Handler(), ReadHeaderTimeout: 10 * time.Second,
 				ReadTimeout: 20 * time.Second, WriteTimeout: 20 * time.Second}
 			go func() { <-ctx.Done(); _ = psrv.Close() }()

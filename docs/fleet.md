@@ -45,7 +45,10 @@ refusals are logged at most once a minute per peer.
 
 ## Configuration
 `relikey-fleet -config fleet.json`: `{"listen": "127.0.0.1:8093", "state": ".../fleet.json", "silence_seconds": 300,
-"edges": {"plant-a": "<enrolment public key, 64 hex>"}}`. It refuses any listen address but loopback.
+"edges": {"plant-a": "<enrolment public key, 64 hex>"}}`. It refuses any listen address but loopback. With
+`"admin": {"state": ".../admin.json", "fleet": "<this fleet's id>"}` it keeps the officer registry, the enrolment
+slots and the evidence log in that file, and takes enrolment by code: presentations on the edge-facing name,
+activations on the page.
 
 ## The fleet page (0026 point 13)
 Operators see the inventory on a page of its own name, signed in at ReliKey's broker; no action on any edge. The page
@@ -61,7 +64,8 @@ ceremony need the browser's WebAuthn API, and that one script is allowed by its 
   Back-channel logout to `http://127.0.0.1:8094/backchannel-logout`, inside the pod, never through the front.
 - The page checks the ID token's issuer, audience, authorised party and nonce, the state against a pre-sign-in cookie
   (one use, 5 minutes), and starts a fresh session (15 minutes, `__Host-` cookie, `HttpOnly`, `Secure`).
-- The front proxies only `/`, `/callback`, `/logout`, `/slots` and the four anchor routes on the page's name to
+- The front proxies only `/`, `/callback`, `/logout`, `/slots`, the four anchor routes and the two activation routes
+  on the page's name to
   `127.0.0.1:8094` (`deploy/secrets/sites/fleet.caddy`); the JSON route stays on loopback 8093.
 - The page reaches the broker only: its client trusts only `ca_file` (the front's CA or chain) and dials the issuer's
   host at the front on the pod's loopback (`front`), so neither DNS nor a hairpin route matters.
@@ -89,9 +93,32 @@ software authenticator, fuzzing of the registration check and of the routes, mut
 walk with a virtual authenticator (`fleet/internal/page/browser_test.go`, run by `build.py check` where Python
 Playwright is installed).
 
-## The officer registry and enrolment (0026 points 14-33), building blocks
-Tested packages; the registry is wired into the page for the anchor, slots are opened on the page, and activation
-and the edge installer's side are not wired yet:
+## Enrolment by code (0026 points 15, 24, 32, 33)
+1. An operator opens a slot on the page (name, kind) and gets a one-time code, shown once, carried to the edge as a
+   QR code or on a USB stick.
+2. The edge's installer takes the code from a file, never from the command line:
+   `python deploy/edge/install.py ... --enrol-code-file <file>`, or for an installed edge
+   `python deploy/edge/install.py enrol --code-file <file>`. It presents the edge's enrolment key with the code's
+   secret and its own signature on `POST /fleet/v1/enrol`, over TLS that trusts only the certificate whose sha256 the
+   code pins (read from the chain the fleet presents, then the only root, the host name checked; a pinned CA needs
+   Python 3.13 or later, a pinned leaf works on any). Then it prints the key's fingerprint. It prints and logs neither
+   the code nor its secret, and reads nothing the fleet answers but the status: 409 is "slot already taken", 429 a
+   retry in a minute.
+3. The page lists the presented keys with their source address. An officer of the registry in force types at least
+   16 characters of the fingerprint as read from the edge's screen, records who read it and how, and signs the
+   activation (up to ten slots) with their officer passkey (`/activate/begin`, `/activate/sign`; the statement is
+   bound to this fleet, the registry version, the activation's hash, five minutes and a nonce, and used once).
+4. The fleet verifies the signature against the registry in force and records the activation, signed, in the evidence
+   log; a refusal is logged too. The slot is active and the edge's key is its report key: its first verified report
+   puts it in the inventory.
+Guards: the enrolment route takes at most 20 presentations a minute for the whole fleet; three refused presentations
+close a slot; a second key for a used slot is refused and shown. An enrolled name cannot be opened again (a new key is
+a rotation, slice 5) nor activated under a second key; a name configured in `edges` and enrolled by code under
+another key is refused for both until one is removed. Tested in Go (`fleet/internal/fleet/enrolled_test.go`, with
+`deploy/edge/install.py` itself presenting where Python has cryptography, set by `build.py check`;
+`fleet/internal/page/activate_test.go`) and in Python (`tests/test_edge_enrol.py`, one vector shared with Go).
+
+## The officer registry and enrolment (0026 points 14-33), the packages
 - `fleet/internal/registry`: the officer registry and bound passkey statements. A statement's challenge is a hash of
   its canonical form under the context `relikey-fleet-stmt-v1`; an assertion is checked for the ceremony, the exact
   origin, the challenge, the rpId, user presence and verification, and the signature (ES256, EdDSA or RS256 COSE keys;
@@ -107,5 +134,6 @@ and the edge installer's side are not wired yet:
   reading its screen on site.
 
 ## Not built yet (0026's slices)
-The digest pin (once releases are signed), a clerk's governance facts,
+The core installer's part of enrolment (fleet.json's `admin` section and the page's `enrol_url` and `pin`), the
+digest pin (once releases are signed), a clerk's governance facts,
 signed releases and the enforced minimum release (slice 3), staged rollout (slice 4), enrolment-key rotation (slice 5), the site relay (slice 6).

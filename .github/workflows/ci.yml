@@ -39,6 +39,7 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
+      - run: pip install -q --require-hashes -r requirements-test.txt   # the installer's enrolment test needs it
       - run: python agent/build.py check    # gofmt, vet (three targets), staticcheck, tests, mutants
       - run: python agent/build.py race
       - run: python agent/build.py vuln

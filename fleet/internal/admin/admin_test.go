@@ -228,3 +228,48 @@ func TestRegisteringAgainVoidsTheDraftAndOnePasskeyServesOneOfficer(t *testing.T
 		t.Fatal("the new draft kept signatures over the old list, or did not carry bob's new passkey")
 	}
 }
+
+// An activation enrols a presented key only once an officer's passkey signs it; an enrolled name opens no new slot
+// and is never activated under a second key, even where two presented slots carry the name.
+func TestActivationEnrolsOnceAndNeverUnderASecondKey(t *testing.T) {
+	ann := regtest.New("es256", false)
+	s, _ := Open(filepath.Join(t.TempDir(), "admin.json"), "fleet-1")
+	r := registry.Registry{Fleet: "fleet-1", Version: 1, Officers: []registry.Officer{ann.Officer("ann", "ann"),
+		regtest.New("es256", false).Officer("bob", "bob"), regtest.New("es256", false).Officer("cat", "cat")}}
+	_ = s.SetAnchor(registry.Accepted{Registry: r, Effective: t0}, registry.Change{Registry: r}, Event{At: t0})
+	rp := registry.RP{ID: "fleet.example", Origin: "https://fleet.example"}
+	activate := func(slot, key string) error {
+		fp := enrol.Fingerprint(key)
+		flat := strings.ReplaceAll(fp, " ", "")
+		a := enrol.Activation{Fleet: "fleet-1", Approver: "ann", Items: []enrol.Item{{Slot: slot, Fingerprint: fp, Typed: flat[:16],
+			ReadBy: "ann", ReadHow: "on site"}}}
+		st := registry.Statement{Kind: "activate", Fleet: "fleet-1", Registry: 1, Body: a.Hash(), Expires: t0.Add(time.Hour), Nonce: slot}
+		_, err := s.Activate(rp, a, st, ann.Sign(rp, "ann", st, regtest.Tweak{}), Event{Subject: "ann"}, t0.Add(time.Minute))
+		return err
+	}
+	_, code, _ := s.OpenSlot("https://f/e", strings.Repeat("a", 64), "plant-a", enrol.Edge, "basic", Event{Subject: "ann"}, t0)
+	_, priv, _ := ed25519.GenerateKey(rand.Reader)
+	p := enrol.Present(code, priv)
+	_ = s.Present(p, "10.0.0.9", t0)
+	if len(s.Enrolled()) != 0 {
+		t.Fatal("a presented key is enrolled before any officer activated it")
+	}
+	// a second presented slot of the same name (as an older state could hold): its activation must be refused
+	twin := s.d.Slots[code.Slot]
+	_, other, _ := ed25519.GenerateKey(rand.Reader)
+	twin.ID, twin.Key = "twin", enrol.Present(code, other).Key
+	s.d.Slots["twin"] = twin
+	if err := activate(code.Slot, p.Key); err != nil {
+		t.Fatalf("activation refused: %v", err)
+	}
+	if got := s.Enrolled(); got["plant-a"] != p.Key {
+		t.Fatalf("enrolled: %v", got)
+	}
+	if err := activate("twin", twin.Key); err == nil || s.Enrolled()["plant-a"] != p.Key {
+		t.Fatalf("an enrolled name was activated under a second key: %v", err)
+	}
+	delete(s.d.Slots, "twin") // no open slot of the name is left: only the enrolment refuses the new one
+	if _, _, err := s.OpenSlot("https://f/e", strings.Repeat("a", 64), "plant-a", enrol.Edge, "basic", Event{Subject: "bob"}, t0.Add(time.Hour)); err == nil {
+		t.Fatal("an enrolled name opened a new slot")
+	}
+}

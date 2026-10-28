@@ -75,9 +75,13 @@ def check():
     go("test", "-count=1", "-shuffle=on", "./...")
     # the anchor ceremony in a real browser, where Python Playwright is installed (fleet/internal/page/browser_test.go)
     browser = importlib.util.find_spec("playwright") is not None
+    # the edge installer's enrolment against the fleet, where Python has cryptography (fleet/internal/fleet)
+    installer = importlib.util.find_spec("cryptography") is not None
     go("test", "-count=1", "-shuffle=on", "./...", cwd=FLEET,
-       **({"RELIKEY_BROWSER": "1", "RELIKEY_PYTHON": sys.executable} if browser else {}))
-    print("tests: pass" + ("" if browser else " (the browser ceremony skipped: no Python Playwright here)"))
+       **({"RELIKEY_BROWSER": "1"} if browser else {}), **({"RELIKEY_INSTALLER": "1"} if installer else {}),
+       **({"RELIKEY_PYTHON": sys.executable} if browser or installer else {}))
+    print("tests: pass" + ("" if browser else " (the browser ceremony skipped: no Python Playwright here)")
+          + ("" if installer else " (the installer's enrolment skipped: no Python cryptography here)"))
     r = subprocess.run([sys.executable, "mutants.py"], cwd=HERE, env=env(), capture_output=True, text=True)
     if r.returncode != 0:
         sys.exit("mutants:\n" + r.stdout)

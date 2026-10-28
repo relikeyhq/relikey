@@ -118,7 +118,7 @@ usage: install.py [-h] --edge EDGE --desk DESK [--desk-ca DESK_CA] [--desk-pin D
                   --officer-key OFFICER_KEY [--sso-provider SSO_PROVIDER] [--engine ENGINE]
                   [--enrolment-seed-file ENROLMENT_SEED_FILE] [--re-key] [--sso-issuer SSO_ISSUER]
                   [--sso-secret-file SSO_SECRET_FILE] [--sso-client SSO_CLIENT] [--sso-ca SSO_CA]
-                  [--ca-bundle CA_BUNDLE] [--warpgate-url WARPGATE_URL] [--lab]
+                  [--ca-bundle CA_BUNDLE] [--warpgate-url WARPGATE_URL] [--enrol-code-file ENROL_CODE_FILE] [--lab]
 
 Prepare a ReliKey edge pod: secrets, the enrolment key, Warpgate's first setup and the agent's configuration.
 
@@ -134,6 +134,14 @@ identity provider sends, and Warpgate creates no users (the agent provisions the
 for a broker behind the core's local CA. SSL_CERT_FILE is process-wide in Warpgate (its rustls native roots, OpenSSL
 for RDP, the S3 client for recordings), so it names a bundle of the public roots plus that CA, never the CA alone:
 the public roots come from --ca-bundle, or certifi, or the host's bundle.
+
+With --enrol-code-file (decision 0026 point 15), the edge also enrols into its fleet: the file holds the one-time code
+from the fleet page (carried as a QR code or on a USB stick, never typed, never on the command line). The installer
+presents this edge's enrolment key with proof of the code's secret, over TLS that trusts only the code's pin, and
+prints the key's fingerprint for whoever reads it to the approving officer. Nothing is admitted until an officer
+approves with their passkey. To present again for an installed edge (the fleet was unreachable, say):
+
+    python deploy/edge/install.py enrol --code-file <the code's file>
 
 options:
   -h, --help            show this help message and exit
@@ -161,6 +169,9 @@ options:
   --warpgate-url WARPGATE_URL
                         the URL people reach this edge's Warpgate on, exactly as given to the core's add_edge.py: its
                         host becomes Warpgate's external_host (sign-in return URL, cookie domain)
+  --enrol-code-file ENROL_CODE_FILE
+                        the fleet's one-time enrolment code, in a file (QR or USB stick, never typed): the edge also
+                        presents its key to its fleet (decision 0026)
   --lab                 the pod on the host network (compose.lab.yaml), to reach a core installed with --lab on the
                         same box. Never in production
 ```

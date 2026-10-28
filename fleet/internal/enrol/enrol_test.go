@@ -208,3 +208,35 @@ func TestTheCommitmentAloneDoesNotAdmit(t *testing.T) {
 		t.Fatal("a presentation without the code's secret was taken")
 	}
 }
+
+// The installer (deploy/edge/install.py) and the fleet build the same presentation and fingerprint: one vector,
+// shared with tests/test_edge_enrol.py.
+func TestThePresentationMatchesTheInstallers(t *testing.T) {
+	seed := sha256.Sum256([]byte("vector seed"))
+	c := Code{Fleet: "fleet-1", URL: "https://fleet.example/fleet/v1/enrol", Pin: pin, Anchor: anc, Slot: "slot-1", Secret: "c2VjcmV0"}
+	p := Present(c, ed25519.NewKeyFromSeed(seed[:]))
+	if p.Key != "22a0fb81251d862fee728fa2344f6243bc00776bb0bf8e4d02df31714ed90b2f" ||
+		p.Sig != "8bc7785c29059503fc16ffb0bce3a2bc4aea010546653899e053a5e6a933eb461759f8ce1f9e6bd7c26df6f5cf799444c595f085f5ff04d822ad325eed88c607" {
+		t.Fatalf("the presentation differs from the installer's: %+v", p)
+	}
+	if fp := Fingerprint(p.Key); fp != "RGTV JDH4 4BF5 I5F6 MA7K UN6X G5CQ N4LJ CNJY NFMM NM7F I3HB Q7DQ" {
+		t.Fatalf("the fingerprint differs from the installer's: %s", fp)
+	}
+}
+
+// Refused presentations close a slot: after MaxRefused, even the right secret and key are refused.
+func TestRefusedPresentationsCloseASlot(t *testing.T) {
+	s, c, err := Open("fleet-1", "https://f/e", pin, anc, "plant-a", Edge, "basic", "ann", nil, t0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, priv, _ := ed25519.GenerateKey(rand.Reader)
+	wrong := c
+	wrong.Secret = "guessed"
+	for range MaxRefused {
+		s, _ = Accept("fleet-1", s, Present(wrong, priv), t0)
+	}
+	if _, err := Accept("fleet-1", s, Present(c, priv), t0); err == nil {
+		t.Fatal("the right code was taken after the slot was closed by refusals")
+	}
+}
