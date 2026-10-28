@@ -28,6 +28,9 @@ Releases are semver tags, `v0.1.0` first. A ReliKey release is its pins and its 
 - The base image of the fleet and agent images (busybox 1.37.0) is pinned by its multi-arch index digest, and the two
   image files are renamed `Dockerfile.fleet` and `Dockerfile.agent` so Dependabot's docker ecosystem proposes updates
   to the pin weekly.
+- CI: a pull request runs only the mutants it can affect (`agent/mutants.py --changed BASE`: those in a changed file
+  or in a package whose tests changed, all of them when a shared test helper or the harness changed); main, a nightly
+  schedule and a manual run take the full set in four parallel shards (`--shard i/n`).
 
 ## [0.1.2] - 2026-10-27
 
