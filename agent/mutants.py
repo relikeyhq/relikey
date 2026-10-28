@@ -320,6 +320,7 @@ HARNESS_FILES = ("agent/mutants.py", "agent/build.py")
 TEST_INPUTS = {
     "agent/internal/agent": ("brand/mark/geometry.json",),   # page_test.go: the mark's geometry
     "agent/internal/apply": ("agent/internal/agent/",),       # seam_test.go: the agent package's imports
+    "fleet/internal/fleet": ("deploy/edge/install.py",),      # enrolled_test.go: the edge installer's enrolment
 }
 
 
