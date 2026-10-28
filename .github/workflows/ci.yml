@@ -24,7 +24,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
-          python-version: "3.12"
+          python-version: "3.13"   # the edge installer's enrolment needs 3.13 (a CA pin reads the presented chain)
       - run: pip install -q --require-hashes -r requirements-test.txt
       - run: python tools/check_model.py
       - run: python tools/check_conformance.py
@@ -44,7 +44,7 @@ jobs:
           cache-dependency-path: agent/go.sum
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
-          python-version: "3.12"
+          python-version: "3.13"
       - run: pip install -q --require-hashes -r requirements-test.txt   # the installer's enrolment test needs it
       # gofmt, vet (three targets), staticcheck, tests; on a pull request the mutants it can affect (agent/mutants.py
       # --changed); elsewhere every mutant runs in the sharded job below
@@ -88,7 +88,7 @@ jobs:
           go-version: "1.27.3"
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
-          python-version: "3.12"
+          python-version: "3.13"
       - run: go install github.com/zricethezav/gitleaks/v8@v8.30.1
       - run: pip install -q --require-hashes -r requirements-test.txt
       - run: python tools/publish_export.py --strict   # fails on an unclassified file, a hard-fail match or a leak
@@ -145,7 +145,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
-          python-version: "3.12"
+          python-version: "3.13"
       - run: pip install -q --require-hashes -r requirements-test.txt
       - run: python -m pytest -q tests/test_release_key.py
         env:
