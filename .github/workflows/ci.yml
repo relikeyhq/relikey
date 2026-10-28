@@ -5,6 +5,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  merge_group:             # the merge queue tests each pull request merged with main and the ones ahead of it
   schedule:
     - cron: '23 2 * * *'   # nightly: every mutant, sharded (a pull request runs only the ones it can affect)
   workflow_dispatch:       # every mutant on demand
@@ -45,19 +46,20 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
-      # gofmt, vet (three targets), staticcheck, tests; on a pull request the mutants it can affect (agent/mutants.py
-      # --changed); elsewhere every mutant runs in the sharded job below
+      # gofmt, vet (three targets), staticcheck, tests; on a pull request or in the merge queue the mutants it can affect
+      # (agent/mutants.py --changed); elsewhere every mutant runs in the sharded job below
       - run: |
           if [ -n "$BASE" ]; then python agent/build.py check --changed "$BASE"
           else python agent/build.py check --no-mutants; fi
         env:
-          BASE: ${{ github.event.pull_request.base.sha }}   # empty outside a pull request
+          BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}   # empty on main and nightly
       - run: python agent/build.py race
       - run: python agent/build.py vuln
 
   agent-mutants:
     name: Edge agent mutants (shard ${{ matrix.shard }}/4)
-    if: github.event_name != 'pull_request'   # main, nightly and on demand: every mutant, in four parallel parts
+    # main, nightly and on demand: every mutant, in four parallel parts (not for a pull request or the merge queue)
+    if: github.event_name != 'pull_request' && github.event_name != 'merge_group'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
