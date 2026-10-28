@@ -10,6 +10,7 @@
 package agent
 
 import (
+	"bytes"
 	"context"
 	"crypto/ed25519"
 	"encoding/hex"
@@ -65,7 +66,12 @@ type Agent struct {
 	// answer is followed by the next long-poll at once; an immediate answer or a failure by the jittered interval.
 	Wait        time.Duration
 	Grace       time.Duration // removals may finish this long after a shutdown signal (default 5s)
-	StatusEvery int           // write status.json every N ticks (default 1)
+	StatusEvery int           // look at the status every N ticks (default 1)
+	// StatusHeartbeat bounds how long the status files go unwritten while nothing in them changes (default 60 s). The
+	// files are rewritten when their content changes, else at this heartbeat, so `updated` in status.json and
+	// relikey_agent_status_updated_seconds are never older than it on a live agent; keep it well below the canary
+	// gate's -max-age (2 minutes). Edge hardware often boots from flash: an idle tick writes nothing.
+	StatusHeartbeat time.Duration
 	// The key exchange each role's link negotiated (decision 0022 A3); nil leaves it out of the status.
 	ClerkTLS, BastionTLS *httpx.Group
 	// Governed loads the bastion roles only leases grant, read every tick (apply.ParseGoverned); an unmanaged account
@@ -82,6 +88,9 @@ type Agent struct {
 	fleetSeq     int64
 	fleetLast    time.Time // monotonic: when the last report went, so a clock set back cannot stall reports
 	fleetSending atomic.Bool
+
+	statusKey []byte    // the status last written, without its per-tick fields (Status.content)
+	statusAt  time.Time // monotonic: when the status files were last written
 
 	rogue map[string]string // the unmanaged accounts holding governed roles last reported, and their roles
 	// digest is the content digest of the last bundle pulled (kcedge.ContentDigest): an answer with the same content
@@ -222,6 +231,9 @@ func (a *Agent) defaults() {
 	if a.StatusEvery <= 0 {
 		a.StatusEvery = 1
 	}
+	if a.StatusHeartbeat <= 0 {
+		a.StatusHeartbeat = 60 * time.Second
+	}
 	if a.Mode == "" {
 		a.Mode = Enforce
 	}
@@ -249,7 +261,7 @@ func (a *Agent) Run(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			a.Log.Info("agent stopping")
-			a.writeStatus()
+			a.writeStatus(true)
 			return nil
 		case <-tick.C:
 			a.reconcile(ctx)
@@ -392,6 +404,9 @@ func (a *Agent) handlePull(ctx context.Context, got keyclerk.Pulled, err error) 
 	rec.BootID, rec.BootAtVerify, rec.WallAtVerify = a.Clock.BootID(), int64(a.Clock.Boot()), formatWall(now)
 	// Floors and the bundle are stored before anything is applied: a crash after this
 	// re-applies from the stored bundle, never leaving a refused serial with stale state.
+	// A new serial is stored even when its content equals the bundle held: the serial and the
+	// newest signed time are the replay floors, so an older bundle issued in between (a lease
+	// since revoked) must be refused, and the trusted clock re-anchors on this verification.
 	if err := a.Store.Save(rec); err != nil {
 		a.Log.Error("cannot store the verified bundle: not applied", "err", err)
 		return
@@ -594,11 +609,28 @@ func (a *Agent) finishTick(plan *apply.Plan, why []string) {
 	a.st.Serial, a.st.AppliedSerial, a.st.Ended = rec.Floors.Serial, rec.AppliedSerial, rec.Ended
 	a.st.ClerkTLS, a.st.BastionTLS = a.ClerkTLS.String(), a.BastionTLS.String()
 	if a.st.Ticks%int64(a.StatusEvery) == 0 {
-		a.writeStatus()
+		a.writeStatus(false)
 	}
 }
 
-func (a *Agent) writeStatus() {
+// content is the status without what moves on every tick or pull of an idle agent (the time, the tick and pull
+// counts, the runtime gauges): when it is unchanged, the status files are not rewritten before the heartbeat. Whether
+// any pull has succeeded stays in, since the health reads it.
+func (st Status) content() []byte {
+	st.Updated, st.Ticks, st.PullsOK = time.Time{}, 0, min(st.PullsOK, 1)
+	st.Goroutines, st.HeapAlloc, st.HeapSys, st.NumGC, st.OpenFDs = 0, 0, 0, 0, 0
+	b, _ := json.Marshal(st)
+	return b
+}
+
+// writeStatus writes status.json, status.html and metrics.prom when the status changed or the heartbeat is due (or
+// always, with force: the last status before the agent stops).
+func (a *Agent) writeStatus(force bool) {
+	key := a.st.content()
+	unchanged := a.statusKey != nil && bytes.Equal(key, a.statusKey)
+	if !force && unchanged && time.Since(a.statusAt) < a.StatusHeartbeat {
+		return // nothing new and the heartbeat is not due: an idle tick writes nothing (flash)
+	}
 	var ms runtime.MemStats
 	runtime.ReadMemStats(&ms)
 	a.st.Updated, a.st.Goroutines = a.Clock.Now(), runtime.NumGoroutine()
@@ -617,7 +649,9 @@ func (a *Agent) writeStatus() {
 	}
 	if err != nil {
 		a.Log.Warn("cannot write the status files", "err", err)
+		return // written again on the next tick
 	}
+	a.statusKey, a.statusAt = key, time.Now()
 }
 
 func (a *Agent) report(ctx context.Context, applied int64) {
