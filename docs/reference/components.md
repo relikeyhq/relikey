@@ -21,7 +21,7 @@ What ReliKey composes. Each is an upstream image or binary pinned by version (an
 | id | component | version | licence | zone | role |
 |---|---|---|---|---|---|
 | agent | ReliKey edge agent |  |  | appliance | Pulls signed lease bundles from KeyClerk (outbound only), verifies them, and applies them locally - Warpgate role assignments and session approvals, facade password rotation. Decides nothing KeyClerk did not sign. |
-| bastion | Warpgate | 0.30.1 | Apache-2.0 | appliance | Protocol bastion for SSH, RDP, VNC, databases, Kubernetes and HTTPS targets; records every session. |
+| bastion | Warpgate | 0.30.2 | Apache-2.0 | appliance | Protocol bastion for SSH, RDP, VNC, databases, Kubernetes and HTTPS targets; records every session. |
 | proxy | Edge filtering proxy |  |  | appliance | Terminates TLS on the user HTTPS port and forwards everything except Warpgate's admin paths (under both /@warpgate and /_warpgate) to Warpgate on loopback; holds only the TLS certificate (decision 0008). Removed when Warpgate has a separate admin listener (U-08). |
 | facade | LDAP facade | 0.6.3 | GPL-3.0 | appliance | The directory an LDAP-only system binds against; its passwords are lease credentials, never a person's own. |
 | host | Edge host |  |  | appliance | The operating system and container runtime of the switch's app hosting or the small board; its own time source, name resolution and image pulls. Counted in the footprint, pinned by the deployment, not by ReliKey. |
@@ -45,6 +45,6 @@ What ReliKey composes. Each is an upstream image or binary pinned by version (an
 | broker-db | `docker.io/library/postgres:16.8-alpine` | `sha256:3b057e1c2c6d...` |
 | front | `docker.io/library/caddy:2.11.7-alpine` | `sha256:eb4d35b7452d...` |
 | clerk | `localhost/keyclerk:0.26.3` | not pinned yet |
-| bastion | `ghcr.io/warp-tech/warpgate:0.30.1` | `sha256:1c4b3dfd42f8...` |
+| bastion | `ghcr.io/warp-tech/warpgate:0.30.2` | `sha256:a18f98d586f5...` |
 | facade | `docker.io/lldap/lldap:0.6.3` | not pinned yet |
 | mirror | `ghcr.io/project-zot/zot:v2.1.22` | `sha256:96cda11459ce...` |
