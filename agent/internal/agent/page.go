@@ -44,10 +44,12 @@ func (st Status) Health(now time.Time, maxStreak int, maxAge time.Duration) []st
 	var bad []string
 	if st.NonEmptyStreak > maxStreak {
 		bad = append(bad, fmt.Sprintf("a plan has been left over for %d ticks (max %d): in shadow mode the new version "+
-			"disagrees with the enforcing one; in enforce mode Warpgate refuses the changes", st.NonEmptyStreak, maxStreak))
+			"disagrees with the enforcing one; in enforce mode Warpgate refuses the changes (the agent's log names them)",
+			st.NonEmptyStreak, maxStreak))
 	}
 	if age := now.Sub(st.Updated); age > maxAge {
-		bad = append(bad, fmt.Sprintf("the status is %v old: the agent is not running its loop", age.Round(time.Second)))
+		bad = append(bad, fmt.Sprintf("the status is %v old: the agent is not running its loop; read its log, "+
+			"then restart it", age.Round(time.Second)))
 	}
 	if st.PullsOK == 0 && st.PullsFailed > 0 {
 		bad = append(bad, "no pull has succeeded: check the network path to the desk and the enrolment key")
