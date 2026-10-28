@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: EUPL-1.2
 # The fleet service (decision 0026; packaging, open decision R-21): the static relikey-fleet binary on scratch, as the
 # agent's image is built. Build context: the repository root, with agent/dist/ from `python agent/build.py dist`.
-FROM docker.io/library/busybox:1.37.0@sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e AS prep
+FROM docker.io/library/busybox:1.38.0@sha256:fd7dc98638c8e305f4dc34e979f1c0fdfdcaeb0fbf8fcff77ae834b6da3d7e6e AS prep
 RUN mkdir -p /out/var/lib/relikey-fleet /out/etc/relikey && chmod 0700 /out/var/lib/relikey-fleet
 
 FROM scratch
