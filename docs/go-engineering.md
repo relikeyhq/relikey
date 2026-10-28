@@ -46,6 +46,10 @@ GE-20, all taken in). Each rule says why.
 - Fuzzing of every parser and verifier with a committed corpus, and **differential fuzzing against the Python
   reference**: the same mutated objects to `keyclerk.edge.unseal` / `verify_bundle` and to the Go verifier; any
   disagreement fails.
+- Mutants (`agent/mutants.py`): every guard removed in turn must fail a test of its package. A pull request runs the
+  mutants in the files it changes and every mutant of a package whose tests or test data it changes (a weakened test
+  must not escape), and all of them when it changes a shared test helper, the harness or a go.mod/go.sum; main, a
+  nightly run and a manual run take the full set in parallel shards.
 - KeyClerk's conformance vectors (`tests/conformance/edge.json`: 15 policy cases, 8 verifier cases) as table tests.
   They do **not** yet cover Ed25519 edge cases, canonical-JSON refusals, encodings, time strings, relay envelopes or
   unlock codes: those vectors are asked of KeyClerk (below) and the agent ships slice 1 only with them.
