@@ -31,6 +31,8 @@ public:
   - REUSE.toml
   - requirements-ci.txt
   - requirements-test.txt
+  - mkdocs.yml
+  - requirements-docs.txt
   # directories cleared for publication
   - LICENSES/
   - .github/
@@ -40,6 +42,7 @@ public:
   - brand/
   - deploy/
   - docs/
+  - docs-site/
   - hooks/
   - model/
   - tests/
