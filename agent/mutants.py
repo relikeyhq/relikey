@@ -283,6 +283,15 @@ MUTANTS = [
      'if id != o.ID && c.Name == o.Name {', 'if false && id != o.ID && c.Name == o.Name {'),
     ("a passkey under your name from another account goes unflagged", Path('../fleet/internal/page') / 'officers.go',
      'if name == s.name && ok && o.ID != s.sub {', 'if false && name == s.name && ok && o.ID != s.sub {'),
+    # The event chain (decision 0025 point 2)
+    ("an event record skips the hash of its line", Path("pkg/events") / "chain.go",
+     "next.Hash = hex.EncodeToString(sum[:])", "next.Hash = hex.EncodeToString(sum[:0])"),
+    ("the verifier skips the hash of the record before", Path("pkg/events") / "chain.go",
+     "case *c.Prev != head.Hash:", "case false:"),
+    ("an event is written before its chain head is stored", Path("pkg/events") / "chain.go",
+     "if err := c.save(next); err != nil {", "if err := error(nil); err != nil {"),
+    ("a stored event sequence may go down (a number used twice)", Path("internal/state") / "state.go",
+     "if h.Seq <= s.chain.Seq || h.Epoch < s.chain.Epoch {", "if false {"),
 ]
 
 

@@ -43,17 +43,19 @@ var actionEvents = map[apply.Kind]struct {
 
 func (a *Agent) account(name string) string { return "account:" + a.Pins.Edge + "/" + name }
 
-// emit builds and writes one event; a malformed one is a bug, logged, never written.
+// emit builds and writes one event as the next record of the chain; a malformed one is a bug, logged, never
+// written. An event whose chain head cannot be stored is not written either, and the log says which.
 func (a *Agent) emit(typ, subject, outcome, severity, reason string, ocsf map[string]any) {
-	if a.Emit == nil {
+	if a.chain == nil {
 		return
 	}
 	ev, err := events.New(a.Pins.Edge, typ, subject, outcome, severity, reason, a.Clock.Now(), ocsf)
-	if err != nil {
-		a.Log.Error("event not emitted", "err", err)
-		return
+	if err == nil {
+		err = a.chain.Emit(ev)
 	}
-	a.Emit(ev)
+	if err != nil {
+		a.Log.Error("event not emitted", "type", typ, "subject", subject, "err", err)
+	}
 }
 
 func ocsfClass(class int) (string, int) {

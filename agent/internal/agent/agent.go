@@ -15,6 +15,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"maps"
 	"math/rand/v2"
@@ -71,9 +72,9 @@ type Agent struct {
 	// Governed loads the bastion roles only leases grant, read every tick (apply.ParseGoverned); an unmanaged account
 	// holding one is reported, never changed (full-stack run 2, finding 8). Nil leaves unmanaged accounts unchecked.
 	Governed func() (map[string]bool, error)
-	// Emit writes one monitoring event (decision 0025: CloudEvents with OCSF data, the platform's alert-event fields);
-	// nil emits nothing.
-	Emit func(events.Event)
+	// Events receives the monitoring events (decision 0025: CloudEvents with OCSF data, the platform's alert-event
+	// fields), one JSON line per Write, chained and sequenced (point 2; events.Chain); nil emits nothing.
+	Events io.Writer
 	// Fleet receives the edge's signed report every pull interval (decision 0026, ReliKey's own fleet service); nil
 	// sends none. It returns only an error: the fleet service is read-only towards edges (0026 point 9).
 	Fleet interface {
@@ -82,6 +83,8 @@ type Agent struct {
 	fleetSeq     int64
 	fleetLast    time.Time // monotonic: when the last report went, so a clock set back cannot stall reports
 	fleetSending atomic.Bool
+
+	chain *events.Chain // over Events, continuing from the head in the state directory
 
 	rogue map[string]string // the unmanaged accounts holding governed roles last reported, and their roles
 	// digest is the content digest of the last bundle pulled (kcedge.ContentDigest): an answer with the same content
@@ -206,6 +209,9 @@ type Status struct {
 	HeapSys    uint64   `json:"heap_sys"`
 	NumGC      uint32   `json:"num_gc"`
 	OpenFDs    int      `json:"open_fds"`
+	// EventChain is the head of the event chain: the last record's epoch, sequence and hash; a verifier holding the
+	// events checks them against it (events.Verify).
+	EventChain *events.Head `json:"event_chain,omitempty"`
 }
 
 func (a *Agent) defaults() {
@@ -233,6 +239,9 @@ func (a *Agent) Run(ctx context.Context) error {
 	a.defaults()
 	now := a.Clock.Now()
 	a.st = Status{Version: a.Version, Mode: a.Mode, Edge: a.Pins.Edge, Started: now, Drift: []string{}}
+	if a.Events != nil {
+		a.chain = events.NewChain(a.Events, a.Store.Chain(), a.Store.SaveChain)
+	}
 	a.Log.Info("agent started", "edge", a.Pins.Edge, "mode", a.Mode, "version", a.Version)
 	a.reconcile(ctx)
 	a.pull(ctx)
@@ -602,6 +611,10 @@ func (a *Agent) writeStatus() {
 	var ms runtime.MemStats
 	runtime.ReadMemStats(&ms)
 	a.st.Updated, a.st.Goroutines = a.Clock.Now(), runtime.NumGoroutine()
+	if a.chain != nil {
+		h := a.chain.Head()
+		a.st.EventChain = &h
+	}
 	a.st.HeapAlloc, a.st.HeapSys, a.st.NumGC, a.st.OpenFDs = ms.HeapAlloc, ms.HeapSys, ms.NumGC, openFDs()
 	b, err := json.Marshal(a.st)
 	if err == nil {
