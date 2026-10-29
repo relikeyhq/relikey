@@ -1,0 +1,42 @@
+name: Bug report
+description: Something in ReliKey's own code, installers or model behaves wrong
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Not for security weaknesses.** Report those privately: see SECURITY.md, or use the link on the previous page.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, what you got.
+    validations:
+      required: true
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options: [edge agent, fleet service, core installer, edge installer, model or decision records, tools or CI, docs]
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: The release (for example v0.1.2) or the commit you built from.
+    validations:
+      required: true
+  - type: input
+    id: host
+    attributes:
+      label: Host
+      description: OS and architecture, container engine and version (podman or docker, rootless or rootful).
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce
+      description: Minimal steps. Remove host names, addresses, keys and personal data from any output you paste.
+      render: text
+    validations:
+      required: true

@@ -64,3 +64,28 @@ func TestAMissingBastionKindIsNamed(t *testing.T) {
 		t.Fatalf("a missing kind was not named: %v", err)
 	}
 }
+
+// A refused configuration says what is wrong and what completes it (issue 22).
+func TestARefusedConfigurationSaysWhatToDoNext(t *testing.T) {
+	for _, tc := range []struct{ body, why, next string }{
+		{config(clerkOK, strings.Replace(bastionOK, `"sso_provider": "keycloak"`, `"sso_provider": ""`, 1)),
+			"missing bastion.sso_provider", "deploy/edge/install.py writes a complete configuration"},
+		{strings.Replace(config(clerkOK, bastionOK), `"officer_key": "`+key, `"officer_key": "`+strings.ToUpper(key), 1),
+			"pins.officer_key: an Ed25519 public key is 64 lower-case hex characters", "as the edge officer gave it"},
+	} {
+		_, err := loadConfig(write(t, tc.body))
+		if err == nil || !strings.Contains(err.Error(), tc.why) || !strings.Contains(err.Error(), tc.next) {
+			t.Errorf("got %v, want %q and %q", err, tc.why, tc.next)
+		}
+	}
+}
+
+func TestABadEnrolmentKeySaysHowToRecover(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "enrolment.key")
+	if err := os.WriteFile(p, []byte("not hex\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := enrolmentKey(p); err == nil || !strings.Contains(err.Error(), "restore the enrolment key") {
+		t.Fatalf("a bad enrolment key was accepted or refused without the next step: %v", err)
+	}
+}

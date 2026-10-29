@@ -71,6 +71,50 @@ def test_an_edge_that_outgrows_the_switch_profile_is_refused(patched):
     assert any("switch-app-hosting" in e and "memory" in e for e in errors)
 
 
+def _switch(d):
+    return next(p for p in d["profiles"] if p["id"] == "switch-app-hosting")
+
+
+def test_the_switch_profile_overrun_is_a_recorded_gap_not_an_error():
+    errors, warnings = cm.check()
+    assert not any("switch-app-hosting" in e for e in errors)
+    assert any("switch-app-hosting" in w and "known gap #62" in w for w in warnings)
+
+
+def test_without_its_known_gap_the_switch_overrun_is_refused(patched):
+    patched("footprint.yaml", lambda d: _switch(d).pop("known_gap"))
+    errors, _ = cm.check()
+    assert any("switch-app-hosting" in e and "memory" in e for e in errors)
+
+
+@pytest.mark.parametrize("field, value, says", [
+    ("issue", None, "names no issue number"),
+    ("issue", "62", "names no issue number"),
+    ("issue", 0, "names no issue number"),
+    ("until", None, "names no release"),
+    ("waits_on", "R-99", "not open in open-decisions.yaml"),
+    ("ram_mb", None, "records no ram_mb"),
+])
+def test_a_known_gap_missing_its_issue_release_or_open_decision_is_refused(patched, field, value, says):
+    patched("footprint.yaml", lambda d: _switch(d)["known_gap"].update({field: value}))
+    errors, _ = cm.check()
+    assert any("switch-app-hosting: known_gap" in e and says in e for e in errors)
+
+
+def test_an_edge_growing_past_its_known_gap_is_refused(patched):
+    patched("components.yaml", lambda d: next(c for c in d["components"] if c["id"] == "proxy")
+            ["footprint"].update(ram_mb=60))
+    errors, _ = cm.check()
+    assert any("recorded by switch-app-hosting's known gap" in e for e in errors)
+
+
+def test_a_known_gap_on_an_edge_that_fits_again_is_refused(patched):
+    patched("components.yaml", lambda d: next(c for c in d["components"] if c["id"] == "proxy")
+            ["footprint"].update(ram_mb=15))
+    errors, _ = cm.check()
+    assert any("fits the 256 MB budget again; remove the gap" in e for e in errors)
+
+
 def test_keycloak_on_the_edge_breaks_the_budget(patched):
     patched("components.yaml", lambda d: next(c for c in d["components"] if c["id"] == "broker").update(tier="edge"))
     errors, _ = cm.check()
@@ -127,3 +171,25 @@ def test_a_loopback_flow_cannot_cross_hosts(patched):
 
 def test_the_docs_are_scanned_for_deployment_names():
     assert "docs/decisions/*.md" in cm.NAME_SCAN_GLOBS and "README.md" in cm.NAME_SCAN_GLOBS
+
+
+def _component(d, cid):
+    return next(c for c in d["components"] if c["id"] == cid)
+
+
+def test_a_deployed_image_no_component_names_is_refused(patched):
+    patched("components.yaml", lambda d: _component(d, "proxy").update(image=None, version=None, digest=None))
+    errors, _ = cm.check()
+    assert any("deploy/edge/compose.yaml front" in e and "no edge component" in e for e in errors)
+
+
+def test_a_deployed_digest_the_model_does_not_pin_is_refused(patched):
+    patched("components.yaml", lambda d: _component(d, "facade").update(digest=None))
+    errors, _ = cm.check()
+    assert any("deploy/edge/compose.yaml facade" in e and "component facade pins" in e for e in errors)
+
+
+def test_a_deployed_tag_of_another_release_is_refused(patched):
+    patched("components.yaml", lambda d: _component(d, "mirror").update(version="v2.1.21"))
+    errors, _ = cm.check()
+    assert any("deploy/core/compose.yaml mirror" in e and "same release" in e for e in errors)
