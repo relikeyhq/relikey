@@ -94,6 +94,12 @@ func (e *Error) Error() string {
 	return fmt.Sprintf("warpgate %s %s: %d %s", e.Method, e.Path, e.Status, e.Body)
 }
 
+// Transient is true for an answer that may change if asked again: a 5xx or a 429. Any other refusal (a rejected
+// token, a malformed request) is permanent (bastion.Transient).
+func (e *Error) Transient() bool {
+	return e.Status >= 500 || e.Status == http.StatusTooManyRequests
+}
+
 // NotFound reports a 404.
 func NotFound(err error) bool {
 	e, ok := err.(*Error)

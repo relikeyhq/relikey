@@ -104,6 +104,21 @@ var ErrNotFound = errors.New("not found on the bastion")
 // NotFound reports whether err means the thing does not exist.
 func NotFound(err error) bool { return errors.Is(err, ErrNotFound) }
 
+// Transient reports whether a failed read may succeed if asked again at once: not a cancelled or timed-out context
+// (the tick's budget or a shutdown), not a thing that does not exist, and not an error that says of itself it is
+// permanent (an adapter's refusal answers false to Transient() bool, such as a rejected token). Anything else, a
+// transport error or an overloaded bastion, may pass.
+func Transient(err error) bool {
+	if err == nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || NotFound(err) {
+		return false
+	}
+	var t interface{ Transient() bool }
+	if errors.As(err, &t) {
+		return t.Transient()
+	}
+	return true
+}
+
 // Hardening is the bastion settings ReliKey depends on: no self-service credentials (a person could add a password,
 // a key or a token the broker never sees, or make their account unreadable to the agent), no password SSH, and API
 // tokens that expire (stack attack 2026-10-25, E1 and E4).

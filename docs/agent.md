@@ -10,7 +10,10 @@ for linux amd64, arm64, armv7). How it is written and built: `docs/go-engineerin
   floors (serial, newest signed time, ceiling serial). Floors and the bundle are stored **before** anything is
   applied; a refused bundle changes nothing. A 410 with a valid sealed ended notice ends the edge for good.
 - **Every tick** (15 s): the live leases are recomputed from the stored bundle at the **trusted time**, so leases end on
-  the edge without asking anyone; Warpgate is read, a plan is computed, and (in enforce mode) executed.
+  the edge without asking anyone; Warpgate is read, a plan is computed, and (in enforce mode) executed. A read that
+  fails transiently (a transport error, a 5xx or a 429) is asked again within the tick, at most three reads with a
+  short doubling wait that never runs past the tick or a shutdown; a rejected token or a cancelled read is not asked
+  again. If no read succeeds, nothing is changed that tick and `observe_errors` counts it (fail closed).
 - **Trusted time**: the wall clock, unless the boot clock (CLOCK_BOOTTIME, counts suspend) since the last verified
   bundle says more time has passed; then the later time wins and the skew is reported. A wall clock set back cannot
   keep a lease alive. After a reboot (boot id changed) nothing is live until a fresh bundle verifies.
