@@ -63,6 +63,8 @@ MUTANTS = [
      "unchanged := a.statusKey != nil || bytes.Equal(key, a.statusKey)"),
     ("an idle agent's status is never written again (no heartbeat: a live agent looks stalled)", G / "agent.go",
      "if !force && unchanged && time.Since(a.statusAt) < a.StatusHeartbeat {", "if !force && unchanged {"),
+    ("a failing metrics copy rewrites the status on every tick (flash wear)", G / "agent.go",
+     "\tst.MetricsDirFailures = 0\n", ""),
     ("a same-content bundle with a new serial is not stored (its floors are lost: an older bundle replays)",
      G / "agent.go", "\trec.Floors, rec.Bundle = applied.State, got.Bundle\n",
      "\tif d, _ := kcedge.ContentDigest(*got.Bundle, a.Pins); d == a.digest {\n\t\treturn\n\t}\n"

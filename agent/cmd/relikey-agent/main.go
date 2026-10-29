@@ -110,6 +110,10 @@ type Config struct {
 		// Optional. https on the clerk's own host: the fleet service's report route, behind the front (decision 0026).
 		URL string `json:"url"`
 	} `json:"fleet"`
+	// Optional. A directory the agent also writes its metrics to, as relikey-agent.prom (mode 0644, replaced
+	// atomically), for a collector such as node_exporter's textfile collector that must not read state_dir. The agent
+	// serves nothing; a missing or unwritable directory is reported in the status and the log, never stops the agent.
+	MetricsDir string `json:"metrics_dir"`
 	// How often the agent reconciles the bastion with the live leases, in seconds (default 15).
 	TickSeconds int `json:"tick_seconds"`
 	// How often the agent pulls a bundle from the desk, in seconds (default 60).
@@ -355,7 +359,7 @@ func run(args []string, once bool) error {
 		Bastion:  warpgate.Bastion{C: &warpgate.Client{Base: strings.TrimRight(c.Bastion.URL, "/"), Token: token, HTTP: wgHTTP}},
 		ClerkTLS: clerkTLS, BastionTLS: bastionTLS,
 		Tick: time.Duration(c.TickSeconds) * time.Second, Pull: time.Duration(c.PullSeconds) * time.Second,
-		Grace: time.Duration(c.GraceSeconds) * time.Second, Wait: wait,
+		Grace: time.Duration(c.GraceSeconds) * time.Second, Wait: wait, MetricsDir: c.MetricsDir,
 	}
 	a.Emit = (&events.Writer{W: os.Stdout}).Emit // JSON lines beside the log, told apart by "specversion" (decision 0025)
 	if c.Fleet.URL != "" {

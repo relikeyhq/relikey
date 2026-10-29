@@ -130,10 +130,11 @@ agent governs the union of both sources (full-stack run 2, finding 8). The file 
 read or parsed is a note in the drift, never "nothing governed".
 
 ## Metrics
-Every tick the agent writes `metrics.prom` (Prometheus text) beside `status.json`, for a textfile collector or to be
-copied out; it serves nothing. The names below are a stable interface, pinned by a test: a rename or removal, or a
-change of type, lands only in a tagged release, listed under Changed or Removed in the changelog. Warpgate exports no
-metrics of its own, so `relikey_agent_observe_errors_total` is the only signal of trouble reading the bastion.
+With each status write (when the status changes, else at the heartbeat) the agent writes `metrics.prom` (Prometheus
+text) beside `status.json`, for a textfile collector or to be copied out; it serves nothing. The names below are a
+stable interface, pinned by a test: a rename or removal, or a change of type, lands only in a tagged release, listed
+under Changed or Removed in the changelog. Warpgate exports no metrics of its own, so
+`relikey_agent_observe_errors_total` is the only signal of trouble reading the bastion.
 
 | Metric | Type | Meaning |
 |---|---|---|
@@ -148,8 +149,57 @@ metrics of its own, so `relikey_agent_observe_errors_total` is the only signal o
 | `relikey_agent_ended` | gauge | 1 when the desk ended this edge |
 | `relikey_agent_pulls_failed_total` | counter | pulls that failed (desk unreachable or refusing) |
 
-The other metrics in the file (successful pulls, the plan, actions executed, module failures, heap and
-goroutines) are diagnostics and may change in any release.
+The other metrics in the file (successful pulls, the plan, actions executed, module failures, failed metrics copies,
+heap and goroutines) are diagnostics and may change in any release.
+
+`metrics.prom` stays in the state directory, which is private to the agent. With `metrics_dir` set, the agent also
+writes the same content to `<metrics_dir>/relikey-agent.prom`: a temporary file in that directory, made 0644, then
+renamed over the old copy, so a reader sees the old file or the new one and never a partial one. A collector then needs
+read access to that directory only, never to the floors, keys and lease slots. node_exporter's textfile collector reads
+it as it is; Grafana Alloy, Telegraf and OpenTelemetry's Prometheus receiver can read the same file.
+
+The agent serves nothing for this. A `/metrics` listener was considered and left out: it is the common pattern, but it
+would add a network surface, TLS and access control to an agent whose design is that it only connects out. Whatever
+listens for the collector (node_exporter, Alloy) is the site's, configured and protected by its monitoring setup.
+
+A missing or unwritable `metrics_dir` never stops the agent: leases are applied as before. The log says once why the
+copy failed and what to change, and again when it is written again; `status.json` carries `metrics_dir_error` and
+`metrics_dir_failures`, and the metrics count `relikey_agent_metrics_dir_failures_total`. It is not part of the
+health (`relikey-agent status`, `relikey_agent_healthy`): the canary gate is about leases, and the collector already
+sees a copy that stops changing.
+
+In the edge pod, the image carries `/var/lib/relikey-metrics` (0755, owned by the agent's user), so a fresh named
+volume there is writable by the agent and readable by others. Add `"metrics_dir": "/var/lib/relikey-metrics"` to
+`agent.json` and, in a compose override:
+```yaml
+services:
+  agent:
+    volumes:
+      - metrics:/var/lib/relikey-metrics          # metrics_dir; the state volume stays the agent's alone
+  node-exporter:
+    image: quay.io/prometheus/node-exporter:<pinned version>@sha256:<digest>
+    command: ["--collector.disable-defaults", "--collector.textfile",
+              "--collector.textfile.directory=/textfile"]
+    volumes:
+      - metrics:/textfile:ro                      # read-only: the collector writes nothing there
+    ports: ["9100:9100"]                          # scraped by the site's Prometheus; protect it as the site does
+    read_only: true
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+volumes:
+  metrics: {}
+```
+With node_exporter on the host instead, point `--collector.textfile.directory` at a host directory mounted as
+`metrics_dir`, writable by the agent's user (65532 in the image).
+
+Staleness: a copy that stops changing means the agent stopped writing it. Alert on either clock:
+```
+time() - relikey_agent_status_updated_seconds > 120                        # the agent's own clock, in the file
+time() - node_textfile_mtime_seconds{file=~".*relikey-agent.prom"} > 120   # the file's mtime, seen by node_exporter
+```
+plus `relikey_agent_healthy == 0` for the health and `node_textfile_scrape_error == 1` for a file the collector
+cannot read. When the agent cannot write the copy, the last one stays in place with its old timestamps, so these
+alerts fire; `metrics_dir_error` in `status.json` says why.
 
 ## Canary: shadow mode and the gate
 A new agent version goes to one edge first, next to the version that enforces:
