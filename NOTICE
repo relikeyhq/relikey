@@ -3,13 +3,14 @@ Licensed under the European Union Public Licence v. 1.2 (EUPL-1.2, LICENSE).
 
 ReliKey composes, without modification, upstream images that keep their own licences. Each runs as its own
 container; ReliKey links none of them into its code:
-  Keycloak        - Apache-2.0 - https://github.com/keycloak/keycloak
-  Broker database - PostgreSQL - https://www.postgresql.org
-  Front proxy     - Apache-2.0 - https://github.com/caddyserver/caddy
-  KeyClerk        - EUPL-1.2   - https://github.com/keyclerk/keyclerk
-  Warpgate        - Apache-2.0 - https://github.com/warp-tech/warpgate
-  LDAP facade     - GPL-3.0    - https://github.com/lldap/lldap
-  Update mirror   - Apache-2.0 - https://github.com/project-zot/zot
+  Keycloak             - Apache-2.0 - https://github.com/keycloak/keycloak
+  Broker database      - PostgreSQL - https://www.postgresql.org
+  Front proxy          - Apache-2.0 - https://github.com/caddyserver/caddy
+  KeyClerk             - EUPL-1.2   - https://github.com/keyclerk/keyclerk
+  Warpgate             - Apache-2.0 - https://github.com/warp-tech/warpgate
+  Edge filtering proxy - Apache-2.0 - https://github.com/caddyserver/caddy
+  LDAP facade          - GPL-3.0    - https://github.com/lldap/lldap
+  Update mirror        - Apache-2.0 - https://github.com/project-zot/zot
 
 Optional, not shipped: OpenBao (MPL-2.0, https://github.com/openbao/openbao), read by Warpgate when an
 organisation runs one.

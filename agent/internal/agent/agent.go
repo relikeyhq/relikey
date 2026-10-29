@@ -107,6 +107,13 @@ type Agent struct {
 // noAddressRetry is how long a lease the desk had no address for waits before it asks again (a variable for tests).
 var noAddressRetry = time.Minute
 
+// readAttempts bounds the reads of the bastion in one tick; readBackoff is the first wait between them, doubled after
+// each (variables for tests).
+var (
+	readAttempts = 3
+	readBackoff  = 250 * time.Millisecond
+)
+
 type fetchedEmail struct {
 	person, email string
 	has           bool      // false: the broker holds no verified address
@@ -507,6 +514,28 @@ func (a *Agent) observe(ctx context.Context, desired apply.Desired) (*apply.Obse
 	return observed, err
 }
 
+// observeTick reads the bastion, asking again within the tick when a read fails transiently (bastion.Transient), so a
+// short network or bastion hiccup does not cost the tick. The tries are bounded by readAttempts, by the tick (no wait
+// starts that would end past it) and by ctx; the last error is returned when none succeeds, and the caller changes
+// nothing on it (fail closed). Each try reads everything afresh: nothing from a failed read is kept.
+func (a *Agent) observeTick(ctx context.Context, desired apply.Desired) (*apply.Observed, error) {
+	budget := time.Now().Add(a.Tick)
+	wait := readBackoff
+	for attempt := 1; ; attempt++ {
+		observed, err := a.observe(ctx, desired)
+		if err == nil || attempt >= readAttempts || !bastion.Transient(err) || time.Now().Add(wait).After(budget) {
+			return observed, err
+		}
+		a.Log.Info("cannot read the bastion; asking again this tick", "err", err, "attempt", attempt)
+		select {
+		case <-ctx.Done():
+			return observed, errors.Join(err, ctx.Err())
+		case <-time.After(wait):
+		}
+		wait *= 2
+	}
+}
+
 // harden checks the bastion settings ReliKey depends on and, in enforce mode, restores them; either way the drift
 // report says what was found (stack attack 2026-10-25, E1 and E4).
 func (a *Agent) harden(ctx context.Context, o *apply.Observed) {
@@ -543,7 +572,7 @@ func (a *Agent) reconcile(ctx context.Context) {
 	desired := apply.FromLive(l.leases, l.visits)
 	desired.Now, desired.Governed = now, l.governed
 	octx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	observed, err := a.observe(octx, desired)
+	observed, err := a.observeTick(octx, desired)
 	cancel()
 	if err != nil {
 		a.st.ObserveErrors++
@@ -674,7 +703,7 @@ func (a *Agent) Once(ctx context.Context) (apply.Plan, error) {
 	l, now, why := a.live(a.Store.Get())
 	desired := apply.FromLive(l.leases, l.visits)
 	desired.Now, desired.Governed = now, l.governed
-	observed, err := a.observe(ctx, desired)
+	observed, err := a.observeTick(ctx, desired)
 	if err != nil {
 		return apply.Plan{}, fmt.Errorf("reading the bastion: %w", err)
 	}
