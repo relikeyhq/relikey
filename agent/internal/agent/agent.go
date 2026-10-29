@@ -655,6 +655,9 @@ func (a *Agent) finishTick(plan *apply.Plan, why []string) {
 func (st Status) content() []byte {
 	st.Updated, st.Ticks, st.PullsOK = time.Time{}, 0, min(st.PullsOK, 1)
 	st.Goroutines, st.HeapAlloc, st.HeapSys, st.NumGC, st.OpenFDs = 0, 0, 0, 0, 0
+	// The metrics copy is tried at each write, so its failure count rises with the writes: counting it would rewrite
+	// the status every tick while the copy fails. A new cause (MetricsDirError) is still a change.
+	st.MetricsDirFailures = 0
 	b, _ := json.Marshal(st)
 	return b
 }
