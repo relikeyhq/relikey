@@ -121,6 +121,28 @@ an account the agent does not manage that holds one of those roles is in the dri
 agent governs the union of both sources (full-stack run 2, finding 8). The file is read every tick; one that cannot be
 read or parsed is a note in the drift, never "nothing governed".
 
+## Metrics
+Every tick the agent writes `metrics.prom` (Prometheus text) beside `status.json`, for a textfile collector or to be
+copied out; it serves nothing. The names below are a stable interface, pinned by a test: a rename or removal, or a
+change of type, lands only in a tagged release, listed under Changed or Removed in the changelog. Warpgate exports no
+metrics of its own, so `relikey_agent_observe_errors_total` is the only signal of trouble reading the bastion.
+
+| Metric | Type | Meaning |
+|---|---|---|
+| `relikey_agent_healthy` | gauge | 1 when the canary gate passes (`relikey-agent status`), else 0 |
+| `relikey_agent_status_updated_seconds` | gauge | Unix time the status was last written |
+| `relikey_agent_live_leases` | gauge | leases live now |
+| `relikey_agent_bundle_serial` | gauge | serial of the newest verified bundle |
+| `relikey_agent_applied_serial` | gauge | serial whose plan was applied in full |
+| `relikey_agent_bundles_refused_total` | counter | bundles and notices refused by the verifier |
+| `relikey_agent_action_failures_total` | counter | Warpgate actions that failed |
+| `relikey_agent_observe_errors_total` | counter | failures to read Warpgate's state |
+| `relikey_agent_ended` | gauge | 1 when the desk ended this edge |
+| `relikey_agent_pulls_failed_total` | counter | pulls that failed (desk unreachable or refusing) |
+
+The other metrics in the file (successful pulls, the plan, actions executed, module failures, heap and
+goroutines) are diagnostics and may change in any release.
+
 ## Canary: shadow mode and the gate
 A new agent version goes to one edge first, next to the version that enforces:
 1. Run the new version with `"mode": "shadow"`, its own state directory and its own enrolment key (enrolled at the
