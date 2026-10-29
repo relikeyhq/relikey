@@ -615,6 +615,50 @@ func TestTheAgentRestoresTheBastionHardening(t *testing.T) {
 	r.eventually("self-service turned off again", func() bool { return !r.wg.GetParameters().AllowOwnCredentialManagement })
 }
 
+// A password, one-time-password seed or certificate on a managed account is out of policy whatever its history (made
+// before the agent ran, by an administrator, by the person while self-service was on): the next tick in enforce mode
+// removes it and says so; shadow mode only reports it; the lease's SSO credential and an unmanaged account stay.
+func TestACredentialAddedOutsideTheAgentIsRemovedOnTheNextTick(t *testing.T) {
+	shadow := newRig(t, Shadow)
+	shadow.kc.SetLeases([]fakes.FakeLease{lease("L-1", time.Now().Add(time.Hour))}, nil)
+	shadow.wg.AddUser("ann", apply.Marker)
+	shadow.wg.AddCredential("ann", "passwords")
+	shadow.eventually("the credential is reported", func() bool {
+		return strings.Contains(shadow.status().Plan, "delete-credential 1")
+	})
+	if len(shadow.wg.Credentials("ann")) != 1 {
+		t.Fatal("shadow mode removed a credential")
+	}
+
+	r := newRig(t, Enforce)
+	r.wg.AddUser("breakglass", "made by the installer")
+	r.wg.AddCredential("breakglass", "passwords")
+	r.kc.SetLeases([]fakes.FakeLease{lease("L-1", time.Now().Add(time.Hour))}, nil)
+	r.eventually("ann gets the role", func() bool { _, ok := r.roles("ann")["plc-operator"]; return ok })
+	for _, kind := range warpgate.OtherCredentialKinds {
+		r.wg.AddCredential("ann", kind)
+	}
+	r.eventually("every credential no lease grants is removed", func() bool { return len(r.wg.Credentials("ann")) == 0 })
+	r.eventually("and each removal is an event", func() bool {
+		n := 0
+		for _, typ := range r.seen("account:edge-a/ann") {
+			if typ == "relikey.account.credential_removed.v1" {
+				n++
+			}
+		}
+		return n == len(warpgate.OtherCredentialKinds)
+	})
+	if _, emails := r.wg.Snapshot(apply.Marker); !slices.Equal(emails["ann"], []string{"ann@example.test"}) {
+		t.Fatalf("the lease's SSO credential went too: %v", emails["ann"])
+	}
+	if _, ok := r.roles("ann")["plc-operator"]; !ok {
+		t.Fatal("the lease's role went too")
+	}
+	if len(r.wg.Credentials("breakglass")) != 1 {
+		t.Fatal("an unmanaged account's credential was touched")
+	}
+}
+
 type lockedBuf struct {
 	mu sync.Mutex
 	b  bytes.Buffer

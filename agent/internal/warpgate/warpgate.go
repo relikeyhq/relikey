@@ -2,8 +2,8 @@
 
 // Package warpgate is the agent's client for Warpgate's admin API on loopback
 // (routes under /@warpgate/admin/api, header X-Warpgate-Token). It covers only what
-// the agent does: users, SSO and public-key credentials, role assignments with expiry,
-// the targets a role reaches, sessions.
+// the agent does: users, SSO and public-key credentials (and the other credentials, to
+// remove them), role assignments with expiry, the targets a role reaches, sessions.
 package warpgate
 
 import (
@@ -62,6 +62,15 @@ type PublicKeyCredential struct {
 	ID               string `json:"id"`
 	Label            string `json:"label"`
 	OpenSSHPublicKey string `json:"openssh_public_key"`
+}
+
+// OtherCredentialKinds are the credentials no lease grants, by their admin API path: passwords, one-time-password
+// seeds, client certificates (Warpgate v0.30.0).
+var OtherCredentialKinds = []string{"passwords", "otp", "certificates"}
+
+// OtherCredential is a credential of one of OtherCredentialKinds; only its id matters here.
+type OtherCredential struct {
+	ID string `json:"id"`
 }
 
 // Target is a target as a role lists it; only its id and name matter here.
@@ -252,6 +261,17 @@ func (c *Client) AddPublicKey(ctx context.Context, userID, label, key string) er
 
 func (c *Client) DeletePublicKey(ctx context.Context, userID, id string) error {
 	return c.do(ctx, http.MethodDelete, "/users/"+url.PathEscape(userID)+"/credentials/public-keys/"+url.PathEscape(id), nil, nil)
+}
+
+// OtherCredentials lists a user's credentials of one of OtherCredentialKinds.
+func (c *Client) OtherCredentials(ctx context.Context, userID, kind string) (out []OtherCredential, err error) {
+	err = c.do(ctx, http.MethodGet, "/users/"+url.PathEscape(userID)+"/credentials/"+url.PathEscape(kind), nil, &out)
+	return out, err
+}
+
+func (c *Client) DeleteOtherCredential(ctx context.Context, userID, kind, id string) error {
+	return c.do(ctx, http.MethodDelete,
+		"/users/"+url.PathEscape(userID)+"/credentials/"+url.PathEscape(kind)+"/"+url.PathEscape(id), nil, nil)
 }
 
 // RoleTargets lists the targets a role reaches (Warpgate v0.30.0: GET /role/{id}/targets).
