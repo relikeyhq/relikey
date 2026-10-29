@@ -1,7 +1,8 @@
 # 0026: Federated observability and fleet management: ReliKey's own, tiered, tighten-only below the parent
 
 - Status: accepted (operator, 2026-10-25), draft 2 after its red team, on the operator's condition that KeyClerk 0027
-  take the red team in (2fa2e25, 4205d60). Nothing built yet.
+  take the red team in (2fa2e25, 4205d60). Nothing was built when it was accepted; the build state is in the section
+  "Build state" below.
 - Date: 2026-10-25
 - Builds on: 0005 (a small edge and a shared core), 0006 (working without a network), 0013 (the witness on site, the
   break-glass promotion), 0021 (no telemetry relay), 0023 (role seams), 0025 (the trust sensor and its evidence log);
@@ -118,7 +119,8 @@ administrator.
 - A relay's backfill is trusted only for records the edge signed whose heads chain to the last witnessed head; what a
   relay alone witnessed is advisory until the parent witnesses it again. Until the evidence log (C-12, C-13) exists,
   backfill is unverified.
-- Not built: the fleet service, the relay, signed releases and staged rollout, enrolment-key rotation on the agent.
+- Not built (when accepted): the fleet service, the relay, signed releases and staged rollout, enrolment-key rotation
+  on the agent. Since then the fleet service is built; see "Build state".
 
 ## Amendment, 2026-10-25 (operator, decide loop on fleet administration and enrolment)
 The operator: everything is done through the admin GUI and nobody runs a script; the fleet updates its edges; edges
@@ -224,7 +226,15 @@ Let the clerk hold the fleet view (KeyClerk's first proposal): one store, no sec
 would then offer no fleet management without KeyClerk, against the rule that any clerk is a stand-in; and device
 facts would drift into the governance store.
 
+## Build state (2026-10-29)
+- Built: the fleet service `relikey-fleet` (its own Go module `fleet/`: signed edge reports, the inventory and the
+  silence alarm, point 1's self-reported label), the fleet page (point 13), the anchor ceremony (points 16, 21, 30), and
+  the officer registry and enrolment building blocks (points 14 to 33). Described in `docs/fleet.md`.
+- Not built: signed releases and the enforced minimum release (slice 3), staged rollout (slice 4) and the site relay
+  (slice 6), tracked in #33; enrolment-key rotation (slice 5), tracked in #26; a clerk's governance facts.
+
 ## Changelog
+- 2026-10-29: the build state recorded (#86); the decision unchanged.
 - 2026-10-25: points 14-33 accepted (operator), with one tightening: a relay or site fleet is admitted only with the
   approver reading its fingerprint themselves.
 - 2026-10-25: round 2 (points 28-33): the director signed, expiring, one release back free; registry rules with
