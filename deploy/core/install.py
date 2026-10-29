@@ -34,6 +34,19 @@ KEYCLERK_UID = 10001
 HOST = re.compile(r"^(?=.{1,253}$)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$")
 
 
+def pinned_busybox(image_file: Path) -> str:
+    """The busybox an image file builds from, with its digest: the helper containers below run that same reference,
+    so a moved tag cannot change what runs with the secrets directory mounted, and Dependabot's update of the image
+    file updates them too."""
+    m = re.search(r"^FROM\s+(\S+/busybox:\S+@sha256:[0-9a-f]{64})", image_file.read_text(encoding="utf-8"), re.M)
+    if not m:
+        sys.exit(f"{image_file}: no busybox base pinned by digest")
+    return m.group(1)
+
+
+BUSYBOX = pinned_busybox(CORE / "Dockerfile.fleet")   # also fleet_page.py's helper
+
+
 CLERK_READS = ("keyclerk-writer.secret", "keyclerk-reader.secret", "relikey-setup.secret", "keyclerk-mgmt.token", "records.key", "records.pub",
                "keyclerk-seed.yaml", "people.json")   # compose.yaml: mounted into containers running as KEYCLERK_UID
 
@@ -70,7 +83,7 @@ def fix_owners(engine: str) -> None:
     todo += [("people.json", f"{KEYCLERK_UID}:{os.getgid()}", "640")]   # the operator reads the first passwords
     todo += [(f, f"0:{os.getgid()}", "640") for f in ("front.crt", "front.key")]
     script = " && ".join(f"chown {owner} /s/{name} && chmod {mode} /s/{name}" for name, owner, mode in todo)
-    subprocess.run([engine, "run", "--rm", "-v", f"{SECRETS}:/s", "docker.io/library/busybox:1.37.0", "sh", "-c", script],
+    subprocess.run([engine, "run", "--rm", "-v", f"{SECRETS}:/s", BUSYBOX, "sh", "-c", script],
                    check=True)
 
 

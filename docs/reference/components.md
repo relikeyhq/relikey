@@ -22,8 +22,8 @@ What ReliKey composes. Each is an upstream image or binary pinned by version (an
 |---|---|---|---|---|---|
 | agent | ReliKey edge agent |  |  | appliance | Pulls signed lease bundles from KeyClerk (outbound only), verifies them, and applies them locally - Warpgate role assignments and session approvals, facade password rotation. Decides nothing KeyClerk did not sign. |
 | bastion | Warpgate | 0.30.1 | Apache-2.0 | appliance | Protocol bastion for SSH, RDP, VNC, databases, Kubernetes and HTTPS targets; records every session. |
-| proxy | Edge filtering proxy |  |  | appliance | Terminates TLS on the user HTTPS port and forwards everything except Warpgate's admin paths (under both /@warpgate and /_warpgate) to Warpgate on loopback; holds only the TLS certificate (decision 0008). Removed when Warpgate has a separate admin listener (U-08). |
-| facade | LDAP facade | 0.6.3 | GPL-3.0 | appliance | The directory an LDAP-only system binds against; its passwords are lease credentials, never a person's own. |
+| proxy | Edge filtering proxy | 2.11.7-alpine | Apache-2.0 | appliance | Terminates TLS on the user HTTPS port and forwards everything except Warpgate's admin paths (under both /@warpgate and /_warpgate) to Warpgate on loopback; holds only the TLS certificate (decision 0008). Removed when Warpgate has a separate admin listener (U-08). Built as the edge's front: Caddy, as in the core, with its own site file (deploy/edge/Caddyfile; decision 0008 point 1, 2026-10-25), which also refuses Warpgate's self-service credential routes. |
+| facade | LDAP facade | v0.6.3-alpine-rootless | GPL-3.0 | appliance | The directory an LDAP-only system binds against; its passwords are lease credentials, never a person's own. |
 | host | Edge host |  |  | appliance | The operating system and container runtime of the switch's app hosting or the small board; its own time source, name resolution and image pulls. Counted in the footprint, pinned by the deployment, not by ReliKey. |
 
 ## Outside ReliKey
@@ -46,5 +46,6 @@ What ReliKey composes. Each is an upstream image or binary pinned by version (an
 | front | `docker.io/library/caddy:2.11.7-alpine` | `sha256:eb4d35b7452d...` |
 | clerk | `localhost/keyclerk:0.26.3` | not pinned yet |
 | bastion | `ghcr.io/warp-tech/warpgate:0.30.1` | `sha256:1c4b3dfd42f8...` |
-| facade | `docker.io/lldap/lldap:0.6.3` | not pinned yet |
+| proxy | `docker.io/library/caddy:2.11.7-alpine` | `sha256:eb4d35b7452d...` |
+| facade | `docker.io/lldap/lldap:v0.6.3-alpine-rootless` | `sha256:ba2c50930ea9...` |
 | mirror | `ghcr.io/project-zot/zot:v2.1.22` | `sha256:96cda11459ce...` |

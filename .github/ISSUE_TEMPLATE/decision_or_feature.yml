@@ -1,0 +1,41 @@
+name: Decision or feature
+description: Propose a change to the design, a new contract, or a capability
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Issues here follow one shape: What, Why, Done when, References. "Done when" is the acceptance test the pull
+        request is checked against.
+  - type: textarea
+    id: what
+    attributes:
+      label: What
+      description: What should ReliKey do, or decide, that it does not yet?
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why
+      description: |
+        Who needs it and what it guards against. ReliKey is a distribution, not a new engine (decision 0001): it
+        composes and does not fork or patch components. Say how the idea stays inside that line: a KeyClerk plugin,
+        an upstream change, or a composition change.
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: Done when
+      description: Checkable items, each with the test or measurement that shows it.
+      placeholder: |
+        - A test with the fakes shows ...
+        - docs/... says ...
+    validations:
+      required: true
+  - type: textarea
+    id: refs
+    attributes:
+      label: References
+      description: Decision records, model files (`model/`, `docs/decisions/`), contracts, prior art.
