@@ -6,15 +6,15 @@ Every seam between two components, what crosses it and with which permission. St
 
 | id | contract | provider | consumer | status |
 |---|---|---|---|---|
-| C-01 | Lease as Warpgate role assignment | bastion | agent | needed |
+| C-01 | Lease as Warpgate role assignment | bastion | agent | built |
 | C-02 | Session approval from a signed lease | bastion | agent | needed |
 | C-03 | LDAP lease credential | facade | agent | needed |
-| C-04 | Signed lease bundles | clerk | agent | needed |
+| C-04 | Signed lease bundles | clerk | agent | built |
 | C-06 | Pre-staged visit lease | bastion | agent | built |
 | C-07 | Carried visit lease | agent | person | needed |
 | C-08 | Phoned unlock | agent | person, clerk | needed |
 | C-09 | Break-glass credential | agent | person, clerk | needed |
-| C-10 | Per-edge ceiling | agent | clerk | needed |
+| C-10 | Per-edge ceiling | agent | clerk | built |
 | C-05 | Broker sign-in and approval proofs | broker | clerk, bastion | built |
 | C-11 | Signed updates | mirror | host | needed |
 | C-12 | Recording backfill | org-store | agent | needed |
@@ -24,9 +24,9 @@ Every seam between two components, what crosses it and with which permission. St
 - Provider: bastion; consumer: agent
 - Interface: /users/:id/roles and /users/:id/roles/:role_id with expires_at (warpgate-admin/src/api/users.rs)
 - Permission: AccessRolesAssign, on the edge host's loopback only
-- Status: needed
+- Status: built
 
-A signed lease in the bundle becomes a role assignment with expires_at = lease end; an early end or a revocation in a newer bundle revokes it. Assignments the agent did not make are drift, reported to KeyClerk; KeyClerk (through the agent) is the only writer (KeyClerk 0013 D2).
+A signed lease in the bundle becomes a role assignment with expires_at = lease end; an early end or a revocation in a newer bundle revokes it. Assignments the agent did not make are drift, reported to KeyClerk; KeyClerk (through the agent) is the only writer (KeyClerk 0013 D2). Built and unit-tested (agent internal/apply apply_test.go and regress_test.go: grants with expires_at, a moved expiry, drift reported not guessed; internal/agent agent_test.go: revocation and offline lease end on the fakes).
 
 ## C-02: Session approval from a signed lease
 
@@ -52,10 +52,10 @@ Lease start: the agent sets the person's facade password to a fresh random value
 - Provider: clerk; consumer: agent
 - Interface: KeyClerk 0013 D3: signed, serial-numbered bundles with a ceiling, a serial floor and horizons per class
 - Permission: the edge's own enrolment credential, one per edge
-- Status: needed
+- Status: built
 - KeyClerk: KeyClerk 0014 (v0.17.0), docs/keyclerk-edge-interface.md
 
-The agent pulls bundles outbound, refuses a bundle with a lower serial, a wrong signer or past its horizon, and reports what it applied. Past a class horizon it ends that class's leases; visit leases end at their own signed window (decision 0007; fail closed, decision 0005 point 3). Bundle entries outside the edge's ceiling (C-10) are refused.
+The agent pulls bundles outbound, refuses a bundle with a lower serial, a wrong signer or past its horizon, and reports what it applied. Past a class horizon it ends that class's leases; visit leases end at their own signed window (decision 0007; fail closed, decision 0005 point 3). Bundle entries outside the edge's ceiling (C-10) are refused. Built and unit-tested (agent internal/kcedge kcedge_test.go: the verifier against KeyClerk's conformance set testdata/edge.json, serial floors, signers and class horizons included, plus fuzzing; internal/state state_test.go: floors only rise; internal/agent agent_test.go: a lease applied and reported, a replayed bundle refused, a lease ended at its own time while the desk is down).
 
 ## C-06: Pre-staged visit lease
 
@@ -102,10 +102,10 @@ Use is detected (facade or Warpgate sign-in with the break-glass account), recor
 - Provider: agent; consumer: clerk
 - Interface: ceiling as data sealed by the officer (kc-edge-ceiling-v2, carried in the bundle exactly as sealed) read by KeyClerk's ceiling.rego (KeyClerk 0014, 0014d; 0007 amended)
 - Permission: only the edge officer's signature changes it; the officer is not a core administrator
-- Status: needed
+- Status: built
 - KeyClerk: KeyClerk 0014 (v0.17.0), docs/keyclerk-edge-interface.md
 
-The agent admits only what both the core's signed policy and the ceiling allow (persons or roles, targets, maximum lease, maximum offline validity, lease classes, hardware profile, remote-reach mode and ports). A ceiling with a lower serial or a wrong signer is refused. Hardware facts come from attestation, not from the ceiling (0007).
+The agent admits only what both the core's signed policy and the ceiling allow (persons or roles, targets, maximum lease, maximum offline validity, lease classes, hardware profile, remote-reach mode and ports). A ceiling with a lower serial or a wrong signer is refused. Hardware facts come from attestation, not from the ceiling (0007). Built as a Go port of ceiling.rego (agent internal/kcedge ceiling.go) until the signed policy module runs in process; unit-tested against KeyClerk's ceiling vectors (kcedge_test.go TestCeilingPolicyMatchesKeyClerk and the ceilings family in TestConformanceFamilies) and on the fakes (agent_test.go TestALeaseOutsideTheCeilingIsNotApplied). Not yet: hardware attestation (the agent attests basic, so visit leases are refused), and remote-reach mode and ports are checked for form but not yet applied.
 
 ## C-05: Broker sign-in and approval proofs
 

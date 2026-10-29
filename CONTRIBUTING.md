@@ -5,6 +5,7 @@
 - ReliKey forks and patches no component (decision 0001). Code that a contract needs goes into a KeyClerk plugin or
   upstream.
 - ReliKey names no deployment, customer or site; the model check fails if a file does.
+- How issues, pull requests, checks and releases work: [docs/maintaining.md](docs/maintaining.md).
 - A change worth a line in the changelog adds a fragment, `changelog.d/<issue>.<section>.md`, instead of editing
   `CHANGELOG.md` (`changelog.d/README.md`); open pull requests then never conflict over it.
 - Design decisions go in `docs/decisions/`; open questions in `model/open-decisions.yaml`; review records stay with the
