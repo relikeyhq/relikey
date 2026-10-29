@@ -208,7 +208,46 @@ def check() -> tuple[list[str], list[str]]:
                         errors.append(f"{path.relative_to(ROOT)}:{n}: names a deployment; ReliKey names none "
                                       f"(decision 0001). Move it to the deployment's own configuration")
     e2, w2 = check_crypto(components, flow_ids)
-    return errors + e2, warnings + w2
+    return errors + e2 + check_compose_pins(components), warnings + w2
+
+
+# An image reference as the shipped compose files write it: name, tag and digest.
+PINNED_REF = re.compile(r"^(?P<image>[^@\s]+):(?P<tag>[\w.-]+)@(?P<digest>sha256:[0-9a-f]{64})$")
+
+
+def check_compose_pins(components: dict) -> list[str]:
+    """Decision 0001: what the shipped compose files run is what the model pins. Each upstream image there is a
+    component of that tier with the same image, version and digest; otherwise the model describes another release
+    than the one deployed (the edge's front ran as a pinned Caddy while the model still had no image for it)."""
+    errors: list[str] = []
+    for tier in ("core", "edge"):
+        path = ROOT / "deploy" / tier / "compose.yaml"
+        if not path.exists():
+            continue
+        rel = path.relative_to(ROOT).as_posix()
+        for name, svc in ((yaml.safe_load(path.read_text(encoding="utf-8")) or {}).get("services") or {}).items():
+            ref = str((svc or {}).get("image") or "")
+            if not ref or ref.startswith("localhost/"):
+                continue        # built here (the agent, the fleet, KeyClerk from its tag): no registry pin to match
+            m = PINNED_REF.match(ref)
+            if not m:
+                errors.append(f"{rel} {name}: image {ref!r} is not pinned by tag and digest; pin it, as the model's "
+                              f"components are, so a moved tag cannot change what runs (decision 0001)")
+                continue
+            named = [c for c in components.values() if c.get("tier") == tier and c.get("image") == m["image"]]
+            if not named:
+                errors.append(f"{rel} {name}: runs {m['image']}, which no {tier} component in components.yaml names; "
+                              f"set that component's image, version and digest, or add the component")
+                continue
+            c = named[0]
+            if str(c.get("version")) != m["tag"]:
+                errors.append(f"{rel} {name}: runs tag {m['tag']}, component {c['id']} pins version {c.get('version')}; "
+                              f"make them the same release (the version is the tag, variant included)")
+            if c.get("digest") != m["digest"]:
+                errors.append(f"{rel} {name}: runs digest {m['digest'][:19]}..., component {c['id']} pins "
+                              f"{str(c.get('digest'))[:19]}...; copy the deployed digest into components.yaml or "
+                              f"repin the compose file")
+    return errors
 
 
 KEX = {"hybrid", "classical", "conditional", "none", "n/a", "unverified"}

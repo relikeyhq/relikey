@@ -85,7 +85,7 @@ The agent accepts a lease signed to the operator for this edge, inside its windo
 - Status: needed
 - KeyClerk: KeyClerk 0014c (v0.19.0), docs/keyclerk-edge-interface.md
 
-Single use, bound to edge, person, target, nonce and duration; the approver is a second person; rate-limited and recorded. A wrong code counts toward lock-out.
+Single use, bound to edge, person, target, nonce and duration; the approver is a second person; rate-limited and recorded. A wrong code counts toward lock-out. Built in part: the code itself (kc-unlock-v2: the node's P-256 unlock key and the desk's derive the same secret, so nothing secret crosses the network; agent internal/kcedge unlock.go) and the node's unlock-keygen and unlock-code commands, tested against KeyClerk's unlock vectors (kcedge_test.go TestConformanceFamilies). Not yet: the challenge shown at the edge, single use, the rate limit, lock-out and the record.
 
 ## C-09: Break-glass credential
 
@@ -95,7 +95,7 @@ Single use, bound to edge, person, target, nonce and duration; the approver is a
 - Status: needed
 - KeyClerk: KeyClerk 0014 (v0.17.0), docs/keyclerk-edge-interface.md
 
-Use is detected (facade or Warpgate sign-in with the break-glass account), recorded in the hash-chained edge log, rotated as soon as the agent can, and reported to KeyClerk as an incident for review on reconnect.
+Use is detected (facade or Warpgate sign-in with the break-glass account), recorded in the hash-chained edge log, rotated as soon as the agent can, and reported to KeyClerk as an incident for review on reconnect. Not built yet: the agent only leaves the break-glass account alone, as every account it did not make (agent internal/apply apply_test.go TestAnUnmanagedUserIsNeverTouched); detection, rotation and the report are to come.
 
 ## C-10: Per-edge ceiling
 
@@ -114,7 +114,7 @@ The agent admits only what both the core's signed policy and the ceiling allow (
 - Permission: per KeyClerk 0003
 - Status: built
 
-Passkey-only sign-in by default; approvals are the approver's own fresh sign-in. Warpgate side (decision 0010): one confidential PKCE client per edge with no roles claim (KeyClerk watches its mappers), auto_create_users off, e-mail admin-editable only. KeyClerk's approval proofs (KeyClerk 0006) are off by default there; ReliKey's shipped configuration sets `approvals.proofs: required` (a supported, CI-covered KeyClerk setting, confirmed 2026-10-23).
+Passkey-only sign-in by default; approvals are the approver's own fresh sign-in. Warpgate side (decision 0010): one confidential PKCE client per edge with no roles claim (KeyClerk watches its mappers), auto_create_users off, e-mail admin-editable only. KeyClerk's approval proofs (KeyClerk 0006) are off by default there; ReliKey's shipped configuration sets `approvals.proofs: required` (a supported, CI-covered KeyClerk setting, confirmed 2026-10-23). Built as shipped configuration: deploy/core/realm.py (the realm and its passkey sign-in), deploy/core/add_edge.py (the per-edge client), deploy/edge/install.py (auto_create_users off, no roles claim read) and deploy/core/keyclerk.yaml (approvals.proofs: required). No test in tests/ covers it yet.
 
 ## C-11: Signed updates
 

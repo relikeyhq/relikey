@@ -43,7 +43,7 @@ components:
       Keycloak listens on the pod's loopback in plain http behind the front (F-22, compose.yaml); as a TLS client to the
       organisation's IdP (F-12) it uses its JDK, whose hybrid group support is not verified
   facade:
-    version: 0.6.3
+    version: v0.6.3-alpine-rootless
     tls_server: unverified
     checked: lldap's LDAPS stack not read; old LDAP clients negotiate whatever they speak
   mirror:
