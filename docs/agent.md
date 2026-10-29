@@ -27,6 +27,14 @@ for linux amd64, arm64, armv7). How it is written and built: `docs/go-engineerin
   live (full-stack run 8: until then the person's SSO sign-in finds no user). Every step is idempotent; a failed step is retried by the next tick's plan. Only users whose description is the
   ReliKey marker are ever touched; two people under one username get nothing.
 - **Reports**: after each pull, `POST /api/v1/edge/report` with the applied serial, the drift and the agent version.
+- **Writes to disk**: edge hardware often boots from flash, so an idle tick writes nothing. The state slots are
+  written only when the record changes. The status files (`status.json`, `status.html`, `metrics.prom`) are written
+  when their content changes (the time, the tick and pull counts and the runtime gauges aside), and otherwise at a
+  **heartbeat of 60 s**: `updated` in status.json and `relikey_agent_status_updated_seconds` are never older than
+  that on a live agent, well inside the canary gate's default `-max-age 2m`, so a reader still tells a live agent
+  from a stalled one. A pulled bundle with a new serial is stored even when its content equals the bundle held:
+  its serial and signed time are the replay floors, and without them an older bundle issued in between (one with a
+  lease revoked since) would verify again; it also re-anchors the trusted time.
 
 ## The bastion's settings
 Each tick the agent reads the bastion settings ReliKey depends on and, in enforce mode, restores them (shadow mode

@@ -28,6 +28,7 @@ import (
 	"relikey/agent/internal/clock"
 	"relikey/agent/internal/fakes"
 	"relikey/agent/internal/httpx"
+	"relikey/agent/internal/kcedge"
 	"relikey/agent/internal/keyclerk"
 	"relikey/agent/internal/state"
 	"relikey/agent/internal/warpgate"
@@ -56,7 +57,16 @@ type rig struct {
 
 func newRig(t *testing.T, mode Mode) *rig {
 	t.Helper()
-	r := &rig{t: t, dir: t.TempDir(), mode: mode, enrol: fakes.Key(9)}
+	r := newRigOff(t, mode, nil)
+	r.start()
+	t.Cleanup(r.halt)
+	return r
+}
+
+// newRigOff is a rig whose agent does not run yet: start runs it, or a test builds it and drives it alone.
+func newRigOff(t *testing.T, mode Mode, tune func(*Agent)) *rig {
+	t.Helper()
+	r := &rig{t: t, dir: t.TempDir(), mode: mode, enrol: fakes.Key(9), tune: tune}
 	r.kc = fakes.NewKeyClerk("edge-a", r.enrol.Public().(ed25519.PublicKey), []string{"idp:ann"}, []string{"plc"})
 	r.wg = fakes.NewWarpgate("tok", map[string][]string{"plc-operator": {"plc"}})
 	kcSrv, kcURL, kcPin := r.kc.Serve()
@@ -64,12 +74,19 @@ func newRig(t *testing.T, mode Mode) *rig {
 	t.Cleanup(kcSrv.Close)
 	t.Cleanup(wgSrv.Close)
 	r.kcURL, r.kcPin, r.wgURL, r.wgPin = kcURL, kcPin, wgURL, wgPin
-	r.start()
-	t.Cleanup(r.halt)
 	return r
 }
 
 func (r *rig) start() {
+	a := r.agent()
+	ctx, cancel := context.WithCancel(context.Background())
+	r.stop, r.done = cancel, make(chan struct{})
+	go func() { defer close(r.done); _ = a.Run(ctx) }()
+}
+
+// agent opens the store and builds the agent. The status heartbeat is a nanosecond, so the tests that wait for ticks
+// in status.json see every tick; the tests of the heartbeat set their own.
+func (r *rig) agent() *Agent {
 	var err error
 	if r.store, err = state.Open(r.dir, true); err != nil {
 		r.t.Fatal(err)
@@ -81,14 +98,12 @@ func (r *rig) start() {
 		Log:     slog.New(slog.NewTextHandler(io.Discard, nil)),
 		Clerk:   &keyclerk.Client{Base: r.kcURL, Edge: "edge-a", Key: r.enrol, HTTP: kcHTTP, Now: clk.Now},
 		Bastion: warpgate.Bastion{C: &warpgate.Client{Base: r.wgURL, Token: "tok", HTTP: wgHTTP, RetryBase: time.Millisecond}},
-		Tick:    100 * time.Millisecond, Pull: 300 * time.Millisecond, Grace: time.Second,
+		Tick:    100 * time.Millisecond, Pull: 300 * time.Millisecond, Grace: time.Second, StatusHeartbeat: time.Nanosecond,
 		Emit: func(e events.Event) { r.mu.Lock(); r.events = append(r.events, e); r.mu.Unlock() }}
 	if r.tune != nil {
 		r.tune(a)
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	r.stop, r.done = cancel, make(chan struct{})
-	go func() { defer close(r.done); _ = a.Run(ctx) }()
+	return a
 }
 
 func (r *rig) halt() {
@@ -170,6 +185,94 @@ func TestIdleTicksWriteNoState(t *testing.T) {
 	})
 	if got := r.generation(); gen == 0 || got != gen {
 		t.Fatalf("idle ticks wrote the state: generation %d -> %d", gen, got)
+	}
+}
+
+// Idle ticks and pulls leave the status files alone until the heartbeat, which still comes, so `updated` keeps telling
+// a live agent from a stalled one (issue 54).
+func TestIdleTicksWriteTheStatusOnlyAtTheHeartbeat(t *testing.T) {
+	r := newRigTuned(t, func(a *Agent) { a.StatusHeartbeat = time.Second })
+	r.kc.SetLeases([]fakes.FakeLease{lease("L-1", time.Now().Add(time.Hour))}, nil)
+	r.eventually("the bundle is applied", func() bool {
+		st := r.status()
+		return st.AppliedSerial > 0 && st.AppliedSerial == r.kc.Serial()
+	})
+	first := r.status()
+	pulls, _ := r.kc.Counts()
+	writes := map[time.Time]bool{}
+	for end := time.Now().Add(4 * time.Second); time.Now().Before(end); time.Sleep(10 * time.Millisecond) {
+		if st := r.status(); !st.Updated.IsZero() && !st.Updated.Equal(first.Updated) {
+			writes[st.Updated] = true
+		}
+	}
+	last := r.status()
+	if n, _ := r.kc.Counts(); last.Ticks < first.Ticks+20 || n < pulls+3 {
+		t.Fatalf("not idle long enough: ticks %d -> %d, pulls %d -> %d", first.Ticks, last.Ticks, pulls, n)
+	}
+	// 40 ticks in 4 s at a 1 s heartbeat: about 4 writes; every tick would be about 40, none would be 0.
+	if len(writes) < 2 || len(writes) > 6 {
+		t.Fatalf("%d status writes over %d idle ticks, want 2 to 6 (the heartbeat)", len(writes), last.Ticks-first.Ticks)
+	}
+}
+
+// A change reaches the status files at once, not at the heartbeat; nothing else is written meanwhile.
+func TestTheStatusIsWrittenWhenItChanges(t *testing.T) {
+	r := newRigTuned(t, func(a *Agent) { a.StatusHeartbeat = time.Hour })
+	r.eventually("the first status", func() bool { return r.status().Ticks > 0 })
+	r.kc.SetLeases([]fakes.FakeLease{lease("L-1", time.Now().Add(time.Hour))}, nil)
+	r.eventually("the lease applied, nothing left over", func() bool {
+		st := r.status()
+		return st.LiveLeases == 1 && st.AppliedSerial > 0 && st.AppliedSerial == r.kc.Serial() && st.NonEmptyStreak == 0
+	})
+	before := r.status()
+	time.Sleep(time.Second) // ten idle ticks, three idle pulls
+	if after := r.status(); !after.Updated.Equal(before.Updated) {
+		t.Fatalf("an idle second rewrote the status: ticks %d -> %d", before.Ticks, after.Ticks)
+	}
+}
+
+// A bundle with a new serial but the content already held is still stored: its serial and signed time are the replay
+// floors. Here the desk issued 1 (ann), 2 (ann and eve), 3 (ann again); the edge saw 1 and 3, and 2 replayed later must
+// be refused, or eve's revoked lease would come back.
+func TestASameContentBundleWithANewSerialRaisesTheFloor(t *testing.T) {
+	r := newRigOff(t, Enforce, nil)
+	a := r.agent()
+	t.Cleanup(func() { r.store.Close() })
+	a.defaults()
+	a.st = Status{Drift: []string{}}
+	ctx := context.Background()
+	pull := func() keyclerk.Pulled {
+		t.Helper()
+		got, err := a.Clerk.Pull(ctx, 0, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return got
+	}
+	ann := lease("L-1", time.Now().Add(time.Hour))
+	eve := lease("L-2", time.Now().Add(time.Hour))
+	eve.Username = "eve"
+	r.kc.SetLeases([]fakes.FakeLease{ann}, nil)
+	b1 := pull()
+	r.kc.SetLeases([]fakes.FakeLease{ann, eve}, nil)
+	b2 := pull()
+	r.kc.SetLeases([]fakes.FakeLease{ann}, nil)
+	b3 := pull()
+	d1, _ := kcedge.ContentDigest(*b1.Bundle, a.Pins)
+	d3, _ := kcedge.ContentDigest(*b3.Bundle, a.Pins)
+	if d1 == "" || d1 != d3 {
+		t.Fatalf("bundles 1 and 3 should have the same content: %q, %q", d1, d3)
+	}
+	a.handlePull(ctx, b1, nil)
+	gen := r.generation()
+	a.handlePull(ctx, b3, nil)
+	if f := a.Store.Get().Floors.Serial; f != 3 || r.generation() <= gen {
+		t.Fatalf("the same content under serial 3 was not stored: floor %d, generation %d -> %d", f, gen, r.generation())
+	}
+	a.handlePull(ctx, b2, nil)
+	if a.st.Refused != 1 || a.Store.Get().Floors.Serial != 3 || r.roles("eve") != nil {
+		t.Fatalf("bundle 2 replayed after 3 was taken: refused %d, floor %d, eve %v", a.st.Refused,
+			a.Store.Get().Floors.Serial, r.roles("eve"))
 	}
 }
 
@@ -263,14 +366,7 @@ func TestAnUnmanagedHolderIsAFindingOnceAndResolvedOnce(t *testing.T) {
 // newRigTuned is newRig with the agent changed before it starts.
 func newRigTuned(t *testing.T, tune func(*Agent)) *rig {
 	t.Helper()
-	r := &rig{t: t, dir: t.TempDir(), mode: Enforce, enrol: fakes.Key(9), tune: tune}
-	r.kc = fakes.NewKeyClerk("edge-a", r.enrol.Public().(ed25519.PublicKey), []string{"idp:ann"}, []string{"plc"})
-	r.wg = fakes.NewWarpgate("tok", map[string][]string{"plc-operator": {"plc"}})
-	kcSrv, kcURL, kcPin := r.kc.Serve()
-	wgSrv, wgURL, wgPin := r.wg.Serve()
-	t.Cleanup(kcSrv.Close)
-	t.Cleanup(wgSrv.Close)
-	r.kcURL, r.kcPin, r.wgURL, r.wgPin = kcURL, kcPin, wgURL, wgPin
+	r := newRigOff(t, Enforce, tune)
 	r.start()
 	t.Cleanup(r.halt)
 	return r

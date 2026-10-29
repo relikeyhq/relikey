@@ -144,7 +144,7 @@ footer{margin-top:22px;color:var(--soft);font-size:12px}
 {{if .S.LastFailure}}<li class="ask"><span>Needs a person:</span> last failure <code>{{plain .S.LastFailure}}</code></li>{{end}}
 {{if .S.LastRefusal}}<li class="ask"><span>Needs a person:</span> last refused bundle <code>{{plain .S.LastRefusal}}</code></li>{{end}}
 {{range .S.Drift}}<li class="{{if fixed .}}fix"><span>Fixed by the agent:</span>{{else}}ask"><span>Needs a person:</span>{{end}} {{plain .}}</li>{{end}}</ul>{{end}}
-<footer>{{.S.Version}}, updated {{clock .S.Updated}}, started {{clock .S.Started}}; {{.S.Ticks}} ticks, {{.S.Executed}} actions, {{.S.Failures}} failed. Written by the agent every 15 s; it serves nothing.</footer>
+<footer>{{.S.Version}}, updated {{clock .S.Updated}}, started {{clock .S.Started}}; {{.S.Ticks}} ticks, {{.S.Executed}} actions, {{.S.Failures}} failed. Written by the agent when it changes and at least every minute; it serves nothing.</footer>
 </main></body></html>
 `))
 

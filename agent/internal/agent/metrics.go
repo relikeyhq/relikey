@@ -8,7 +8,9 @@ import (
 )
 
 // Metrics is the status as Prometheus text exposition, written to metrics.prom beside
-// status.json on every tick. The agent serves nothing, so it is read by a textfile
+// status.json when the status changes and at the heartbeat (Agent.StatusHeartbeat, a minute), so
+// relikey_agent_status_updated_seconds tells a live agent from a stalled one; the runtime gauges
+// are as of that write. The agent serves nothing, so it is read by a textfile
 // collector (node_exporter --collector.textfile.directory) or copied out; the names and
 // the status-only health follow KeyClerk's monitoring shape (its decision 0018), so one
 // monitoring setup covers the desk and its edges. bad is Status.Health's list.
