@@ -32,6 +32,19 @@ COMPOSE_LAB = ROOT / "deploy" / "edge" / "compose.lab.yaml"
 AGENT_UID = 65532
 
 
+def pinned_busybox(image_file: Path) -> str:
+    """The busybox the agent image builds from, with its digest (the core's install.py reads its image file the same
+    way): the helper containers below run that same reference, so a moved tag cannot change what runs with the secrets
+    or Warpgate's volume mounted, and Dependabot's update of the image file updates them too."""
+    m = re.search(r"^FROM\s+(\S+/busybox:\S+@sha256:[0-9a-f]{64})", image_file.read_text(encoding="utf-8"), re.M)
+    if not m:
+        sys.exit(f"{image_file}: no busybox base pinned by digest")
+    return m.group(1)
+
+
+BUSYBOX = pinned_busybox(ROOT / "deploy" / "edge" / "Dockerfile.agent")
+
+
 def write(name: str, text: str, owner: int | None = AGENT_UID) -> Path:
     p = SECRETS / name
     p.unlink(missing_ok=True)   # replaced, not opened: a re-run cannot write a file fix_owners gave the agent
@@ -62,7 +75,7 @@ def fix_owners(engine: str) -> None:
         return
     script = " && ".join([f"chown {AGENT_UID}:{AGENT_UID} /s/{f}" for f in AGENT_READS] +
                          [f"chown 0:0 /s/{f} && chmod 600 /s/{f}" for f in FRONT_READS])
-    subprocess.run([engine, "run", "--rm", "-v", f"{SECRETS}:/s", "docker.io/library/busybox:1.37.0", "sh", "-c", script],
+    subprocess.run([engine, "run", "--rm", "-v", f"{SECRETS}:/s", BUSYBOX, "sh", "-c", script],
                    check=True)
 
 
@@ -162,7 +175,7 @@ def main() -> int:
                    check=True, env={**os.environ, "WARPGATE_ADMIN_PASSWORD": secrets.token_urlsafe(24)})
     # The Warpgate image holds only its binary (no shell, no cat): read the certificate from its volume with a
     # throwaway busybox, the same pinned one the agent image builds from.
-    busybox = [o.engine, "run", "--rm", "-i", "-v", "relikey-edge_warpgate:/data", "docker.io/library/busybox:1.37.0"]
+    busybox = [o.engine, "run", "--rm", "-i", "-v", "relikey-edge_warpgate:/data", BUSYBOX]
     der = subprocess.run(busybox + ["cat", "/data/tls.certificate.pem"], capture_output=True, check=False).stdout
     import yaml
     wg = yaml.safe_load(subprocess.run(busybox + ["cat", "/data/warpgate.yaml"], capture_output=True, check=True).stdout)

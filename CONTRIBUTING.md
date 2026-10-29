@@ -11,6 +11,7 @@
   to the command or person that fixes it. A refusal sent to an unauthenticated peer says less on purpose; its reason
   then goes to the service's log, and the log entry carries the next step. Tests pin the next step, not only the
   refusal (`tests/test_installers.py`).
+- How issues, pull requests, checks and releases work: [docs/maintaining.md](docs/maintaining.md).
 - A change worth a line in the changelog adds a fragment, `changelog.d/<issue>.<section>.md`, instead of editing
   `CHANGELOG.md` (`changelog.d/README.md`); open pull requests then never conflict over it.
 - Design decisions go in `docs/decisions/`; open questions in `model/open-decisions.yaml`; review records stay with the

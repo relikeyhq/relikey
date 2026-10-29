@@ -10,13 +10,17 @@ for linux amd64, arm64, armv7). How it is written and built: `docs/go-engineerin
   floors (serial, newest signed time, ceiling serial). Floors and the bundle are stored **before** anything is
   applied; a refused bundle changes nothing. A 410 with a valid sealed ended notice ends the edge for good.
 - **Every tick** (15 s): the live leases are recomputed from the stored bundle at the **trusted time**, so leases end on
-  the edge without asking anyone; Warpgate is read, a plan is computed, and (in enforce mode) executed.
+  the edge without asking anyone; Warpgate is read, a plan is computed, and (in enforce mode) executed. A read that
+  fails transiently (a transport error, a 5xx or a 429) is asked again within the tick, at most three reads with a
+  short doubling wait that never runs past the tick or a shutdown; a rejected token or a cancelled read is not asked
+  again. If no read succeeds, nothing is changed that tick and `observe_errors` counts it (fail closed).
 - **Trusted time**: the wall clock, unless the boot clock (CLOCK_BOOTTIME, counts suspend) since the last verified
   bundle says more time has passed; then the later time wins and the skew is reported. A wall clock set back cannot
   keep a lease alive. After a reboot (boot id changed) nothing is live until a fresh bundle verifies.
 - **The plan**: close sessions that no live lease reaches (or that ran past `max_session_hours`, or whose user no longer
-  exists), then remove roles and SSO credentials, delete users without leases, then create users (stripping
-  Warpgate's default roles), add SSO credentials (provider and e-mail, decision 0010) and roles with `expires_at`.
+  exists), then remove roles, SSO credentials and every other credential, delete users without leases, then create
+  users (stripping Warpgate's default roles), add SSO credentials (provider and e-mail, decision 0010) and roles
+  with `expires_at`.
   Since edge protocol 1.3 the bundle carries no address: the agent fetches each live lease's verified address from the
   desk, sealed for that request, and keeps it in memory only. A failed fetch is retried after 15 s; an answer without
   an address is asked again no sooner than a minute later, because the desk can learn the address after the lease went
@@ -30,6 +34,14 @@ only reports): no self-service credentials (a person could add a password, key o
 make their account unreadable to the agent), no password SSH, API tokens of at most an hour. A bastion adapter
 offers this through the optional `bastion.Hardener`; without it the settings are unchecked. An account the agent
 cannot read is still closed and deleted once no lease is live; with a live lease nothing is changed blind.
+
+The settings stop new credentials; the plan removes the ones already there. A managed account signs in only through
+the lease's SSO credential or a visit lease's key, so every other credential on it (on Warpgate: passwords,
+one-time-password seeds, client certificates) is removed on the next tick in enforce mode, however it got there:
+made before the agent ran or before the settings were restored, by an administrator, or by an import. The same
+holds for a key no live visit lease installs and an SSO credential that is not the lease's. Unmanaged accounts keep
+theirs. A credential list that cannot be read makes the account unreadable for that tick, never "holds none". API
+tokens are not listed by Warpgate's admin API; the one-hour cap bounds them.
 
 ## A role reaches only its leases' targets
 A bastion role grants every target bound to it, and the ceiling checks only the lease's target. So the agent assigns
@@ -94,10 +106,11 @@ apart by `"specversion"`: a CloudEvents 1.0 envelope (type `relikey.<noun>.<verb
 `account:<edge>/<name>`) whose data is an OCSF 1.6.0 event, with a monitoring platform's alert-event fields (`ts`,
 `solution`, `event`, `outcome`, `severity`, `reason`, `entity`) as extension attributes. Emitted: each change the agent
 made on the bastion (`relikey.account.created`, `deleted`, `role_granted`, `role_revoked`, `role_extended`,
-`sso_bound`, `sso_unbound`, `key_added`, `key_removed`; `relikey.session.closed`), an unmanaged account holding a
-governed role (`relikey.drift.rogue_account`, once when found and once when gone; which roles stays in the local
-drift report), a refused bundle (`relikey.bundle.refused`) and an ended edge (`relikey.edge.ended`). Events name
-bastion accounts and lease ids, never an e-mail; they are not yet chained or sequenced (the evidence log, 0025 point 2).
+`sso_bound`, `sso_unbound`, `key_added`, `key_removed`, `credential_removed`; `relikey.session.closed`), an
+unmanaged account holding a governed role (`relikey.drift.rogue_account`, once when found and once when gone; which
+roles stays in the local drift report), a refused bundle (`relikey.bundle.refused`) and an ended edge
+(`relikey.edge.ended`). Events name bastion accounts and lease ids, never an e-mail; they are not yet chained or
+sequenced (the evidence log, 0025 point 2).
 
 `fleet.url` (optional): the agent sends ReliKey's fleet service its signed report every pull interval
 (`docs/fleet.md`, decision 0026); it must be the clerk's own host, and the agent takes nothing back from it.
@@ -107,6 +120,28 @@ from the edge's targets. With it, or with `governed_roles` in the signed bundle 
 an account the agent does not manage that holds one of those roles is in the drift report and is never changed: the
 agent governs the union of both sources (full-stack run 2, finding 8). The file is read every tick; one that cannot be
 read or parsed is a note in the drift, never "nothing governed".
+
+## Metrics
+Every tick the agent writes `metrics.prom` (Prometheus text) beside `status.json`, for a textfile collector or to be
+copied out; it serves nothing. The names below are a stable interface, pinned by a test: a rename or removal, or a
+change of type, lands only in a tagged release, listed under Changed or Removed in the changelog. Warpgate exports no
+metrics of its own, so `relikey_agent_observe_errors_total` is the only signal of trouble reading the bastion.
+
+| Metric | Type | Meaning |
+|---|---|---|
+| `relikey_agent_healthy` | gauge | 1 when the canary gate passes (`relikey-agent status`), else 0 |
+| `relikey_agent_status_updated_seconds` | gauge | Unix time the status was last written |
+| `relikey_agent_live_leases` | gauge | leases live now |
+| `relikey_agent_bundle_serial` | gauge | serial of the newest verified bundle |
+| `relikey_agent_applied_serial` | gauge | serial whose plan was applied in full |
+| `relikey_agent_bundles_refused_total` | counter | bundles and notices refused by the verifier |
+| `relikey_agent_action_failures_total` | counter | Warpgate actions that failed |
+| `relikey_agent_observe_errors_total` | counter | failures to read Warpgate's state |
+| `relikey_agent_ended` | gauge | 1 when the desk ended this edge |
+| `relikey_agent_pulls_failed_total` | counter | pulls that failed (desk unreachable or refusing) |
+
+The other metrics in the file (successful pulls, the plan, actions executed, module failures, heap and
+goroutines) are diagnostics and may change in any release.
 
 ## Canary: shadow mode and the gate
 A new agent version goes to one edge first, next to the version that enforces:
@@ -122,11 +157,11 @@ A new agent version goes to one edge first, next to the version that enforces:
 ## Assurance
 | Check | What it proves |
 |---|---|
-| KeyClerk conformance (`testdata/edge.json`, KeyClerk v0.26.1 (aa29f6f, signed tag; sha256 5a2c03be...): 126 cases and 8 e-mail answers: 70 verifier with live leases, visit leases, governed roles and stored state; the families statements 10, ceilings 6, ended 6, unlock 5 (both sides reach one code), module_bytes 3, requests 8 (the signed bytes for every case, the header byte for byte where accepted, the long-poll query included); the ceiling policy cases) | the same verdicts and state as the reference, no exceptions |
+| KeyClerk conformance (`testdata/edge.json`, KeyClerk v0.26.3 (cfc5793, signed tag; sha256 5a2c03be...): 126 cases and 8 e-mail answers: 70 verifier with live leases, visit leases, governed roles and stored state; the families statements 10, ceilings 6, ended 6, unlock 5 (both sides reach one code), module_bytes 3, requests 8 (the signed bytes for every case, the header byte for byte where accepted, the long-poll query included); the ceiling policy cases) | the same verdicts and state as the reference, no exceptions |
 | interop with KeyClerk's CLI (2026-10-24) | a statement made and officer-signed by `edge_cli`, cosigned by `relikey-agent cosign`, is accepted by KeyClerk's `unseal_multi` |
 | 18 canonical cross vectors, signed-request vectors | byte-exact encoding and headers |
-| `regen.py <keyclerk> <tag>` | vectors rebuilt from the pinned tag; v0.19.0, v0.21.2, v0.22.0, v0.23.0 |
-| 61/61 mutants killed (`mutants.py`) | every guard is caught by a test (0.23.0 added exact sealed members, canonical base64, the bound ended notice, exact statement signers and signatures, modules by hash, module bytes, unlock fields; 2026-10-25 added the governed roles: reported, ungoverned and expired grants left out, a malformed file or bundle member refused, the clerk's catalogue used) |
+| `regen.py <keyclerk> <tag>` | vectors rebuilt from the pinned tag; v0.19.0, v0.21.2, v0.22.0, v0.23.0, v0.26.3 |
+| every mutant killed (`mutants.py`, the count grows with the guards) | every guard is caught by a test (0.23.0 added exact sealed members, canonical base64, the bound ended notice, exact statement signers and signatures, modules by hash, module bytes, unlock fields; 2026-10-25 added the governed roles: reported, ungoverned and expired grants left out, a malformed file or bundle member refused, the clerk's catalogue used) |
 | randomised convergence test (200 steps, with faults) | the plan always converges, never touches unmanaged users |
 | 10 end-to-end agent tests on the fakes | revocation, offline lease end, replay, ended edge, an ended notice for another enrolment key ignored, module fetched once by hash, shadow, restart, ceiling |
 | `go test -race -shuffle=on` on linux/amd64 and linux/arm64 | no data races |
@@ -162,8 +197,8 @@ run 1 (2f5b718).
 ## Red team status
 The agent's red team (2026-10-23, findings AG-1 to AG-22) is answered: each fix carries a test and is listed in the
 CHANGELOG; AG-11 (a lease's role reaches only the targets the lease names) is enforced since 2026-10-25, fail closed.
-Two items are engineering rather than security: AG-14 (write state only when it matters, to spare flash) and AG-20
-(shadow and enforcing agents use separate enrolment keys, the procedure above).
+Two items are engineering rather than security: AG-14 (write state only when it changes, to spare flash) is done
+since 2026-10-27, and AG-20 (shadow and enforcing agents use separate enrolment keys, the procedure above).
 
 KeyClerk 0.22.0 sends the verified e-mail on each lease (KC-10) and a stable `from` (KC-11); 0.23.0 seals the ceiling, names modules by hash and binds the ended notice. Metrics: `metrics.prom` (Prometheus text) beside `status.json`, health status-only (`relikey-agent status`), in KeyClerk's monitoring shape; OCSF log events wait for KeyClerk's decision 0018 to be published. Not yet built: the signed policy modules in wazero (the ceiling is a Go port of
 `ceiling.rego` meanwhile), the LDAP facade and lease credentials, offline levels, evidence, TPM. Not yet run: armv7 on real hardware (qemu-user only so far).

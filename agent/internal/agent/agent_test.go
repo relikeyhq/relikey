@@ -139,6 +139,40 @@ func TestALeaseIsAppliedAndReported(t *testing.T) {
 	})
 }
 
+// generation is the newest generation in the state slots: every slot write raises it by one.
+func (r *rig) generation() int64 {
+	var gen int64
+	for _, n := range []string{"state-a.json", "state-b.json"} {
+		var sl struct {
+			Gen int64 `json:"gen"`
+		}
+		b, _ := os.ReadFile(filepath.Join(r.dir, n))
+		if json.Unmarshal(b, &sl) == nil {
+			gen = max(gen, sl.Gen)
+		}
+	}
+	return gen
+}
+
+// AG-14: idle ticks and pulls that bring nothing new write no state (edge hardware often boots from flash).
+func TestIdleTicksWriteNoState(t *testing.T) {
+	r := newRig(t, Enforce)
+	r.kc.SetLeases([]fakes.FakeLease{lease("L-1", time.Now().Add(time.Hour))}, nil)
+	r.eventually("the bundle is applied", func() bool {
+		st := r.status()
+		return st.AppliedSerial > 0 && st.AppliedSerial == r.kc.Serial()
+	})
+	gen, ticks := r.generation(), r.status().Ticks
+	pulls, _ := r.kc.Counts()
+	r.eventually("20 idle ticks and 3 idle pulls", func() bool {
+		n, _ := r.kc.Counts()
+		return r.status().Ticks >= ticks+20 && n >= pulls+3
+	})
+	if got := r.generation(); gen == 0 || got != gen {
+		t.Fatalf("idle ticks wrote the state: generation %d -> %d", gen, got)
+	}
+}
+
 func TestTheClerksGovernedRolesAloneReportAnUnmanagedHolder(t *testing.T) {
 	r := newRig(t, Enforce) // no governed-roles file: the signed catalogue in the bundle is the only source
 	rogue := r.wg.AddUser("rogue", "made behind the agent's back")
@@ -579,6 +613,50 @@ func TestTheAgentRestoresTheBastionHardening(t *testing.T) {
 	})
 	r.wg.SetParameters(warpgate.Parameters{AllowOwnCredentialManagement: true}) // an administrator turns it back on
 	r.eventually("self-service turned off again", func() bool { return !r.wg.GetParameters().AllowOwnCredentialManagement })
+}
+
+// A password, one-time-password seed or certificate on a managed account is out of policy whatever its history (made
+// before the agent ran, by an administrator, by the person while self-service was on): the next tick in enforce mode
+// removes it and says so; shadow mode only reports it; the lease's SSO credential and an unmanaged account stay.
+func TestACredentialAddedOutsideTheAgentIsRemovedOnTheNextTick(t *testing.T) {
+	shadow := newRig(t, Shadow)
+	shadow.kc.SetLeases([]fakes.FakeLease{lease("L-1", time.Now().Add(time.Hour))}, nil)
+	shadow.wg.AddUser("ann", apply.Marker)
+	shadow.wg.AddCredential("ann", "passwords")
+	shadow.eventually("the credential is reported", func() bool {
+		return strings.Contains(shadow.status().Plan, "delete-credential 1")
+	})
+	if len(shadow.wg.Credentials("ann")) != 1 {
+		t.Fatal("shadow mode removed a credential")
+	}
+
+	r := newRig(t, Enforce)
+	r.wg.AddUser("breakglass", "made by the installer")
+	r.wg.AddCredential("breakglass", "passwords")
+	r.kc.SetLeases([]fakes.FakeLease{lease("L-1", time.Now().Add(time.Hour))}, nil)
+	r.eventually("ann gets the role", func() bool { _, ok := r.roles("ann")["plc-operator"]; return ok })
+	for _, kind := range warpgate.OtherCredentialKinds {
+		r.wg.AddCredential("ann", kind)
+	}
+	r.eventually("every credential no lease grants is removed", func() bool { return len(r.wg.Credentials("ann")) == 0 })
+	r.eventually("and each removal is an event", func() bool {
+		n := 0
+		for _, typ := range r.seen("account:edge-a/ann") {
+			if typ == "relikey.account.credential_removed.v1" {
+				n++
+			}
+		}
+		return n == len(warpgate.OtherCredentialKinds)
+	})
+	if _, emails := r.wg.Snapshot(apply.Marker); !slices.Equal(emails["ann"], []string{"ann@example.test"}) {
+		t.Fatalf("the lease's SSO credential went too: %v", emails["ann"])
+	}
+	if _, ok := r.roles("ann")["plc-operator"]; !ok {
+		t.Fatal("the lease's role went too")
+	}
+	if len(r.wg.Credentials("breakglass")) != 1 {
+		t.Fatal("an unmanaged account's credential was touched")
+	}
 }
 
 type lockedBuf struct {
