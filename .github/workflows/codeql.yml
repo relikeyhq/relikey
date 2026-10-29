@@ -1,0 +1,60 @@
+# CodeQL as a workflow (advanced setup) instead of GitHub's default setup: the default setup does not run on the merge
+# queue, so its required checks never report there. Same languages and job names as the default setup had, so the
+# required checks "Analyze (actions)", "Analyze (go)" and "Analyze (python)" keep their names.
+name: CodeQL
+on:
+  push:
+    branches: [main]
+  pull_request:
+  merge_group:
+  schedule:
+    - cron: '41 3 * * 1'   # weekly, for queries added upstream since the last change
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write   # upload the results to code scanning
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: actions
+            build-mode: none
+          - language: go
+            build-mode: manual
+          - language: python
+            build-mode: none
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - if: matrix.language == 'go'
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.27.3"        # the modules name this toolchain
+          cache-dependency-path: |
+            agent/go.sum
+            fleet/go.sum
+      - uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+      # the agent and the fleet service, each its own module (agent/tools only pins tool versions, it has no packages)
+      - if: matrix.language == 'go'
+        run: |
+          (cd agent && go build ./...)
+          (cd fleet && go build ./...)
+        env:
+          GOTOOLCHAIN: local
+      - uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          category: /language:${{ matrix.language }}
