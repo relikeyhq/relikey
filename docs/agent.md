@@ -126,7 +126,7 @@ A new agent version goes to one edge first, next to the version that enforces:
 | interop with KeyClerk's CLI (2026-10-24) | a statement made and officer-signed by `edge_cli`, cosigned by `relikey-agent cosign`, is accepted by KeyClerk's `unseal_multi` |
 | 18 canonical cross vectors, signed-request vectors | byte-exact encoding and headers |
 | `regen.py <keyclerk> <tag>` | vectors rebuilt from the pinned tag; v0.19.0, v0.21.2, v0.22.0, v0.23.0 |
-| 61/61 mutants killed (`mutants.py`) | every guard is caught by a test (0.23.0 added exact sealed members, canonical base64, the bound ended notice, exact statement signers and signatures, modules by hash, module bytes, unlock fields; 2026-10-25 added the governed roles: reported, ungoverned and expired grants left out, a malformed file or bundle member refused, the clerk's catalogue used) |
+| every mutant killed (`mutants.py`, the count grows with the guards) | every guard is caught by a test (0.23.0 added exact sealed members, canonical base64, the bound ended notice, exact statement signers and signatures, modules by hash, module bytes, unlock fields; 2026-10-25 added the governed roles: reported, ungoverned and expired grants left out, a malformed file or bundle member refused, the clerk's catalogue used) |
 | randomised convergence test (200 steps, with faults) | the plan always converges, never touches unmanaged users |
 | 10 end-to-end agent tests on the fakes | revocation, offline lease end, replay, ended edge, an ended notice for another enrolment key ignored, module fetched once by hash, shadow, restart, ceiling |
 | `go test -race -shuffle=on` on linux/amd64 and linux/arm64 | no data races |

@@ -32,6 +32,16 @@ Finish what 0.1.x started. Suggested order:
 16. Agent: sequence numbers and a hash chain for events ([#10](https://github.com/relikeyhq/relikey/issues/10))
 17. Errors say why and what to do next ([#22](https://github.com/relikeyhq/relikey/issues/22))
 18. This file ([#21](https://github.com/relikeyhq/relikey/issues/21))
+19. Changelog entries as fragments, so pull requests stop conflicting ([#52](https://github.com/relikeyhq/relikey/issues/52), done)
+20. Issue chooser: the private-report link names the wrong owner ([#58](https://github.com/relikeyhq/relikey/issues/58))
+21. Installers: run the helper image by digest, as the images are ([#55](https://github.com/relikeyhq/relikey/issues/55))
+22. Model: an audit against the code, and a gate rule for the drift it finds ([#61](https://github.com/relikeyhq/relikey/issues/61))
+23. Model: the edge proxy's footprint, measured against the switch profile ([#62](https://github.com/relikeyhq/relikey/issues/62))
+24. Agent: its metric names are a stable interface ([#53](https://github.com/relikeyhq/relikey/issues/53))
+25. Agent: metrics a site's monitoring can read, without a listener ([#60](https://github.com/relikeyhq/relikey/issues/60))
+26. Agent: the writes left on idle ticks and unchanged pulls ([#54](https://github.com/relikeyhq/relikey/issues/54))
+27. Core installer: write the fleet's enrolment-by-code settings ([#74](https://github.com/relikeyhq/relikey/issues/74))
+28. Edge: Warpgate 0.30.2, and decision 0010 brought up to date ([#78](https://github.com/relikeyhq/relikey/issues/78))
 
 ## Then: [0.3.0](https://github.com/relikeyhq/relikey/milestone/2)
 Work that needs 0.2.0 first, a lab installation, hardware or a second component:
@@ -55,3 +65,4 @@ Accepted or proposed direction that waits on a partner release, a prototype or a
 - Sign-in gateway part B: a Kerberos prototype ([#35](https://github.com/relikeyhq/relikey/issues/35))
 - Vendor sign-in through the vendor's own identity provider ([#36](https://github.com/relikeyhq/relikey/issues/36))
 - Production networking and high availability for the core ([#37](https://github.com/relikeyhq/relikey/issues/37))
+- Edge on Windows: what it takes, behind Warpgate's Windows port ([#81](https://github.com/relikeyhq/relikey/issues/81))
