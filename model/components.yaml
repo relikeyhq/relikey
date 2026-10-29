@@ -114,10 +114,10 @@ components:
     zone: appliance
     plane: control
     arch: [amd64, arm64, armv7]
-    # The estimate is that of the minimal Go proxy first planned. Caddy is larger: about 50 MB resident at idle and a
-    # 67 MB image on amd64 (a quick look, not a soak). At that size the edge no longer fits the switch profile's
-    # memory; measure it on the reference hardware (R-10) before relying on this budget.
-    footprint: {ram_mb: 15, disk_mb: 10, measured: false}
+    # The pinned Caddy that deploy/edge/compose.yaml runs as `front`, from a first amd64 measurement (2026-10): about
+    # 50 MB resident at idle, a 67 MB image. It replaces the 15 MB estimate of a minimal proxy, and puts the edge over
+    # the switch profile's memory: a known gap there (model/footprint.yaml, #62).
+    footprint: {ram_mb: 50, disk_mb: 67, measured: true}
     upstream: https://github.com/caddyserver/caddy
 
   - id: facade
