@@ -1,8 +1,8 @@
 # 0026: Federated observability and fleet management: ReliKey's own, tiered, tighten-only below the parent
 
 - Status: accepted (operator, 2026-10-25), draft 2 after its red team, on the operator's condition that KeyClerk 0027
-  take the red team in (2fa2e25, 4205d60). Nothing was built when it was accepted; the build state is in the section
-  "Build state" below.
+  take the red team in (2fa2e25, 4205d60). Nothing built yet.
+- Build state (2026-10-29): the line above was true when accepted; what is built since is in "Build state" below.
 - Date: 2026-10-25
 - Builds on: 0005 (a small edge and a shared core), 0006 (working without a network), 0013 (the witness on site, the
   break-glass promotion), 0021 (no telemetry relay), 0023 (role seams), 0025 (the trust sensor and its evidence log);
