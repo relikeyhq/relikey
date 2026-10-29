@@ -58,6 +58,8 @@ def test_a_code_is_read_and_a_bad_one_refused_without_repeating_it():
         with pytest.raises(ValueError) as e:
             m.parse_code(text)
         assert CODE_SECRET not in str(e.value) and text not in str(e.value)
+        # the refusal says what to do next: check the file, or get a new code from the fleet page
+        assert "exactly as the fleet page issued it" in str(e.value) and "for a new code" in str(e.value)
 
 
 def test_enrolment_before_python_3_13_is_refused_and_says_why(monkeypatch, tmp_path):

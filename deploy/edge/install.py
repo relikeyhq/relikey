@@ -101,11 +101,14 @@ def public_roots(given: str | None) -> bytes:
 
 CODE_PREFIX = "relikey-enrol-v1:"
 PRESENT_CONTEXT = "relikey-enrol-present-v1"   # fleet/internal/enrol: the edge's signature over fleet, slot, commitment
+CODE_NEXT_STEP = (f"check that the file holds the code exactly as the fleet page issued it (one line starting "
+                  f"{CODE_PREFIX}), or ask the fleet's operator to open a new slot on the fleet page for a new code")
 
 
 def parse_code(text: str) -> dict:
     """The enrolment code as the fleet page gives it (fleet/internal/enrol ParseCode). Errors never repeat the code:
-    its secret is single-use and is never logged or printed."""
+    its secret is single-use and is never logged or printed. They say what to do next: the file may be damaged in
+    transit, or hold something else; a new code comes from the fleet page."""
     text = text.strip()
     try:
         if not text.startswith(CODE_PREFIX):
@@ -113,13 +116,13 @@ def parse_code(text: str) -> dict:
         raw = text[len(CODE_PREFIX):]
         code = json.loads(base64.urlsafe_b64decode(raw + "=" * (-len(raw) % 4)))
     except (ValueError, TypeError):
-        raise ValueError("not a ReliKey enrolment code") from None
+        raise ValueError(f"not a ReliKey enrolment code: {CODE_NEXT_STEP}") from None
     if not isinstance(code, dict):
-        raise ValueError("not a ReliKey enrolment code")
+        raise ValueError(f"not a ReliKey enrolment code: {CODE_NEXT_STEP}")
     fields = {k: code.get(k) for k in ("fleet", "url", "pin", "anchor", "slot", "secret")}
     if (not all(isinstance(v, str) and v for v in fields.values()) or not fields["url"].startswith("https://")
             or len(fields["pin"]) != 64 or len(fields["anchor"]) != 64):
-        raise ValueError("the enrolment code lacks the fleet's address, pin, anchor, slot or secret")
+        raise ValueError(f"the enrolment code lacks the fleet's address, pin, anchor, slot or secret: {CODE_NEXT_STEP}")
     return fields
 
 
@@ -230,7 +233,7 @@ def enrol_main(argv: list[str]) -> int:
     try:
         enrol_by_code(o.code_file, seed)
     except (OSError, ValueError) as e:
-        sys.exit(f"--code-file: {e}")
+        sys.exit(f"--code-file {o.code_file}: {e}")
     return 0
 
 
@@ -269,7 +272,7 @@ def main() -> int:
         try:   # checked before anything is written: a code that cannot be read stops the install at its start
             parse_code(Path(o.enrol_code_file).read_text(encoding="utf-8"))
         except (OSError, ValueError) as e:
-            sys.exit(f"--enrol-code-file: {e}")
+            sys.exit(f"--enrol-code-file {o.enrol_code_file}: {e}")
     if bool(o.sso_issuer) != bool(o.sso_secret_file) or (o.sso_ca and not o.sso_issuer):
         sys.exit("--sso-issuer and --sso-secret-file go together (and --sso-ca only with them)")
     if o.sso_issuer and not o.sso_issuer.startswith("https://"):
