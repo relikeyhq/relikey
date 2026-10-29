@@ -116,7 +116,7 @@ components:
     # 50 MB resident at idle, a 67 MB image. It replaces the 15 MB estimate of a minimal proxy, and puts the edge over
     # the switch profile's memory: a known gap there (model/footprint.yaml, #62).
     footprint: {ram_mb: 50, disk_mb: 67, measured: true}
-    upstream: null
+    upstream: https://github.com/caddyserver/caddy
 
   - id: facade
     name: LDAP facade
