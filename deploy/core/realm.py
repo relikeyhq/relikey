@@ -106,7 +106,9 @@ def wait_for_broker(timeout=300) -> None:
         except (urllib.error.URLError, OSError):
             pass
         time.sleep(3)
-    raise SystemExit("realm setup: the broker did not answer on the pod's loopback")
+    raise SystemExit("realm setup: the broker did not answer on the pod's loopback, so the realm is not set up. Read "
+                     "the broker's log (compose logs broker) for why it is not up, then run deploy/core/install.py "
+                     "again: it keeps every secret it wrote")
 
 
 def client_id(name: str) -> str:
@@ -181,7 +183,9 @@ def setup_client() -> None:
     """The realm's setup client (stack attack 2026-10-25, C1): later steps act as it, not as the master realm's admin."""
     secret = Path(SETUP_SECRET).read_text(encoding="utf-8").strip()
     if len(secret) < 32:
-        raise SystemExit("realm setup: the setup client's secret is too short")
+        raise SystemExit("realm setup: the setup client's secret (deploy/secrets/relikey-setup.secret) is shorter "
+                         "than 32 characters, so it is not the one deploy/core/install.py wrote; restore that file "
+                         "from the core's backup")
     rm = client_id("realm-management")
     mine = [r for r in req("GET", f"{R}/clients/{rm}/roles")[1] if r["name"] in SETUP_ROLES]
     cid = ensure_client({"clientId": SETUP_CLIENT, "enabled": True, "protocol": "openid-connect", "publicClient": False,
@@ -359,7 +363,8 @@ def fleet_client(page_url: str, secret: str) -> None:
 def fleet_grant(username: str, grant: bool) -> None:
     users = req("GET", f"{R}/users?username={urllib.parse.quote(username)}&exact=true")[1]
     if not users:
-        raise SystemExit(f"realm setup: no account {username}")
+        raise SystemExit(f"realm setup: no account {username} in realm {REALM}; give the broker username exactly "
+                         "(deploy/secrets/people.json lists the seeded ones)")
     cid = client_id("relikey-fleet")
     role = req("GET", f"{R}/clients/{cid}/roles/fleet-operator")[1]
     req("POST" if grant else "DELETE", f"{R}/users/{users[0]['id']}/role-mappings/clients/{cid}", [role])

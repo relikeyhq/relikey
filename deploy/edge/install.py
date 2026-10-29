@@ -95,7 +95,8 @@ def public_roots(given: str | None) -> bytes:
             if data.count(b"BEGIN CERTIFICATE") >= 50:   # a real public set, not a stray single certificate
                 return data
             if given:
-                sys.exit(f"--ca-bundle {p}: fewer than 50 certificates, not a public root set")
+                sys.exit(f"--ca-bundle {p}: fewer than 50 certificates, not a public root set, and Warpgate's other "
+                         "TLS clients would lose the public roots; give a full bundle (certifi's, or the host's)")
     sys.exit("--sso-ca needs the public roots beside it: pass --ca-bundle, or install certifi")
 
 
@@ -123,12 +124,22 @@ def main() -> int:
     a.add_argument("--lab", action="store_true", help="the pod on the host network (compose.lab.yaml), to reach a core "
                                                       "installed with --lab on the same box. Never in production")
     o = a.parse_args()
+    # The agent refuses both pins in another form when it starts; caught here, the right key is still at hand.
+    for flag, key, whose in (("--bundle-key", o.bundle_key, "the desk's bundle key, as the core's install.py printed"),
+                             ("--officer-key", o.officer_key, "the edge officer's public key")):
+        if not re.fullmatch(r"[0-9a-f]{64}", key):
+            sys.exit(f"{flag} {key!r}: not 64 lower-case hex characters, so the agent would refuse to start; give "
+                     f"{whose}")
     if bool(o.desk_ca) == bool(o.desk_pin):
-        sys.exit("give exactly one of --desk-ca and --desk-pin")
+        sys.exit("give exactly one of --desk-ca and --desk-pin: the agent checks the desk by one of them. The core's "
+                 "install.py printed both (the pin, and the CA when it made a local one)")
     if bool(o.sso_issuer) != bool(o.sso_secret_file) or (o.sso_ca and not o.sso_issuer):
-        sys.exit("--sso-issuer and --sso-secret-file go together (and --sso-ca only with them)")
+        sys.exit("--sso-issuer and --sso-secret-file go together (and --sso-ca only with them): the broker signs "
+                 "people in only for the client the core made for this edge. Give both, from the core's add_edge.py, "
+                 "or neither")
     if o.sso_issuer and not o.sso_issuer.startswith("https://"):
-        sys.exit("--sso-issuer: https only")
+        sys.exit(f"--sso-issuer {o.sso_issuer}: https only, as the sign-in carries this edge's client secret; give "
+                 "https://<broker>/realms/<realm>")
     if o.sso_issuer and not o.warpgate_url:
         sys.exit("--sso-issuer needs --warpgate-url: Warpgate builds its sign-in return URL from it, and the broker only "
                  "accepts the URL the core registered with add_edge.py (--warpgate-url there); give the same one here")
@@ -195,7 +206,10 @@ def main() -> int:
         body = b"".join(ln for ln in der.splitlines() if ln and not ln.startswith(b"-----"))
         pin = hashlib.sha256(base64.b64decode(body)).hexdigest()
     if len(pin) != 64:
-        sys.exit("could not read Warpgate's certificate from its volume: the agent would refuse to start without the pin")
+        sys.exit("could not read Warpgate's certificate from its volume (relikey-edge_warpgate, tls.certificate.pem): "
+                 "the agent would refuse to start without the pin. Check that Warpgate's setup above succeeded, then "
+                 f"run again with --enrolment-seed-file {SECRETS / 'enrolment.key'} to keep the enrolment key made "
+                 "here")
     write("warpgate.pin", pin + "\n", owner=None)   # targets.py checks who answers before sending the token
     # The front: Warpgate's own certificate and key on the published port (people see what they saw before), and the
     # certificate as the only root the front trusts towards Warpgate, under the name it carries.
@@ -214,7 +228,9 @@ def main() -> int:
     cn = [a.value for a in cert.subject.get_attributes_for_oid(x509.oid.NameOID.COMMON_NAME)]
     tls_name = (names or cn or [""])[0]
     if not tls_name:
-        sys.exit("Warpgate's certificate names no host: the front could not check it")
+        sys.exit("Warpgate's certificate names no host: the front could not check it. Remove the volume "
+                 "relikey-edge_warpgate so its setup makes a new certificate, then run again with "
+                 f"--enrolment-seed-file {SECRETS / 'enrolment.key'} to keep the enrolment key made here")
     write("front.env", f"WARPGATE_TLS_NAME={tls_name}\n", owner=None)
     keyclerk = {"url": o.desk}
     if o.desk_ca:
