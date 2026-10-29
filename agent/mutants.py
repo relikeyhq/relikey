@@ -53,6 +53,8 @@ MUTANTS = [
      "if desired.Governed != nil {", "if false {"),
     ("a rogue-account finding is emitted on every tick", Path("internal/agent") / "emit.go",
      "if a.rogue[name] == current[name] {", "if false {"),
+    ("an unchanged state record is written again (flash wear, AG-14)", Path("internal/state") / "state.go",
+     "if s.cur != -1 && bytes.Equal(body, s.body) {", "if false {"),
     ("an address the desk learns after the lease went live is never asked for again", Path("internal/agent") / "agent.go",
      "|| (f.ok && !f.has && time.Since(f.tried) >= noAddressRetry)", "|| (false && f.ok && !f.has && time.Since(f.tried) >= noAddressRetry)"),
     ("the agent's changes are not emitted as events", Path("internal/agent") / "agent.go",

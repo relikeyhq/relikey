@@ -162,8 +162,8 @@ run 1 (2f5b718).
 ## Red team status
 The agent's red team (2026-10-23, findings AG-1 to AG-22) is answered: each fix carries a test and is listed in the
 CHANGELOG; AG-11 (a lease's role reaches only the targets the lease names) is enforced since 2026-10-25, fail closed.
-Two items are engineering rather than security: AG-14 (write state only when it matters, to spare flash) and AG-20
-(shadow and enforcing agents use separate enrolment keys, the procedure above).
+Two items are engineering rather than security: AG-14 (write state only when it changes, to spare flash) is done
+since 2026-10-27, and AG-20 (shadow and enforcing agents use separate enrolment keys, the procedure above).
 
 KeyClerk 0.22.0 sends the verified e-mail on each lease (KC-10) and a stable `from` (KC-11); 0.23.0 seals the ceiling, names modules by hash and binds the ended notice. Metrics: `metrics.prom` (Prometheus text) beside `status.json`, health status-only (`relikey-agent status`), in KeyClerk's monitoring shape; OCSF log events wait for KeyClerk's decision 0018 to be published. Not yet built: the signed policy modules in wazero (the ceiling is a Go port of
 `ceiling.rego` meanwhile), the LDAP facade and lease credentials, offline levels, evidence, TPM. Not yet run: armv7 on real hardware (qemu-user only so far).

@@ -6,7 +6,8 @@
 // Two slots (A/B), each a generation number, a sha256 and the record. A write goes to
 // the slot not holding the newest generation: a temporary file, fsync, rename, fsync of
 // the directory. A torn or reverted write leaves the other slot readable. Floors only
-// rise. Unreadable state fails closed: losing the floors is a reinstall
+// rise. A record equal to the stored one is not written again: edge hardware often boots
+// from flash (AG-14). Unreadable state fails closed: losing the floors is a reinstall
 // (docs/go-engineering.md, State on disk; GE-14, GE-15).
 package state
 
@@ -61,6 +62,7 @@ type Store struct {
 	gen  int64
 	cur  int // index of the slot holding gen; -1 when empty
 	rec  Record
+	body []byte // rec as stored in slot cur, to tell an unchanged record (AG-14)
 	// unlock releases the exclusive lock: two agents on one directory would interleave
 	// generations and could lower the floors (AG-12).
 	unlock func()
@@ -140,7 +142,7 @@ func (s *Store) load() error {
 		}
 		valid++
 		if s.cur == -1 || sl.Gen > s.gen {
-			s.gen, s.cur, s.rec = sl.Gen, i, r
+			s.gen, s.cur, s.rec, s.body = sl.Gen, i, r, sl.Body
 		}
 	}
 	if present > 0 && valid == 0 {
@@ -166,7 +168,8 @@ func (s *Store) read(name string) ([]byte, error) {
 // ErrFloorDown is returned when a write would lower a floor.
 var ErrFloorDown = errors.New("a floor would go down")
 
-// Save writes r as the next generation. It refuses to lower any floor.
+// Save writes r as the next generation, unless r equals the stored record. It refuses to
+// lower any floor.
 func (s *Store) Save(r Record) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -179,6 +182,9 @@ func (s *Store) Save(r Record) error {
 	body, err := json.Marshal(r)
 	if err != nil {
 		return err
+	}
+	if s.cur != -1 && bytes.Equal(body, s.body) {
+		return nil // unchanged: a rewrite would only wear the flash (AG-14)
 	}
 	sum := sha256.Sum256(body)
 	out, err := json.Marshal(slot{Gen: s.gen + 1, SHA256: hex.EncodeToString(sum[:]), Body: body})
@@ -197,7 +203,7 @@ func (s *Store) Save(r Record) error {
 		// re-read from disk on the next start.
 		return fmt.Errorf("writing the edge state: %w", err)
 	}
-	s.gen, s.cur, s.rec = s.gen+1, next, r
+	s.gen, s.cur, s.rec, s.body = s.gen+1, next, r, body
 	return nil
 }
 
