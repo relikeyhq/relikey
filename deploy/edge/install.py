@@ -15,15 +15,29 @@ identity provider sends, and Warpgate creates no users (the agent provisions the
 for a broker behind the core's local CA. SSL_CERT_FILE is process-wide in Warpgate (its rustls native roots, OpenSSL
 for RDP, the S3 client for recordings), so it names a bundle of the public roots plus that CA, never the CA alone:
 the public roots come from --ca-bundle, or certifi, or the host's bundle.
+
+With --enrol-code-file (decision 0026 point 15), the edge also enrols into its fleet: the file holds the one-time code
+from the fleet page (carried as a QR code or on a USB stick, never typed, never on the command line). The installer
+presents this edge's enrolment key with proof of the code's secret, over TLS that trusts only the fleet's CA the
+code pins (this needs Python 3.13 or later), and prints the key's fingerprint for whoever reads it to the approving
+officer. Nothing is admitted until an officer approves with their passkey. To present again for an installed edge (the fleet was unreachable, say):
+
+    python deploy/edge/install.py enrol --code-file <the code's file>
 """
 import argparse
+import base64
+import hashlib
+import http.client
 import json
 import os
 import re
 import secrets
+import socket
+import ssl
 import subprocess
 import sys
 from pathlib import Path
+from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parents[2]
 SECRETS = ROOT / "deploy" / "secrets"
@@ -100,7 +114,147 @@ def public_roots(given: str | None) -> bytes:
     sys.exit("--sso-ca needs the public roots beside it: pass --ca-bundle, or install certifi")
 
 
+CODE_PREFIX = "relikey-enrol-v1:"
+PRESENT_CONTEXT = "relikey-enrol-present-v1"   # fleet/internal/enrol: the edge's signature over fleet, slot, commitment
+CODE_NEXT_STEP = (f"check that the file holds the code exactly as the fleet page issued it (one line starting "
+                  f"{CODE_PREFIX}), or ask the fleet's operator to open a new slot on the fleet page for a new code")
+
+
+def parse_code(text: str) -> dict:
+    """The enrolment code as the fleet page gives it (fleet/internal/enrol ParseCode). Errors never repeat the code:
+    its secret is single-use and is never logged or printed. They say what to do next: the file may be damaged in
+    transit, or hold something else; a new code comes from the fleet page."""
+    text = text.strip()
+    try:
+        if not text.startswith(CODE_PREFIX):
+            raise ValueError
+        raw = text[len(CODE_PREFIX):]
+        code = json.loads(base64.urlsafe_b64decode(raw + "=" * (-len(raw) % 4)))
+    except (ValueError, TypeError):
+        raise ValueError(f"not a ReliKey enrolment code: {CODE_NEXT_STEP}") from None
+    if not isinstance(code, dict):
+        raise ValueError(f"not a ReliKey enrolment code: {CODE_NEXT_STEP}")
+    fields = {k: code.get(k) for k in ("fleet", "url", "pin", "anchor", "slot", "secret")}
+    if (not all(isinstance(v, str) and v for v in fields.values()) or not fields["url"].startswith("https://")
+            or len(fields["pin"]) != 64 or len(fields["anchor"]) != 64):
+        raise ValueError(f"the enrolment code lacks the fleet's address, pin, anchor, slot or secret: {CODE_NEXT_STEP}")
+    return fields
+
+
+def fingerprint(key: bytes) -> str:
+    """How the edge's screen shows its key (fleet/internal/enrol Fingerprint): base32 of sha256, in groups of four."""
+    enc = base64.b32encode(hashlib.sha256(key).digest()).decode().rstrip("=")
+    return " ".join(enc[i:i + 4] for i in range(0, len(enc), 4))
+
+
+def presentation(code: dict, seed: bytes) -> dict:
+    """The edge's key, the code's secret, and the key's signature over the fleet, the slot and the secret's
+    commitment (proof of possession, 0026 point 24)."""
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+    from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+    priv = Ed25519PrivateKey.from_private_bytes(seed)
+    commitment = hashlib.sha256(code["secret"].encode()).hexdigest()
+    msg = "\n".join([PRESENT_CONTEXT, code["fleet"], code["slot"], commitment]).encode()
+    return {"slot": code["slot"], "key": priv.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw).hex(),
+            "secret": code["secret"], "sig": priv.sign(msg).hex()}
+
+
+def require_ca_pin_support() -> None:
+    """Enrolment by code needs Python 3.13: the code pins the fleet's CA (0026 point 27), and only from 3.13 does ssl
+    give the chain the fleet presents, where that CA is found; before it, only the leaf can be read."""
+    if sys.version_info < (3, 13):
+        raise SystemExit(f"enrolment by code needs Python 3.13 or later (this is {sys.version.split()[0]}): the code "
+                         "pins the fleet's CA, and only Python 3.13's ssl reads the chain the fleet presents to find "
+                         "it. Install Python 3.13 or later (Debian 13 and current Raspberry Pi OS ship it), then run "
+                         "the installer with it")
+
+
+def is_ca(der: bytes) -> bool:
+    from cryptography import x509
+    try:
+        return x509.load_der_x509_certificate(der).extensions.get_extension_for_class(x509.BasicConstraints).value.ca
+    except x509.ExtensionNotFound:
+        return False
+
+
+def pinned_context(host: str, port: int, pin: str, timeout: float = 20) -> ssl.SSLContext:
+    """A TLS context that trusts only the CA the code pins (0026 point 27): the chain the fleet presents is read once,
+    the certificate whose sha256 is the pin becomes the only root, and the real connection is verified against it,
+    the host name included. A chain without it is refused, and so is a pinned certificate that is not a CA."""
+    require_ca_pin_support()
+    probe = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    probe.check_hostname, probe.verify_mode = False, ssl.CERT_NONE   # only to read the chain; nothing is sent
+    probe.minimum_version = ssl.TLSVersion.TLSv1_3
+    with socket.create_connection((host, port), timeout=timeout) as raw:
+        with probe.wrap_socket(raw, server_hostname=host) as t:
+            chain = t.get_unverified_chain()   # the whole chain the fleet sent (Python 3.13)
+    for der in chain or []:   # DER bytes, as the fleet sent them
+        if hashlib.sha256(der).hexdigest() == pin.lower():
+            if not is_ca(der):
+                raise ssl.SSLError("the code pins a certificate that is not a CA: a code pins the fleet's CA, never "
+                                   "its leaf. Ask for a new code")
+            ctx = ssl.create_default_context(cadata=der)   # this certificate alone; no system roots
+            ctx.verify_flags |= ssl.VERIFY_X509_PARTIAL_CHAIN   # the pinned certificate is the root, CA or not
+            ctx.minimum_version = ssl.TLSVersion.TLSv1_3
+            return ctx
+    raise ssl.SSLError("the fleet's certificate chain does not hold the pinned certificate: "
+                       "not the fleet the code names")
+
+
+def present(code: dict, seed: bytes, timeout: float = 20) -> str:
+    """Presents this edge's key for its slot and returns the key's fingerprint. Raises SystemExit with what to do."""
+    u = urlparse(code["url"])
+    host, port = u.hostname, u.port or 443
+    body = presentation(code, seed)
+    try:
+        ctx = pinned_context(host, port, code["pin"], timeout)
+        conn = http.client.HTTPSConnection(host, port, context=ctx, timeout=timeout)
+        conn.request("POST", u.path or "/", body=json.dumps(body), headers={"Content-Type": "application/json"})
+        status = conn.getresponse().status   # the body is not read: nothing the fleet says is acted on
+        conn.close()
+    except (OSError, ssl.SSLError) as e:
+        raise SystemExit(f"enrolment: could not reach the fleet at {host}:{port} with its pinned certificate "
+                         f"({e}). Check the address and the network, then: python deploy/edge/install.py enrol "
+                         "--code-file ...") from None
+    if status == 204:
+        return fingerprint(bytes.fromhex(body["key"]))
+    if status == 409:
+        raise SystemExit("slot already taken: another key was presented for this slot. Tell the officer who opened it; "
+                         "the fleet keeps the first key and shows the second")
+    if status == 429:
+        raise SystemExit("the fleet takes few enrolments a minute: try again in a minute (enrol --code-file ...)")
+    raise SystemExit(f"the fleet refused the presentation ({status}): the code may have expired, been used, or not "
+                     "be this fleet's. Ask for a new code; the reason is in the fleet's evidence log")
+
+
+def enrol_by_code(code_file: str, seed: bytes) -> None:
+    """Enrols this edge into the fleet its code names, and prints the fingerprint (shown only after presenting)."""
+    require_ca_pin_support()
+    code = parse_code(Path(code_file).read_text(encoding="utf-8"))
+    fp = present(code, seed)
+    print(f"enrolment into fleet {code['fleet']}: key presented. Read this fingerprint from this screen to the "
+          f"approving officer, who types 16 of its characters (not the last 16) or all of it:\n  {fp}")
+
+
+def enrol_main(argv: list[str]) -> int:
+    a = argparse.ArgumentParser(prog="install.py enrol", description="present this installed edge's key to its fleet")
+    a.add_argument("--code-file", required=True, help="the file holding the enrolment code from the fleet page")
+    o = a.parse_args(argv)
+    keyfile = SECRETS / "enrolment.key"
+    try:
+        seed = bytes.fromhex(keyfile.read_text().strip())
+    except (OSError, ValueError):
+        sys.exit(f"{keyfile}: no enrolment key to present; install the edge first (with --enrol-code-file)")
+    try:
+        enrol_by_code(o.code_file, seed)
+    except (OSError, ValueError) as e:
+        sys.exit(f"--code-file {o.code_file}: {e}")
+    return 0
+
+
 def main() -> int:
+    if sys.argv[1:2] == ["enrol"]:
+        return enrol_main(sys.argv[2:])
     a = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     a.add_argument("--edge", required=True)
     a.add_argument("--desk", required=True, help="KeyClerk base URL (https)")
@@ -121,6 +275,8 @@ def main() -> int:
     a.add_argument("--warpgate-url", help="the URL people reach this edge's Warpgate on, exactly as given to the core's "
                                           "add_edge.py: its host becomes Warpgate's external_host (sign-in return URL, "
                                           "cookie domain)")
+    a.add_argument("--enrol-code-file", help="the fleet's one-time enrolment code, in a file (QR or USB stick, never "
+                                             "typed): the edge also presents its key to its fleet (decision 0026)")
     a.add_argument("--lab", action="store_true", help="the pod on the host network (compose.lab.yaml), to reach a core "
                                                       "installed with --lab on the same box. Never in production")
     o = a.parse_args()
@@ -133,6 +289,12 @@ def main() -> int:
     if bool(o.desk_ca) == bool(o.desk_pin):
         sys.exit("give exactly one of --desk-ca and --desk-pin: the agent checks the desk by one of them. The core's "
                  "install.py printed both (the pin, and the CA when it made a local one)")
+    if o.enrol_code_file:
+        require_ca_pin_support()   # before anything is written, as the code below
+        try:   # checked before anything is written: a code that cannot be read stops the install at its start
+            parse_code(Path(o.enrol_code_file).read_text(encoding="utf-8"))
+        except (OSError, ValueError) as e:
+            sys.exit(f"--enrol-code-file {o.enrol_code_file}: {e}")
     if bool(o.sso_issuer) != bool(o.sso_secret_file) or (o.sso_ca and not o.sso_issuer):
         sys.exit("--sso-issuer and --sso-secret-file go together (and --sso-ca only with them): the broker signs "
                  "people in only for the client the core made for this edge. Give both, from the core's add_edge.py, "
@@ -143,7 +305,6 @@ def main() -> int:
     if o.sso_issuer and not o.warpgate_url:
         sys.exit("--sso-issuer needs --warpgate-url: Warpgate builds its sign-in return URL from it, and the broker only "
                  "accepts the URL the core registered with add_edge.py (--warpgate-url there); give the same one here")
-    from urllib.parse import urlparse
     external_host = urlparse(o.warpgate_url).hostname if o.warpgate_url else o.edge   # full-stack run: never a bare id
     if (SECRETS / "enrolment.key").exists() and not (o.re_key or o.enrolment_seed_file):
         sys.exit(f"this edge is already installed ({SECRETS / 'enrolment.key'} exists). Running again would make a new "
@@ -259,6 +420,8 @@ def main() -> int:
     from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
     pub = Ed25519PrivateKey.from_private_bytes(seed).public_key().public_bytes(Encoding.Raw, PublicFormat.Raw).hex()
     print(f"edge {o.edge}: enrol this enrolment key at the desk (officer and edge both sign the statement):\n  {pub}")
+    if o.enrol_code_file:
+        enrol_by_code(o.enrol_code_file, seed)
     files = [COMPOSE] + ([COMPOSE_LAB] if o.lab else [])
     print(f"then: {o.engine} compose {' '.join(f'-f {f.relative_to(ROOT).as_posix()}' for f in files)} up -d"
           + ("   (lab: without compose.lab.yaml the agent cannot reach the desk on the host's loopback)" if o.lab else ""))

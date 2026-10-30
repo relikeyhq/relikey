@@ -150,11 +150,16 @@ MUTANTS = [
      "if !ed25519.Verify(key, presentMessage(fleet, s.ID, s.SecretHash), sig) {",
      "if false && !ed25519.Verify(key, presentMessage(fleet, s.ID, s.SecretHash), sig) {"),
     ("a second key replaces the first for a slot", Path("../fleet/internal/enrol") / "enrol.go", 'case s.Active || s.Key != "":', "case s.Active:"),
-    ("a short typed fingerprint check is taken", Path("../fleet/internal/enrol") / "enrol.go", "case len(plain(it.Typed)) < MinTyped ||", "case len(plain(it.Typed)) < 1 ||"),
+    ("a short typed fingerprint check is taken", Path("../fleet/internal/enrol") / "enrol.go", "if len(typed) < MinTyped {", "if len(typed) < 1 {"),
+    ("the last 16 typed characters (76 bits) are taken", Path("../fleet/internal/enrol") / "enrol.go",
+     "strings.Contains(fp[:len(fp)-1], typed) ||", "strings.Contains(fp, typed) ||"),
+    ("a code pins a leaf certificate", Path("../fleet/internal/enrol") / "enrol.go", "if !cert.IsCA {", "if false {"),
+    ("enrolment loads without the codes' address or CA", Path("../fleet/cmd/relikey-fleet") / "main.go",
+     "if c.Admin != nil && c.Page != nil && (", "if false && c.Admin != nil && c.Page != nil && ("),
     ("an activation may name another key's fingerprint", Path("../fleet/internal/enrol") / "enrol.go", "case plain(it.Fingerprint) != plain(Fingerprint(s.Key)):", "case false:"),
     ("a relay is admitted without the approver reading its screen", Path("../fleet/internal/enrol") / "enrol.go",
      'case (s.Kind == Relay || s.Kind == Site) && (it.ReadBy != a.Approver || it.ReadHow != "on site"):', "case false:"),
-    ("a batch may exceed ten slots", Path("../fleet/internal/enrol") / "enrol.go", "case len(a.Items) == 0 || len(a.Items) > MaxBatch:", "case len(a.Items) == 0:"),
+    ("a batch may exceed ten slots", Path("../fleet/internal/enrol") / "enrol.go", "if len(a.Items) == 0 || len(a.Items) > MaxBatch {", "if len(a.Items) == 0 {"),
     ("a slot is opened from another origin", Path("../fleet/internal/page") / "page.go",
      'return err == nil && r.Header.Get("Origin") == u.Scheme+"://"+u.Host', 'return err == nil || r.Header.Get("Origin") == u.Scheme+"://"+u.Host'),
     ("a slot is opened without a session", Path("../fleet/internal/page") / "page.go",
@@ -308,7 +313,24 @@ MUTANTS = [
     ('a passkey step comes from another origin', Path('../fleet/internal/page') / 'officers.go',
      'case !ok || p.Admin == nil || !p.sameOrigin(r):', 'case !ok || p.Admin == nil:'),
     ('a passkey step runs after the anchor', Path('../fleet/internal/page') / 'officers.go',
-     'case p.Admin.Anchor() != "":', 'case false:'),
+     'case !anchored && p.Admin.Anchor() != "":', 'case false:'),
+    ('an activation step runs before the anchor', Path('../fleet/internal/page') / 'officers.go',
+     'case anchored && p.Admin.Anchor() == "":', 'case false:'),
+    ('a non-officer begins an activation', Path('../fleet/internal/page') / 'activate.go',
+     'i := slices.IndexFunc(reg.Officers, func(o registry.Officer) bool { return o.ID == s.sub })',
+     'i := slices.IndexFunc(reg.Officers, func(o registry.Officer) bool { return true })'),
+    ('an enrolled name opens a new slot', Path('../fleet/internal/admin') / 'admin.go',
+     'if sl.Active && sl.Name == name {', 'if false && sl.Active && sl.Name == name {'),
+    ('an enrolled name is activated under a second key', Path('../fleet/internal/admin') / 'admin.go',
+     'if sl.Active && names[sl.Name] {', 'if false && sl.Active && names[sl.Name] {'),
+    ('a configured and an enrolled key for one name both count', Path('../fleet/internal/fleet') / 'server.go',
+     'if have, ok := out[name]; ok && !have.Equal(ed25519.PublicKey(k)) {', 'if false {'),
+    ('a presented key reports before its activation', Path('../fleet/internal/admin') / 'admin.go',
+     '\t\tif sl.Active {\n\t\t\tout[sl.Name] = sl.Key', '\t\tif true {\n\t\t\tout[sl.Name] = sl.Key'),
+    ('the enrolment route takes any number of presentations', Path('../fleet/internal/fleet') / 'server.go',
+     'return s.tried <= MaxPresentPerMinute', 'return true'),
+    ('refused presentations never close a slot', Path('../fleet/internal/enrol') / 'enrol.go',
+     'case len(s.Refused) >= MaxRefused:', 'case false:'),
     ('a passkey step takes unknown fields', Path('../fleet/internal/page') / 'officers.go',
      '\tdec.DisallowUnknownFields()\n', ''),
     ('an operator not named is offered the passkey steps', Path('../fleet/internal/page') / 'officers.go',
@@ -340,6 +362,7 @@ HARNESS_FILES = ("agent/mutants.py", "agent/build.py")
 TEST_INPUTS = {
     "agent/internal/agent": ("brand/mark/geometry.json",),   # page_test.go: the mark's geometry
     "agent/internal/apply": ("agent/internal/agent/",),       # seam_test.go: the agent package's imports
+    "fleet/internal/fleet": ("deploy/edge/install.py",),      # enrolled_test.go: the edge installer's enrolment
 }
 
 

@@ -86,9 +86,14 @@ def check(*args):
     go("test", "-count=1", "-shuffle=on", "./...")
     # the anchor ceremony in a real browser, where Python Playwright is installed (fleet/internal/page/browser_test.go)
     browser = importlib.util.find_spec("playwright") is not None
+    # the edge installer's enrolment against the fleet, where Python is 3.13 or later (the CA pin reads the chain the
+    # fleet presents) and has cryptography (fleet/internal/fleet)
+    installer = sys.version_info >= (3, 13) and importlib.util.find_spec("cryptography") is not None
     go("test", "-count=1", "-shuffle=on", "./...", cwd=FLEET,
-       **({"RELIKEY_BROWSER": "1", "RELIKEY_PYTHON": sys.executable} if browser else {}))
-    print("tests: pass" + ("" if browser else " (the browser ceremony skipped: no Python Playwright here)"))
+       **({"RELIKEY_BROWSER": "1"} if browser else {}), **({"RELIKEY_INSTALLER": "1"} if installer else {}),
+       **({"RELIKEY_PYTHON": sys.executable} if browser or installer else {}))
+    print("tests: pass" + ("" if browser else " (the browser ceremony skipped: no Python Playwright here)")
+          + ("" if installer else " (the installer's enrolment skipped: needs Python 3.13 or later with cryptography)"))
     if args != ("--no-mutants",):
         mutants(*args)
 

@@ -4,10 +4,12 @@ package fleet
 
 import (
 	"crypto/ed25519"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
+	"maps"
 	"net"
 	"net/http"
 	"relikey/agent/pkg/fleetproto"
@@ -32,6 +34,45 @@ type Server struct {
 
 	warned map[string]time.Time // refusal warnings, at most one a minute per peer: no log flood from bad reports
 	mu     sync.Mutex
+	window time.Time // the enrolment route's current minute, and the presentations taken in it
+	tried  int
+}
+
+// MaxPresentPerMinute caps presentations on the enrolment route for the whole fleet: a code is single-use and
+// enrolment is rare, so beyond it the route answers 429 and the installer retries later.
+const MaxPresentPerMinute = 20
+
+func (s *Server) allowPresent() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if now := s.Now(); now.Sub(s.window) >= time.Minute {
+		s.window, s.tried = now, 0
+	}
+	s.tried++
+	return s.tried <= MaxPresentPerMinute
+}
+
+// keys are the edges' report keys: the configured ones and those enrolled by code. A name both list with different
+// keys is in neither: a second key for an edge is shown and refused, never chosen (0026 point 15).
+func (s *Server) keys() map[string]ed25519.PublicKey {
+	if s.Admin == nil {
+		return s.Keys
+	}
+	out := maps.Clone(s.Keys)
+	for name, h := range s.Admin.Enrolled() {
+		k, err := hex.DecodeString(h)
+		if err != nil || len(k) != ed25519.PublicKeySize {
+			continue
+		}
+		if have, ok := out[name]; ok && !have.Equal(ed25519.PublicKey(k)) {
+			delete(out, name)
+			s.Log.Error("an edge enrolled by code carries another key than the configured one: its reports are refused",
+				"edge", name, "next", "remove the edge from fleet.json or decommission the slot; keep the one you enrolled")
+			continue
+		}
+		out[name] = ed25519.PublicKey(k)
+	}
+	return out
 }
 
 func (s *Server) warn(peer string, err error) {
@@ -57,7 +98,10 @@ func (s *Server) Handler() http.Handler {
 			http.Error(w, "a signed report: {report, signature}", http.StatusBadRequest)
 			return
 		}
-		rep, err := fleetproto.Verify(signed, s.Keys)
+		rep, err := fleetproto.Verify(signed, s.keys())
+		if err == nil {
+			err = s.Inv.Know(rep.Edge) // an edge enrolled by code joins the inventory with its first verified report
+		}
 		if err == nil {
 			err = s.Inv.Accept(rep, s.Now())
 		}
@@ -73,6 +117,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /fleet/v1/enrol", func(w http.ResponseWriter, r *http.Request) {
 		if s.Admin == nil {
 			http.Error(w, "enrolment is not set up on this fleet", http.StatusNotFound)
+			return
+		}
+		if !s.allowPresent() {
+			http.Error(w, "too many presentations: try again in a minute", http.StatusTooManyRequests)
 			return
 		}
 		var p enrol.Presentation

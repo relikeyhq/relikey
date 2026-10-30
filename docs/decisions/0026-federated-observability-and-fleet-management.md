@@ -164,6 +164,10 @@ Straight tightenings, taken in:
     checked by a party other than the fleet server as well: the edge for anything that changes what it runs, the parent
     fleet for a child's roster, the clerk for its roster. The fleet stores and forwards statements. A statement no one
     else checks grants nothing beyond the fleet's own display. (Points 14-17 read with this; TUF: the client checks.)
+    Note, 2026-10-28 (operator, for release 0.2.0): an activation is checked by the fleet alone for now. It changes
+    only the fleet's display and which reports the fleet accepts, never what an edge runs; the signed activation is in
+    the evidence log, where an auditor can verify it again. A second live checker, the clerk checking its roster,
+    follows with the end-to-end work (#23).
 21. **A passkey signs a bound statement, not a page.** The challenge is H("relikey-fleet-stmt-v1" || the canonical
     statement), and the statement names the fleet id, the registry version, an expiry and a nonce. The checker
     requires type webauthn.get, the exact origin of FLEET_HOST, the rpId of a statement credential registered
@@ -235,6 +239,8 @@ facts would drift into the governance store.
 
 ## Changelog
 - 2026-10-29: the build state recorded (#86); the decision unchanged.
+- 2026-10-28: note on point 20: for 0.2.0 the fleet alone checks an activation (display and report intake only,
+  re-verifiable from the evidence log); the clerk as a second checker follows (#23).
 - 2026-10-25: points 14-33 accepted (operator), with one tightening: a relay or site fleet is admitted only with the
   approver reading its fingerprint themselves.
 - 2026-10-25: round 2 (points 28-33): the director signed, expiring, one release back free; registry rules with
