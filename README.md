@@ -115,6 +115,16 @@ example is v0.1.2; run the checks from a clone of this repository, the last two 
        gh attestation verify relikey-agent-linux-amd64 --repo relikeyhq/relikey \
            --signer-workflow relikeyhq/relikey/.github/workflows/release.yml
 
+4. **The SBOM** (from 0.2.0): each binary `NAME` comes with a CycloneDX SBOM, `NAME.cdx.json`, listed in
+   `SHA256SUMS` and attested with the binary. This checks the SBOM attestation (add `--format json` to see the SBOM):
+
+       gh attestation verify relikey-agent-linux-amd64 --repo relikeyhq/relikey \
+           --predicate-type https://cyclonedx.org/bom
+
+From 0.2.0 a release is also built only from a commit whose CI passed on `main`, and its binaries are smoke-tested
+before anything is attested. The attestation bundles are release files too (`relikey-provenance.intoto.jsonl`,
+`NAME.cdx.intoto.jsonl`), so `gh attestation verify --bundle FILE` checks them offline.
+
 ## Security
 ReliKey is security infrastructure; treat findings responsibly. Report a weakness privately (see `SECURITY.md`), not
 in a public issue. The design's own threat work and residual risks live with the maintainer, not in this repository.

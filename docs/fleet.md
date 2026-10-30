@@ -46,6 +46,7 @@ refusals are logged at most once a minute per peer.
 ## Configuration
 `relikey-fleet -config fleet.json`: `{"listen": "127.0.0.1:8093", "state": ".../fleet.json", "silence_seconds": 300,
 "edges": {"plant-a": "<enrolment public key, 64 hex>"}}`. It refuses any listen address but loopback.
+`relikey-fleet -version` prints the version, the commit and the Go release, as the agent's `version` does.
 
 ## The fleet page (0026 point 13)
 Operators see the inventory on a page of its own name, signed in at ReliKey's broker; no action on any edge. The page
