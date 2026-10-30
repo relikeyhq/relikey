@@ -66,7 +66,35 @@ def as_list(value) -> list:
     return value if isinstance(value, list) else [value]
 
 
-def check_footprint(components: dict, footprint: dict) -> tuple[list[str], list[str]]:
+def check_known_gap(prof: dict, ram: int, budget_ram: float, open_ids: set) -> tuple[str | None, str | None]:
+    """A profile may record that the edge's memory exceeds its budget, as a known gap with an issue, the release that
+    settles it and the open decision it waits on. The gap turns the overrun into a warning only while it is honest:
+    a gap without its issue, release or open decision, an edge larger than the gap recorded, or a gap on an edge
+    that fits again is an error, so a gap can neither hide a growing overrun nor outlive its cause. Returns
+    (error, warning), at most one set."""
+    gap = prof["known_gap"]
+    where = f"{prof['id']}: known_gap"
+    issue, until, waits_on, ceiling = gap.get("issue"), gap.get("until"), gap.get("waits_on"), gap.get("ram_mb")
+    if not isinstance(issue, int) or isinstance(issue, bool) or issue <= 0:
+        return f"{where} names no issue number; a gap is recorded against an open issue, never silently", None
+    if not until:
+        return f"{where} (#{issue}) names no release that settles it; add `until`", None
+    if waits_on not in open_ids:
+        return (f"{where} (#{issue}) waits on {waits_on!r}, which is not open in open-decisions.yaml; name the open "
+                f"decision it waits on, or settle the gap now that the decision is taken"), None
+    if not isinstance(ceiling, int) or isinstance(ceiling, bool):
+        return f"{where} (#{issue}) records no ram_mb; record the edge's need when the gap was accepted", None
+    if ram <= budget_ram:
+        return (f"{where} (#{issue}): the edge needs {ram} MB and fits the {budget_ram:.0f} MB budget again; "
+                f"remove the gap"), None
+    if ram > ceiling:
+        return (f"edge needs {ram} MB memory, more than the {ceiling} MB recorded by {prof['id']}'s known gap "
+                f"(#{issue}); the gap covers only what was accepted, so shrink the edge or record the new need"), None
+    return None, (f"{prof['id']}: known gap #{issue}, the edge needs {ram} MB memory against a {budget_ram:.0f} MB "
+                  f"budget; settled in {until}, after {waits_on}")
+
+
+def check_footprint(components: dict, footprint: dict, open_ids: set = frozenset()) -> tuple[list[str], list[str]]:
     """Decision 0005: the edge fits every profile within its headroom, on that profile's architecture."""
     errors: list[str] = []
     warnings: list[str] = []
@@ -84,7 +112,13 @@ def check_footprint(components: dict, footprint: dict) -> tuple[list[str], list[
         budget_ram, budget_disk = prof["ram_mb"] * headroom, prof["disk_mb"] * headroom
         # Decision 0009: the local recording store is part of the edge's disk.
         need_disk = disk + prof.get("recording_store_mb", 0)
-        if ram > budget_ram:
+        if "known_gap" in prof:
+            gap_error, gap_warning = check_known_gap(prof, ram, budget_ram, open_ids)
+            if gap_error:
+                errors.append(gap_error)
+            if gap_warning:
+                warnings.append(gap_warning)
+        elif ram > budget_ram:
             report.append(f"edge needs {ram} MB memory, {prof['id']} allows {budget_ram:.0f} MB "
                           f"({prof['ram_mb']} MB x headroom {headroom}); shrink the edge or drop the profile")
         if need_disk > budget_disk:
@@ -165,7 +199,7 @@ def check() -> tuple[list[str], list[str]]:
             errors.append(f"{f['id']}: the core opens a connection into the edge ({f['from']} -> {f['to']}); the edge "
                           f"only connects out (decision 0005). Reverse it so the edge pulls")
 
-    errors_fp, warnings_fp = check_footprint(components, load("footprint.yaml"))
+    errors_fp, warnings_fp = check_footprint(components, load("footprint.yaml"), open_ids)
     errors += errors_fp
     warnings += warnings_fp
 
@@ -208,7 +242,46 @@ def check() -> tuple[list[str], list[str]]:
                         errors.append(f"{path.relative_to(ROOT)}:{n}: names a deployment; ReliKey names none "
                                       f"(decision 0001). Move it to the deployment's own configuration")
     e2, w2 = check_crypto(components, flow_ids)
-    return errors + e2, warnings + w2
+    return errors + e2 + check_compose_pins(components), warnings + w2
+
+
+# An image reference as the shipped compose files write it: name, tag and digest.
+PINNED_REF = re.compile(r"^(?P<image>[^@\s]+):(?P<tag>[\w.-]+)@(?P<digest>sha256:[0-9a-f]{64})$")
+
+
+def check_compose_pins(components: dict) -> list[str]:
+    """Decision 0001: what the shipped compose files run is what the model pins. Each upstream image there is a
+    component of that tier with the same image, version and digest; otherwise the model describes another release
+    than the one deployed (the edge's front ran as a pinned Caddy while the model still had no image for it)."""
+    errors: list[str] = []
+    for tier in ("core", "edge"):
+        path = ROOT / "deploy" / tier / "compose.yaml"
+        if not path.exists():
+            continue
+        rel = path.relative_to(ROOT).as_posix()
+        for name, svc in ((yaml.safe_load(path.read_text(encoding="utf-8")) or {}).get("services") or {}).items():
+            ref = str((svc or {}).get("image") or "")
+            if not ref or ref.startswith("localhost/"):
+                continue        # built here (the agent, the fleet, KeyClerk from its tag): no registry pin to match
+            m = PINNED_REF.match(ref)
+            if not m:
+                errors.append(f"{rel} {name}: image {ref!r} is not pinned by tag and digest; pin it, as the model's "
+                              f"components are, so a moved tag cannot change what runs (decision 0001)")
+                continue
+            named = [c for c in components.values() if c.get("tier") == tier and c.get("image") == m["image"]]
+            if not named:
+                errors.append(f"{rel} {name}: runs {m['image']}, which no {tier} component in components.yaml names; "
+                              f"set that component's image, version and digest, or add the component")
+                continue
+            c = named[0]
+            if str(c.get("version")) != m["tag"]:
+                errors.append(f"{rel} {name}: runs tag {m['tag']}, component {c['id']} pins version {c.get('version')}; "
+                              f"make them the same release (the version is the tag, variant included)")
+            if c.get("digest") != m["digest"]:
+                errors.append(f"{rel} {name}: runs digest {m['digest'][:19]}..., component {c['id']} pins "
+                              f"{str(c.get('digest'))[:19]}...; copy the deployed digest into components.yaml or "
+                              f"repin the compose file")
+    return errors
 
 
 KEX = {"hybrid", "classical", "conditional", "none", "n/a", "unverified"}
