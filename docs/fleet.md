@@ -48,7 +48,17 @@ refusals are logged at most once a minute per peer.
 "edges": {"plant-a": "<enrolment public key, 64 hex>"}}`. It refuses any listen address but loopback. With
 `"admin": {"state": ".../admin.json", "fleet": "<this fleet's id>"}` it keeps the officer registry, the enrolment
 slots and the evidence log in that file, and takes enrolment by code: presentations on the edge-facing name,
-activations on the page.
+activations on the page. `fleet_page.py --host` (and so `install.py --fleet-host`) writes it once, with the state in
+the fleet's volume and a new random fleet id, and keeps it on every later run: a new id would be a new fleet (0026
+point 30). It writes the page's `enrol_url` (`https://<edge-facing name>/fleet/v1/enrol`, the route the front passes
+to the fleet) and `pin_ca_file` (`deploy/secrets/fleet/pin-ca.crt`, mounted read-only): the CA certificate that
+issued the front's certificate (0026 point 27), the second certificate in `deploy/secrets/front.crt`, which the front
+presents with its own. The local CA's `front.crt` holds that chain (an older install gets it on the next run); with
+`--cert`, give the certificate followed by its issuing CA. Without such a CA the installer leaves enrolment off and
+says why; on a core that already has enrolment it keeps the last CA, so the fleet still starts, and says new codes
+will fail at the edge until the chain is fixed. If the CA changes, it says the pin changed: codes opened before carry
+the old pin and fail at the edge. The rate cap is the fleet's own, one for the
+whole fleet, and needs no setting.
 `relikey-fleet -version` prints the version, the commit and the Go release, as the agent's `version` does.
 
 ## The fleet page (0026 point 13)
@@ -142,7 +152,5 @@ check's 80 bits and the CA pin) and in Python (`tests/test_edge_enrol.py`, one v
   and who read it and how; a relay or site fleet only with the approver reading its screen on site.
 
 ## Not built yet (0026's slices)
-The core installer's part of enrolment (fleet.json's `admin` section and the page's `enrol_url` and `pin_ca_file`;
-the fleet refuses to start with the one and without the others), the
-digest pin (once releases are signed), a clerk's governance facts,
+The digest pin (once releases are signed), a clerk's governance facts,
 signed releases and the enforced minimum release (slice 3), staged rollout (slice 4), enrolment-key rotation (slice 5), the site relay (slice 6).

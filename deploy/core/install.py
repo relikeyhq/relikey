@@ -7,7 +7,9 @@ broker's realm and the desk's first records.
         --keyclerk-src ../keyclerk [--cert front.crt --key front.key] [--engine podman] [--lab]
 
 Writes deploy/secrets/ (git-ignored; files 0600, those KeyClerk reads owned by its uid 10001), once: running it again
-keeps every secret it finds there. Without --cert and --key it makes a local CA and a leaf for the three names.
+keeps every secret it finds there. Without --cert and --key it makes a local CA and a leaf for the three names
+(front.crt holds the leaf, then the CA). With --fleet-host it also gives the fleet its page and enrolment by code
+(fleet_page.py): fleet.json's admin section, once, and the page's enrol_url and pin_ca_file (the CA after the leaf).
 Builds KeyClerk from its tag with KeyClerk's own Containerfile, starts the broker, sets up the realm (realm.py), then
 starts the rest and prints what an edge's install.py needs: the desk's certificate pin (or the CA) and its bundle key.
 """
@@ -131,6 +133,17 @@ def local_ca(names: list[str]) -> tuple[str, str, str]:
     return as_pem(ca), as_pem(leaf), pem(key)
 
 
+def issued_by(crt_pem: str, ca_pem: str) -> bool:
+    """crt_pem is a lone certificate that ca_pem's certificate issued: the local CA's leaf, without its chain."""
+    from cryptography import x509
+    certs = x509.load_pem_x509_certificates(crt_pem.encode())
+    try:
+        certs[0].verify_directly_issued_by(x509.load_pem_x509_certificate(ca_pem.encode()))
+    except Exception:   # another issuer, a bad signature or key type: not this CA's leaf, leave the file alone
+        return False
+    return len(certs) == 1
+
+
 def leaf_pin(pem_text: str) -> str:
     """The SHA-256 of the first certificate's DER: what the agent pins (keyclerk.pin_sha256)."""
     from cryptography import x509
@@ -162,7 +175,8 @@ def main() -> int:
     a.add_argument("--keyclerk-src", help=f"a KeyClerk git repository to build v{KEYCLERK_VERSION} from")
     a.add_argument("--keyclerk-ref", help="lab only (with --lab): build KeyClerk from this git ref instead of the pinned "
                                           "tag, tagged localhost/keyclerk:lab-<ref>, to try an unreleased KeyClerk")
-    a.add_argument("--cert", help="the organisation's certificate (PEM, chain) for the three names")
+    a.add_argument("--cert", help="the organisation's certificate for the three names (PEM): the "
+                                       "certificate, then the CA that issued it, which enrolment codes pin")
     a.add_argument("--key", help="its private key (PEM)")
     a.add_argument("--port", type=int, default=443, help="the port people and edges reach the front on")
     a.add_argument("--engine", default="podman")
@@ -221,8 +235,13 @@ def main() -> int:
     elif not (SECRETS / "front.crt").exists():
         ca, crt, key = local_ca(hosts + ([o.fleet_host.lower()] if o.fleet_host else []))
         write("front-ca.crt", ca, owner=None)
-        write("front.crt", crt, owner=None)
+        write("front.crt", crt + ca, owner=None)   # the chain: the front presents its CA, which enrolment codes pin
         write("front.key", key, owner=None)
+    elif (SECRETS / "front-ca.crt").exists():   # a local CA from before the chain: add it, same leaf, same key
+        crt = (SECRETS / "front.crt").read_text(encoding="utf-8")
+        ca = (SECRETS / "front-ca.crt").read_text(encoding="utf-8")
+        if issued_by(crt, ca):
+            write("front.crt", crt.rstrip("\n") + "\n" + ca, owner=None, keep=False)
     if not (SECRETS / "people.json").exists():   # the first people and the desk's first records (read once)
         root, officer = person(o.root, "root"), person(o.officer, "officer")
         people = [root, officer] + ([person(o.edge_officer, "edgeofficer")] if o.edge_officer else [])             + [person(p, "person") for p in o.person]

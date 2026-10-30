@@ -45,7 +45,9 @@ broker's realm and the desk's first records.
     python deploy/core/install.py --broker-host id.example --desk-host desk.example --edge-host edge.example         --root "Root Holder <root@example>" --officer "Officer Name <officer@example>"         --keyclerk-src ../keyclerk [--cert front.crt --key front.key] [--engine podman] [--lab]
 
 Writes deploy/secrets/ (git-ignored; files 0600, those KeyClerk reads owned by its uid 10001), once: running it again
-keeps every secret it finds there. Without --cert and --key it makes a local CA and a leaf for the three names.
+keeps every secret it finds there. Without --cert and --key it makes a local CA and a leaf for the three names
+(front.crt holds the leaf, then the CA). With --fleet-host it also gives the fleet its page and enrolment by code
+(fleet_page.py): fleet.json's admin section, once, and the page's enrol_url and pin_ca_file (the CA after the leaf).
 Builds KeyClerk from its tag with KeyClerk's own Containerfile, starts the broker, sets up the realm (realm.py), then
 starts the rest and prints what an edge's install.py needs: the desk's certificate pin (or the CA) and its bundle key.
 
@@ -81,7 +83,8 @@ options:
   --keyclerk-ref KEYCLERK_REF
                         lab only (with --lab): build KeyClerk from this git ref instead of the pinned tag, tagged
                         localhost/keyclerk:lab-<ref>, to try an unreleased KeyClerk
-  --cert CERT           the organisation's certificate (PEM, chain) for the three names
+  --cert CERT           the organisation's certificate for the three names (PEM): the certificate, then the CA that
+                        issued it, which enrolment codes pin
   --key KEY             its private key (PEM)
   --port PORT           the port people and edges reach the front on
   --engine ENGINE
