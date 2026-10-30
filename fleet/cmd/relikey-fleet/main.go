@@ -72,7 +72,8 @@ func load(path string) (config, map[string]ed25519.PublicKey, error) {
 		}
 	}
 	if c.State == "" {
-		return c, nil, errors.New("state: the inventory file's path")
+		return c, nil, errors.New("state: the inventory file's path is missing, e.g. /var/lib/relikey-fleet/fleet.json " +
+			"(deploy/core/install.py writes it)")
 	}
 	if c.SilenceSeconds <= 0 {
 		c.SilenceSeconds = 300
@@ -81,7 +82,8 @@ func load(path string) (config, map[string]ed25519.PublicKey, error) {
 	for edge, h := range c.Edges {
 		k, err := hex.DecodeString(h)
 		if err != nil || len(k) != ed25519.PublicKeySize {
-			return c, nil, fmt.Errorf("edges.%s: an Ed25519 public key, 64 hex characters", edge)
+			return c, nil, fmt.Errorf("edges.%s: not an Ed25519 public key of 64 hex characters; write the edge's "+
+				"enrolment key again with deploy/core/fleet_edge.py --edge %s --key <key>", edge, edge)
 		}
 		keys[edge] = ed25519.PublicKey(k)
 	}

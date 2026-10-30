@@ -6,7 +6,8 @@
 // Two slots (A/B), each a generation number, a sha256 and the record. A write goes to
 // the slot not holding the newest generation: a temporary file, fsync, rename, fsync of
 // the directory. A torn or reverted write leaves the other slot readable. Floors only
-// rise. Unreadable state fails closed: losing the floors is a reinstall
+// rise. A record equal to the stored one is not written again: edge hardware often boots
+// from flash (AG-14). Unreadable state fails closed: losing the floors is a reinstall
 // (docs/go-engineering.md, State on disk; GE-14, GE-15).
 //
 // The head of the event chain (decision 0025 point 2) is kept the same way in a pair of
@@ -73,6 +74,7 @@ type Store struct {
 	gen  int64
 	cur  int // index of the slot holding gen; -1 when empty
 	rec  Record
+	body []byte // rec as stored in slot cur, to tell an unchanged record (AG-14)
 	// The event chain's head, in its own slots.
 	chainGen int64
 	chainCur int
@@ -132,11 +134,11 @@ func (s *Store) Get() Record {
 }
 
 func (s *Store) load() error {
-	if present, valid := loadPair(s, slots, maxSlot, &s.gen, &s.cur, &s.rec); present && !valid {
+	if present, valid := loadPair(s, slots, maxSlot, &s.gen, &s.cur, &s.rec, &s.body); present && !valid {
 		return errors.New("the edge state is unreadable in both slots: refusing to start without floors " +
 			"(restore the state directory from a backup, or re-enrol the edge)")
 	}
-	if present, valid := loadPair(s, chainSlots, maxChainSlot, &s.chainGen, &s.chainCur, &s.chain); present && !valid {
+	if present, valid := loadPair(s, chainSlots, maxChainSlot, &s.chainGen, &s.chainCur, &s.chain, nil); present && !valid {
 		return errors.New("the event chain head is unreadable in both slots: refusing to start, since the event " +
 			"sequence would start again and reuse numbers (restore the state directory from a backup; or remove " +
 			"chain-a.json and chain-b.json to start a new chain, which a verifier then sees as a break)")
@@ -144,9 +146,9 @@ func (s *Store) load() error {
 	return nil
 }
 
-// loadPair reads the newest valid slot of a pair into v, with its generation and index; it says whether either slot
-// exists and whether either is valid.
-func loadPair[T any](s *Store, pair [2]string, limit int64, gen *int64, cur *int, v *T) (present, valid bool) {
+// loadPair reads the newest valid slot of a pair into v, with its generation and index, and its body as stored into
+// raw when raw is not nil; it says whether either slot exists and whether either is valid.
+func loadPair[T any](s *Store, pair [2]string, limit int64, gen *int64, cur *int, v *T, raw *[]byte) (present, valid bool) {
 	for i, name := range pair {
 		b, err := s.read(name, limit)
 		if errors.Is(err, fs.ErrNotExist) {
@@ -171,6 +173,9 @@ func loadPair[T any](s *Store, pair [2]string, limit int64, gen *int64, cur *int
 		valid = true
 		if *cur == -1 || sl.Gen > *gen {
 			*gen, *cur, *v = sl.Gen, i, r
+			if raw != nil {
+				*raw = sl.Body
+			}
 		}
 	}
 	return present, valid
@@ -192,7 +197,8 @@ func (s *Store) read(name string, limit int64) ([]byte, error) {
 // ErrFloorDown is returned when a write would lower a floor.
 var ErrFloorDown = errors.New("a floor would go down")
 
-// Save writes r as the next generation. It refuses to lower any floor.
+// Save writes r as the next generation, unless r equals the stored record. It refuses to
+// lower any floor.
 func (s *Store) Save(r Record) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -205,6 +211,9 @@ func (s *Store) Save(r Record) error {
 	body, err := json.Marshal(r)
 	if err != nil {
 		return err
+	}
+	if s.cur != -1 && bytes.Equal(body, s.body) {
+		return nil // unchanged: a rewrite would only wear the flash (AG-14)
 	}
 	sum := sha256.Sum256(body)
 	out, err := json.Marshal(slot{Gen: s.gen + 1, SHA256: hex.EncodeToString(sum[:]), Body: body})
@@ -223,7 +232,7 @@ func (s *Store) Save(r Record) error {
 		// re-read from disk on the next start.
 		return fmt.Errorf("writing the edge state: %w", err)
 	}
-	s.gen, s.cur, s.rec = s.gen+1, next, r
+	s.gen, s.cur, s.rec, s.body = s.gen+1, next, r, body
 	return nil
 }
 

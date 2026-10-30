@@ -109,6 +109,10 @@ type Config struct {
 		// Optional. https on the clerk's own host: the fleet service's report route, behind the front (decision 0026).
 		URL string `json:"url"`
 	} `json:"fleet"`
+	// Optional. A directory the agent also writes its metrics to, as relikey-agent.prom (mode 0644, replaced
+	// atomically), for a collector such as node_exporter's textfile collector that must not read state_dir. The agent
+	// serves nothing; a missing or unwritable directory is reported in the status and the log, never stops the agent.
+	MetricsDir string `json:"metrics_dir"`
 	// How often the agent reconciles the bastion with the live leases, in seconds (default 15).
 	TickSeconds int `json:"tick_seconds"`
 	// How often the agent pulls a bundle from the desk, in seconds (default 60).
@@ -223,7 +227,8 @@ func loadConfig(path string) (*Config, error) {
 		}
 	}
 	if len(missing) > 0 {
-		return nil, fmt.Errorf("%s: missing %s", path, strings.Join(missing, ", "))
+		return nil, fmt.Errorf("%s: missing %s; deploy/edge/install.py writes a complete configuration (compare with "+
+			"the one it wrote)", path, strings.Join(missing, ", "))
 	}
 	if c.Mode == "" {
 		c.Mode = agent.Enforce
@@ -241,9 +246,10 @@ func loadConfig(path string) (*Config, error) {
 	if c.Mode != agent.Enforce && c.Mode != agent.Shadow {
 		return nil, fmt.Errorf("mode %q: enforce or shadow", c.Mode)
 	}
-	for _, k := range []string{c.Pins.BundleKey, c.Pins.OfficerKey} {
+	for name, k := range map[string]string{"pins.bundle_key": c.Pins.BundleKey, "pins.officer_key": c.Pins.OfficerKey} {
 		if _, err := kcedge.PublicKey(k); err != nil {
-			return nil, fmt.Errorf("pins: %w", err)
+			return nil, fmt.Errorf("%s: %w; give the key as the desk operator read it out (the bundle key) or as the "+
+				"edge officer gave it (the officer key)", name, err)
 		}
 	}
 	return &c, nil
@@ -278,7 +284,7 @@ func run(args []string, once bool) error {
 	}
 	seed, err := hex.DecodeString(seedHex)
 	if err != nil || len(seed) != ed25519.SeedSize {
-		return fmt.Errorf("%s: an Ed25519 seed is 64 hex characters", c.EnrolmentKeyFile)
+		return badSeed(c.EnrolmentKeyFile)
 	}
 	token, err := readSecret(c.Bastion.TokenFile)
 	if err != nil {
@@ -296,7 +302,8 @@ func run(args []string, once bool) error {
 		}
 		pool := x509.NewCertPool()
 		if !pool.AppendCertsFromPEM(pemBytes) {
-			return fmt.Errorf("%s holds no certificate", c.Clerk.CAFile)
+			return fmt.Errorf("clerk.ca_file %s holds no PEM certificate, so the desk cannot be checked; give the CA "+
+				"that signs the desk's certificate (the core's front-ca.crt), or clerk.pin_sha256 instead", c.Clerk.CAFile)
 		}
 		kcOpts.RootCAs = pool
 	}
@@ -351,7 +358,7 @@ func run(args []string, once bool) error {
 		Bastion:  warpgate.Bastion{C: &warpgate.Client{Base: strings.TrimRight(c.Bastion.URL, "/"), Token: token, HTTP: wgHTTP}},
 		ClerkTLS: clerkTLS, BastionTLS: bastionTLS,
 		Tick: time.Duration(c.TickSeconds) * time.Second, Pull: time.Duration(c.PullSeconds) * time.Second,
-		Grace: time.Duration(c.GraceSeconds) * time.Second, Wait: wait,
+		Grace: time.Duration(c.GraceSeconds) * time.Second, Wait: wait, MetricsDir: c.MetricsDir,
 	}
 	a.Events = os.Stdout // chained JSON lines beside the log, told apart by "specversion" (decision 0025)
 	if c.Fleet.URL != "" {
@@ -406,7 +413,8 @@ func status(args []string) error {
 	}
 	fmt.Println(string(b))
 	if bad := st.Health(time.Now(), *maxStreak, *maxAge); len(bad) > 0 {
-		return errors.New("unhealthy: " + strings.Join(bad, "; "))
+		return errors.New("unhealthy: " + strings.Join(bad, "; ") + " (the agent's log, on its standard output, " +
+			"names each cause)")
 	}
 	return nil
 }
@@ -416,7 +424,7 @@ func keygen(args []string) error {
 	out := fs.String("out", "", "file for the new enrolment key (must not exist)")
 	_ = fs.Parse(args)
 	if *out == "" {
-		return errors.New("keygen -out FILE")
+		return errors.New("usage: relikey-agent keygen -out FILE")
 	}
 	seed := make([]byte, ed25519.SeedSize)
 	_, _ = rand.Read(seed)
@@ -442,6 +450,9 @@ func pin(args []string) error {
 	fs := flag.NewFlagSet("pin", flag.ExitOnError)
 	cert := fs.String("cert", "", "a PEM certificate file")
 	_ = fs.Parse(args)
+	if *cert == "" {
+		return errors.New("usage: relikey-agent pin -cert FILE")
+	}
 	b, err := os.ReadFile(*cert)
 	if err != nil {
 		return err

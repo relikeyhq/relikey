@@ -4,11 +4,20 @@ package agent
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
 )
 
+// MetricsFile is the copy's name in metrics_dir; a textfile collector reads the *.prom files there.
+const MetricsFile = "relikey-agent.prom"
+
 // Metrics is the status as Prometheus text exposition, written to metrics.prom beside
-// status.json on every tick. The agent serves nothing, so it is read by a textfile
+// status.json when the status changes and at the heartbeat (Agent.StatusHeartbeat, a minute), so
+// relikey_agent_status_updated_seconds tells a live agent from a stalled one; the runtime gauges
+// are as of that write. The agent serves nothing, so it is read by a textfile
 // collector (node_exporter --collector.textfile.directory) or copied out; the names and
 // the status-only health follow KeyClerk's monitoring shape (its decision 0018), so one
 // monitoring setup covers the desk and its edges. bad is Status.Health's list.
@@ -41,10 +50,64 @@ func Metrics(st Status, bad []string) []byte {
 		{"relikey_agent_action_failures_total", "counter", "Warpgate actions that failed", st.Failures},
 		{"relikey_agent_observe_errors_total", "counter", "failures to read Warpgate's state", st.ObserveErrors},
 		{"relikey_agent_module_failures_total", "counter", "policy modules not fetched or not kept", st.ModuleFailures},
+		{"relikey_agent_metrics_dir_failures_total", "counter", "copies to metrics_dir that failed", st.MetricsDirFailures},
 		{"relikey_agent_heap_bytes", "gauge", "Go heap in use", st.HeapAlloc},
 		{"relikey_agent_goroutines", "gauge", "goroutines", st.Goroutines},
 	} {
 		fmt.Fprintf(&b, "# HELP %s %s\n# TYPE %s %s\n%s %v\n", m.name, m.help, m.name, m.kind, m.name, m.value)
 	}
 	return b.Bytes()
+}
+
+// WriteMetricsDir writes b to dir/relikey-agent.prom for a collector that may read dir but not the state directory:
+// a temporary file in dir (named so a collector skips it), made 0644 whatever the umask, then renamed over the old
+// copy, so a reader sees the old file or the new one and never a partial one. Not fsynced: a copy lost in a crash is
+// written again on the next tick. The error says what to change; it never names the temporary file, so a lasting
+// cause reads the same on every tick.
+func WriteMetricsDir(dir string, b []byte) error {
+	fi, err := os.Stat(dir)
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		return fmt.Errorf("metrics_dir %s does not exist: create it, writable by the agent's user and readable by the "+
+			"collector's, or remove metrics_dir from agent.json", dir)
+	case err != nil:
+		return fmt.Errorf("metrics_dir %s: %w", dir, cause(err))
+	case !fi.IsDir():
+		return fmt.Errorf("metrics_dir %s is not a directory: set it to the directory the collector reads", dir)
+	}
+	f, err := os.CreateTemp(dir, ".relikey-agent-*.tmp")
+	if err != nil {
+		return fmt.Errorf("metrics_dir %s: cannot create a file there (%w): make it writable by the agent's user", dir,
+			cause(err))
+	}
+	tmp := f.Name()
+	_, err = f.Write(b)
+	if err == nil {
+		err = f.Chmod(0o644)
+	}
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err == nil {
+		err = os.Rename(tmp, filepath.Join(dir, MetricsFile))
+	}
+	if err != nil {
+		_ = os.Remove(tmp)
+		return fmt.Errorf("metrics_dir %s: writing %s: %w (the previous copy, if any, is unchanged)", dir, MetricsFile,
+			cause(err))
+	}
+	return nil
+}
+
+// cause strips the path from a file error: the temporary file's random name would make each tick's message new.
+func cause(err error) error {
+	var pe *fs.PathError
+	var le *os.LinkError
+	switch {
+	case errors.As(err, &pe):
+		return pe.Err
+	case errors.As(err, &le):
+		return le.Err
+	}
+	return err
 }

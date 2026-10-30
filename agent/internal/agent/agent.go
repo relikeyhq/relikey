@@ -10,6 +10,7 @@
 package agent
 
 import (
+	"bytes"
 	"context"
 	"crypto/ed25519"
 	"encoding/hex"
@@ -66,7 +67,15 @@ type Agent struct {
 	// answer is followed by the next long-poll at once; an immediate answer or a failure by the jittered interval.
 	Wait        time.Duration
 	Grace       time.Duration // removals may finish this long after a shutdown signal (default 5s)
-	StatusEvery int           // write status.json every N ticks (default 1)
+	StatusEvery int           // look at the status every N ticks (default 1)
+	// StatusHeartbeat bounds how long the status files go unwritten while nothing in them changes (default 60 s). The
+	// files are rewritten when their content changes, else at this heartbeat, so `updated` in status.json and
+	// relikey_agent_status_updated_seconds are never older than it on a live agent; keep it well below the canary
+	// gate's -max-age (2 minutes). Edge hardware often boots from flash: an idle tick writes nothing.
+	StatusHeartbeat time.Duration
+	// MetricsDir, when set, receives a copy of metrics.prom as relikey-agent.prom each time it is written, readable by
+	// a site's collector while the state directory stays private (WriteMetricsDir). Empty writes no copy.
+	MetricsDir string
 	// The key exchange each role's link negotiated (decision 0022 A3); nil leaves it out of the status.
 	ClerkTLS, BastionTLS *httpx.Group
 	// Governed loads the bastion roles only leases grant, read every tick (apply.ParseGoverned); an unmanaged account
@@ -84,6 +93,9 @@ type Agent struct {
 	fleetLast    time.Time // monotonic: when the last report went, so a clock set back cannot stall reports
 	fleetSending atomic.Bool
 
+	statusKey []byte    // the status last written, without its per-tick fields (Status.content)
+	statusAt  time.Time // monotonic: when the status files were last written
+
 	chain *events.Chain // over Events, continuing from the head in the state directory
 
 	rogue map[string]string // the unmanaged accounts holding governed roles last reported, and their roles
@@ -100,6 +112,13 @@ type Agent struct {
 
 // noAddressRetry is how long a lease the desk had no address for waits before it asks again (a variable for tests).
 var noAddressRetry = time.Minute
+
+// readAttempts bounds the reads of the bastion in one tick; readBackoff is the first wait between them, doubled after
+// each (variables for tests).
+var (
+	readAttempts = 3
+	readBackoff  = 250 * time.Millisecond
+)
 
 type fetchedEmail struct {
 	person, email string
@@ -212,6 +231,10 @@ type Status struct {
 	// EventChain is the head of the event chain: the last record's epoch, sequence and hash; a verifier holding the
 	// events checks them against it (events.Verify).
 	EventChain *events.Head `json:"event_chain,omitempty"`
+	// Why the last metrics copy to metrics_dir failed (empty when it was written, or none is configured), and how
+	// many copies failed. A failed copy never stops the loop.
+	MetricsDirError    string `json:"metrics_dir_error,omitempty"`
+	MetricsDirFailures int64  `json:"metrics_dir_failures"`
 }
 
 func (a *Agent) defaults() {
@@ -227,6 +250,9 @@ func (a *Agent) defaults() {
 	}
 	if a.StatusEvery <= 0 {
 		a.StatusEvery = 1
+	}
+	if a.StatusHeartbeat <= 0 {
+		a.StatusHeartbeat = 60 * time.Second
 	}
 	if a.Mode == "" {
 		a.Mode = Enforce
@@ -258,7 +284,7 @@ func (a *Agent) Run(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			a.Log.Info("agent stopping")
-			a.writeStatus()
+			a.writeStatus(true)
 			return nil
 		case <-tick.C:
 			a.reconcile(ctx)
@@ -401,6 +427,9 @@ func (a *Agent) handlePull(ctx context.Context, got keyclerk.Pulled, err error) 
 	rec.BootID, rec.BootAtVerify, rec.WallAtVerify = a.Clock.BootID(), int64(a.Clock.Boot()), formatWall(now)
 	// Floors and the bundle are stored before anything is applied: a crash after this
 	// re-applies from the stored bundle, never leaving a refused serial with stale state.
+	// A new serial is stored even when its content equals the bundle held: the serial and the
+	// newest signed time are the replay floors, so an older bundle issued in between (a lease
+	// since revoked) must be refused, and the trusted clock re-anchors on this verification.
 	if err := a.Store.Save(rec); err != nil {
 		a.Log.Error("cannot store the verified bundle: not applied", "err", err)
 		return
@@ -501,6 +530,28 @@ func (a *Agent) observe(ctx context.Context, desired apply.Desired) (*apply.Obse
 	return observed, err
 }
 
+// observeTick reads the bastion, asking again within the tick when a read fails transiently (bastion.Transient), so a
+// short network or bastion hiccup does not cost the tick. The tries are bounded by readAttempts, by the tick (no wait
+// starts that would end past it) and by ctx; the last error is returned when none succeeds, and the caller changes
+// nothing on it (fail closed). Each try reads everything afresh: nothing from a failed read is kept.
+func (a *Agent) observeTick(ctx context.Context, desired apply.Desired) (*apply.Observed, error) {
+	budget := time.Now().Add(a.Tick)
+	wait := readBackoff
+	for attempt := 1; ; attempt++ {
+		observed, err := a.observe(ctx, desired)
+		if err == nil || attempt >= readAttempts || !bastion.Transient(err) || time.Now().Add(wait).After(budget) {
+			return observed, err
+		}
+		a.Log.Info("cannot read the bastion; asking again this tick", "err", err, "attempt", attempt)
+		select {
+		case <-ctx.Done():
+			return observed, errors.Join(err, ctx.Err())
+		case <-time.After(wait):
+		}
+		wait *= 2
+	}
+}
+
 // harden checks the bastion settings ReliKey depends on and, in enforce mode, restores them; either way the drift
 // report says what was found (stack attack 2026-10-25, E1 and E4).
 func (a *Agent) harden(ctx context.Context, o *apply.Observed) {
@@ -537,7 +588,7 @@ func (a *Agent) reconcile(ctx context.Context) {
 	desired := apply.FromLive(l.leases, l.visits)
 	desired.Now, desired.Governed = now, l.governed
 	octx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	observed, err := a.observe(octx, desired)
+	observed, err := a.observeTick(octx, desired)
 	cancel()
 	if err != nil {
 		a.st.ObserveErrors++
@@ -603,18 +654,39 @@ func (a *Agent) finishTick(plan *apply.Plan, why []string) {
 	a.st.Serial, a.st.AppliedSerial, a.st.Ended = rec.Floors.Serial, rec.AppliedSerial, rec.Ended
 	a.st.ClerkTLS, a.st.BastionTLS = a.ClerkTLS.String(), a.BastionTLS.String()
 	if a.st.Ticks%int64(a.StatusEvery) == 0 {
-		a.writeStatus()
+		a.writeStatus(false)
 	}
 }
 
-func (a *Agent) writeStatus() {
-	var ms runtime.MemStats
-	runtime.ReadMemStats(&ms)
-	a.st.Updated, a.st.Goroutines = a.Clock.Now(), runtime.NumGoroutine()
+// content is the status without what moves on every tick or pull of an idle agent (the time, the tick and pull
+// counts, the runtime gauges): when it is unchanged, the status files are not rewritten before the heartbeat. Whether
+// any pull has succeeded stays in, since the health reads it.
+func (st Status) content() []byte {
+	st.Updated, st.Ticks, st.PullsOK = time.Time{}, 0, min(st.PullsOK, 1)
+	st.Goroutines, st.HeapAlloc, st.HeapSys, st.NumGC, st.OpenFDs = 0, 0, 0, 0, 0
+	// The metrics copy is tried at each write, so its failure count rises with the writes: counting it would rewrite
+	// the status every tick while the copy fails. A new cause (MetricsDirError) is still a change.
+	st.MetricsDirFailures = 0
+	b, _ := json.Marshal(st)
+	return b
+}
+
+// writeStatus writes status.json, status.html and metrics.prom when the status changed or the heartbeat is due (or
+// always, with force: the last status before the agent stops).
+func (a *Agent) writeStatus(force bool) {
 	if a.chain != nil {
+		// Before the content key: a new event moves the head, and the status then reports it at once.
 		h := a.chain.Head()
 		a.st.EventChain = &h
 	}
+	key := a.st.content()
+	unchanged := a.statusKey != nil && bytes.Equal(key, a.statusKey)
+	if !force && unchanged && time.Since(a.statusAt) < a.StatusHeartbeat {
+		return // nothing new and the heartbeat is not due: an idle tick writes nothing (flash)
+	}
+	var ms runtime.MemStats
+	runtime.ReadMemStats(&ms)
+	a.st.Updated, a.st.Goroutines = a.Clock.Now(), runtime.NumGoroutine()
 	a.st.HeapAlloc, a.st.HeapSys, a.st.NumGC, a.st.OpenFDs = ms.HeapAlloc, ms.HeapSys, ms.NumGC, openFDs()
 	b, err := json.Marshal(a.st)
 	if err == nil {
@@ -626,10 +698,34 @@ func (a *Agent) writeStatus() {
 		}
 	}
 	if err == nil {
-		err = a.Store.WriteStatus("metrics.prom", Metrics(a.st, a.st.Health(a.st.Updated, 2, 2*time.Minute)))
+		m := Metrics(a.st, a.st.Health(a.st.Updated, 2, 2*time.Minute))
+		if err = a.Store.WriteStatus("metrics.prom", m); err == nil && a.MetricsDir != "" {
+			a.copyMetrics(m)
+		}
 	}
 	if err != nil {
 		a.Log.Warn("cannot write the status files", "err", err)
+		return // written again on the next tick
+	}
+	a.statusKey, a.statusAt = key, time.Now()
+}
+
+// copyMetrics writes the copy of metrics.prom for the site's collector. A failure is logged when it starts or its
+// cause changes, counted, and kept in the status (the next status.json carries it); the return is logged once. It
+// is not part of the health: the loop and the leases do not depend on it, and the collector already sees a copy
+// that stops changing (node_textfile_mtime_seconds, relikey_agent_status_updated_seconds).
+func (a *Agent) copyMetrics(m []byte) {
+	err := WriteMetricsDir(a.MetricsDir, m)
+	switch {
+	case err != nil:
+		a.st.MetricsDirFailures++
+		if msg := err.Error(); msg != a.st.MetricsDirError {
+			a.st.MetricsDirError = msg
+			a.Log.Warn("cannot write the metrics copy; leases are still applied", "err", err)
+		}
+	case a.st.MetricsDirError != "":
+		a.st.MetricsDirError = ""
+		a.Log.Info("the metrics copy is written again", "dir", a.MetricsDir)
 	}
 }
 
@@ -653,7 +749,7 @@ func (a *Agent) Once(ctx context.Context) (apply.Plan, error) {
 	l, now, why := a.live(a.Store.Get())
 	desired := apply.FromLive(l.leases, l.visits)
 	desired.Now, desired.Governed = now, l.governed
-	observed, err := a.observe(ctx, desired)
+	observed, err := a.observeTick(ctx, desired)
 	if err != nil {
 		return apply.Plan{}, fmt.Errorf("reading the bastion: %w", err)
 	}

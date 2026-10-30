@@ -116,6 +116,41 @@ func TestATempFileLeftByACrashIsIgnored(t *testing.T) {
 	s2.Close()
 }
 
+// AG-14: an unchanged record is not written again, before or after a restart; a change still is.
+func TestAnUnchangedRecordIsNotWrittenAgain(t *testing.T) {
+	dir := t.TempDir()
+	s, _ := Open(dir, true)
+	r := rec(5, 2, "2026-10-23T12:00:00Z")
+	if err := s.Save(r); err != nil {
+		t.Fatal(err)
+	}
+	stamp := func() string {
+		var out string
+		for _, n := range slots {
+			b, _ := os.ReadFile(filepath.Join(dir, n))
+			out += string(b) + "|"
+		}
+		return out
+	}
+	before, gen := stamp(), s.gen
+	for range 20 {
+		if err := s.Save(r); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s.Close()
+	s2, _ := Open(dir, true)
+	defer s2.Close()
+	_ = s2.Save(r)
+	if s2.gen != gen || stamp() != before {
+		t.Fatalf("an unchanged record was written: generation %d -> %d", gen, s2.gen)
+	}
+	r.AppliedSerial = 6
+	if err := s2.Save(r); err != nil || s2.gen != gen+1 || stamp() == before {
+		t.Fatalf("a changed record was not written: generation %d -> %d, %v", gen, s2.gen, err)
+	}
+}
+
 func head(epoch, seq int64) events.Head {
 	return events.Head{Epoch: epoch, Seq: seq, Hash: fmt.Sprintf("%064x", seq)}
 }
