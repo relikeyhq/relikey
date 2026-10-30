@@ -37,10 +37,12 @@ public:
   # directories cleared for publication
   - LICENSES/
   - .github/
+  - .devcontainer/
   - adapters/
   - agent/
   - fleet/
   - brand/
+  - changelog.d/
   - deploy/
   - docs/
   - docs-site/

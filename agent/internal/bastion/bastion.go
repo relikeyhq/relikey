@@ -49,6 +49,14 @@ type Key struct {
 	OpenSSH string
 }
 
+// Credential is any other way an account can sign in: a password, a one-time-password seed, a client certificate. No
+// lease grants one, so a managed account holds none, whatever its history (an administrator, a person while
+// self-service was on, an import). Kind is what the bastion calls it, for the reports.
+type Credential struct {
+	ID   string `json:"id"`
+	Kind string `json:"kind"`
+}
+
 // Target is a system the bastion fronts.
 type Target struct {
 	ID   string
@@ -94,6 +102,11 @@ type Admin interface {
 	AddKey(ctx context.Context, accountID, label, openssh string) error
 	RemoveKey(ctx context.Context, accountID, id string) error
 
+	// Credentials lists every credential of the account that is neither an identity nor a key. An adapter that cannot
+	// list one kind returns an error, so the account counts as unreadable, never as holding none.
+	Credentials(ctx context.Context, accountID string) ([]Credential, error)
+	RemoveCredential(ctx context.Context, accountID string, c Credential) error
+
 	ActiveSessions(ctx context.Context) ([]Session, error)
 	CloseSession(ctx context.Context, id string) error
 }
@@ -103,6 +116,21 @@ var ErrNotFound = errors.New("not found on the bastion")
 
 // NotFound reports whether err means the thing does not exist.
 func NotFound(err error) bool { return errors.Is(err, ErrNotFound) }
+
+// Transient reports whether a failed read may succeed if asked again at once: not a cancelled or timed-out context
+// (the tick's budget or a shutdown), not a thing that does not exist, and not an error that says of itself it is
+// permanent (an adapter's refusal answers false to Transient() bool, such as a rejected token). Anything else, a
+// transport error or an overloaded bastion, may pass.
+func Transient(err error) bool {
+	if err == nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || NotFound(err) {
+		return false
+	}
+	var t interface{ Transient() bool }
+	if errors.As(err, &t) {
+		return t.Transient()
+	}
+	return true
+}
 
 // Hardening is the bastion settings ReliKey depends on: no self-service credentials (a person could add a password,
 // a key or a token the broker never sees, or make their account unreadable to the agent), no password SSH, and API

@@ -114,16 +114,21 @@ func (s *Store) Anchor() string {
 	return s.d.Versions[0].Registry.Hash()
 }
 
-// Current is the registry in force at now: the newest version whose delay has passed.
-func (s *Store) Current(now time.Time) (registry.Registry, bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+// current is Current with mu held.
+func (s *Store) current(now time.Time) (registry.Registry, bool) {
 	for i := len(s.d.Versions) - 1; i >= 0; i-- {
 		if !now.Before(s.d.Versions[i].Effective) {
 			return s.d.Versions[i].Registry, true
 		}
 	}
 	return registry.Registry{}, false
+}
+
+// Current is the registry in force at now: the newest version whose delay has passed.
+func (s *Store) Current(now time.Time) (registry.Registry, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.current(now)
 }
 
 // SetAnchor records an anchor already verified by registry.Anchor. Refused once anchored.
@@ -290,6 +295,9 @@ func (s *Store) OpenSlot(url, pin, name string, kind enrol.Kind, profile string,
 	}
 	open := make([]enrol.Slot, 0, len(s.d.Slots))
 	for _, sl := range s.d.Slots {
+		if sl.Active && sl.Name == name { // a new key for an enrolled edge is a rotation (0026 point 3), not a slot
+			return enrol.Slot{}, enrol.Code{}, fmt.Errorf("%s is enrolled already: a new key for it is a rotation, not a new slot", name)
+		}
 		open = append(open, sl)
 	}
 	sl, code, err := enrol.Open(s.d.Fleet, url, pin, s.d.Versions[0].Registry.Hash(), name, kind, profile, ev.Subject, open, now)
@@ -311,6 +319,9 @@ func (s *Store) Present(p enrol.Presentation, source string, now time.Time) erro
 		return errors.New("no such slot")
 	}
 	next, err := enrol.Accept(s.d.Fleet, sl, p, now)
+	if err == nil {
+		next.Source = source
+	}
 	s.d.Slots[sl.ID] = next
 	ev := Event{At: now, Subject: "edge:" + sl.Name, Source: source, Action: "present key"}
 	if err != nil {
@@ -323,6 +334,82 @@ func (s *Store) Present(p enrol.Presentation, source string, now time.Time) erro
 		return serr
 	}
 	return err
+}
+
+// CheckActivation is whether an activation's items would pass (enrol.Check), before an officer is asked to sign it.
+func (s *Store) CheckActivation(a enrol.Activation, now time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.checkActivation(a, now)
+	return err
+}
+
+func (s *Store) checkActivation(a enrol.Activation, now time.Time) ([]enrol.Slot, error) {
+	out, err := enrol.Check(s.d.Slots, a, now)
+	if err != nil {
+		return nil, err
+	}
+	names := map[string]bool{}
+	for _, sl := range out {
+		if names[sl.Name] {
+			return nil, fmt.Errorf("%s: two slots of the same name in one activation", sl.Name)
+		}
+		names[sl.Name] = true
+	}
+	for _, sl := range s.d.Slots {
+		if sl.Active && names[sl.Name] {
+			return nil, fmt.Errorf("%s is enrolled already under another key: never replaced by an activation", sl.Name)
+		}
+	}
+	return out, nil
+}
+
+// Activate records an activation one officer's passkey approved (points 15, 32), verified here against the
+// registry in force: the slots become active and their edges' keys are enrolled. Refused or not, it is logged.
+func (s *Store) Activate(rp registry.RP, a enrol.Activation, st registry.Statement, sig registry.Signature, ev Event,
+	now time.Time) ([]enrol.Slot, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	reg, ok := s.current(now)
+	if !ok {
+		return nil, errors.New("the fleet has no officers yet: anchor it first")
+	}
+	out, err := enrol.Activate(rp, reg, s.d.Slots, a, st, sig, now)
+	if err == nil {
+		out, err = s.checkActivation(a, now)
+	}
+	ev.Action = "activate"
+	if err != nil {
+		ev.Detail = "refused: " + err.Error()
+		s.d.Log = append(s.d.Log, ev)
+		if serr := s.save(); serr != nil {
+			return nil, serr
+		}
+		return nil, err
+	}
+	var what []string
+	for i, sl := range out {
+		s.d.Slots[sl.ID] = sl
+		it := a.Items[i]
+		what = append(what, fmt.Sprintf("%s (%s) fingerprint %s, read by %s, %s", sl.Name, sl.Kind,
+			enrol.Fingerprint(sl.Key), it.ReadBy, it.ReadHow))
+	}
+	ev.Signed, ev.Detail = true, fmt.Sprintf("under registry %d, activation %s: %s", reg.Version, a.Hash(), strings.Join(what, "; "))
+	s.d.Log = append(s.d.Log, ev)
+	return out, s.save()
+}
+
+// Enrolled are the edges enrolled by code, by name: their keys (hex) from the active slots.
+func (s *Store) Enrolled() map[string]string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := map[string]string{}
+	for _, sl := range s.d.Slots {
+		if sl.Active {
+			out[sl.Name] = sl.Key
+		}
+	}
+	return out
 }
 
 // Log is the evidence log, newest first, at most n entries.

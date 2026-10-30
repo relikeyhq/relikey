@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: EUPL-1.2
 # Weekly updates, as pull requests that CI checks: the pinned workflow actions, the Go modules of the agent, its tools
-# and the fleet, the hash-locked Python tools (requirements-ci.txt, requirements-test.txt, requirements-docs.txt) and
-# the digest-pinned base images of the two image files (named Dockerfile.* because Dependabot's docker ecosystem only
-# reads that name).
+# (the SBOM tool in its own module) and the fleet, the hash-locked Python tools (requirements-ci.txt,
+# requirements-test.txt, requirements-docs.txt) and the digest-pinned base images of the two image files (named
+# Dockerfile.* because Dependabot's docker ecosystem only reads that name).
 version: 2
 updates:
   - package-ecosystem: github-actions
@@ -13,7 +13,7 @@ updates:
       actions:
         patterns: ["*"]
   - package-ecosystem: gomod
-    directories: [/agent, /agent/tools, /fleet]
+    directories: [/agent, /agent/tools, /agent/tools/sbom, /fleet]
     schedule:
       interval: weekly
     groups:

@@ -492,6 +492,84 @@ func TestAFailedCloseStillTakesAwayRoleAndSSO(t *testing.T) {
 	steady(t, wg, nil)
 }
 
+// A credential no lease grants (a password, a one-time-password seed, a certificate) is removed from a managed
+// account whatever its history, the lease's own SSO credential and role stay, and an unmanaged account's credential
+// is not touched (#18).
+func TestACredentialAddedOutsideTheAgentIsRemoved(t *testing.T) {
+	fw, wg := setup(t)
+	leases := []kcedge.Lease{lease("L-1", "ann", "plc-operator", t0.Add(time.Hour))}
+	reconcile(t, wg, leases)
+	fw.AddUser("breakglass", "made by the installer")
+	fw.AddCredential("breakglass", "passwords")
+	for _, kind := range warpgate.OtherCredentialKinds {
+		fw.AddCredential("ann", kind)
+	}
+	p := reconcile(t, wg, leases)
+	n := 0
+	for _, a := range p.Actions {
+		if a.Kind != DeleteCredential || a.Username != "ann" {
+			t.Fatalf("an action besides removing ann's credentials: %v", a)
+		}
+		n++
+	}
+	if n != len(warpgate.OtherCredentialKinds) || len(fw.Credentials("ann")) != 0 {
+		t.Fatalf("planned %d removals, left %v", n, fw.Credentials("ann"))
+	}
+	steady(t, wg, leases)
+	view, emails := fw.Snapshot(Marker)
+	if _, ok := view["ann"]["plc-operator"]; !ok || !slices.Equal(emails["ann"], []string{"ann@example.test"}) {
+		t.Fatalf("the lease's own access went too: view %v, emails %v", view, emails)
+	}
+	if len(fw.Credentials("breakglass")) != 1 {
+		t.Fatal("an unmanaged account's credential was touched")
+	}
+}
+
+// Credentials that cannot be listed make the account unreadable: with a live lease nothing is changed blind, and
+// nothing is taken as "holds none" (fail closed); the next readable tick removes them.
+func TestCredentialsThatCannotBeListedChangeNothing(t *testing.T) {
+	fw, wg := setup(t)
+	leases := []kcedge.Lease{lease("L-1", "ann", "plc-operator", t0.Add(time.Hour))}
+	reconcile(t, wg, leases)
+	fw.AddCredential("ann", "passwords")
+	fw.Refuse = func(method, path string) bool { return method == "GET" && strings.HasSuffix(path, "/credentials/otp") }
+	o, err := observeAll(wg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p := Compute(FromLeases(leases), o, provider); len(p.Actions) != 0 || !o.Unreadable["ann"] {
+		t.Fatalf("planned blind: %v (unreadable %v)", p.Actions, o.Unreadable)
+	}
+	fw.Refuse = nil
+	reconcile(t, wg, leases)
+	if len(fw.Credentials("ann")) != 0 {
+		t.Fatalf("left %v", fw.Credentials("ann"))
+	}
+}
+
+// A revocation whose session close fails keeps the user (its session must stay visible) but takes every way to sign
+// in again at once: a password or certificate too, not only roles and SSO.
+func TestAFailedCloseStillTakesAwayOtherCredentials(t *testing.T) {
+	fw, wg := setup(t)
+	leases := []kcedge.Lease{lease("L-1", "ann", "plc-operator", t0.Add(time.Hour))}
+	reconcile(t, wg, leases)
+	fw.AddCredential("ann", "passwords")
+	fw.AddCredential("ann", "certificates")
+	if _, err := fw.OpenSession("ann", "target-plc"); err != nil {
+		t.Fatal(err)
+	}
+	fw.Refuse = func(method, path string) bool { return strings.HasSuffix(path, "/close") }
+	o, err := observeAll(wg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	Execute(context.Background(), wg, provider, Compute(FromLeases(nil), o, provider), time.Second)
+	if !fw.UserExists("ann", Marker) || len(fw.Credentials("ann")) != 0 {
+		t.Fatalf("after a failed close: kept %v, credentials %v (want the user kept, no credentials)",
+			fw.UserExists("ann", Marker), fw.Credentials("ann"))
+	}
+}
+
 // observeAll reads the bastion as the agent does each tick, with the targets of every role (ReadRoleTargets reads
 // those of the roles a lease grants; AG-11 needs them).
 func observeAll(wg bastion.Admin) (*Observed, error) {

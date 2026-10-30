@@ -6,17 +6,23 @@ inventory on its own name, read-only. Run it on the core after install.py; insta
 
 It makes the fleet's client secret (deploy/secrets/fleet/page.secret, readable by the fleet's uid only), the broker
 client relikey-fleet (confidential, PKCE, a client role fleet-operator in the ID token, back-channel logout to the
-pod's loopback), fleet.json's page section, and the front's site for the name, which proxies only /, /callback and
-/logout. The front's certificate must name the host: install.py --fleet-host puts it in a local CA's certificate;
-with --cert, the organisation's certificate must carry it. Who may see the page: the client role fleet-operator,
-granted at the broker (python deploy/core/fleet_page.py --grant <username>) or by the clerk's governance.
+pod's loopback), fleet.json's page section, and the front's site for the name, which proxies only the page's routes.
+With it, enrolment by code (0026 points 14-33): fleet.json's admin section, written once and kept, and the page's
+enrol_url (the edge-facing name) and pin_ca_file (deploy/secrets/fleet/pin-ca.crt: the CA that issued the front's
+certificate, the second one in front.crt, which the codes pin); without that CA in front.crt it says why and leaves
+enrolment off. The front's certificate must name the host: install.py --fleet-host puts it in a local CA's
+certificate; with --cert, the organisation's certificate must carry it. Who may see the page: the client role
+fleet-operator, granted at the broker (python deploy/core/fleet_page.py --grant <username>) or by the clerk's
+governance.
 """
 import argparse
+import hashlib
 import os
 import re
 import secrets
 import subprocess
 import sys
+import uuid
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -24,9 +30,12 @@ SECRETS = ROOT / "deploy" / "secrets"
 CORE = ROOT / "deploy" / "core"
 FLEET_UID = 10002
 PAGE_PORT = 8094
+ADMIN_STATE = "/var/lib/relikey-fleet/admin.json"   # the fleet's volume (compose.yaml), beside the inventory's state
+PIN_CA = "/etc/relikey/fleet/pin-ca.crt"   # deploy/secrets/fleet/pin-ca.crt, mounted read-only (compose.yaml)
 HOST = re.compile(r"[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+")
 sys.path.insert(0, str(CORE))
 from fleet_edge import save   # noqa: E402  the same locked, atomic write as the known edges
+from install import BUSYBOX   # noqa: E402  the busybox Dockerfile.fleet pins, by digest
 
 
 def env(name: str) -> str:
@@ -44,6 +53,62 @@ def names_in(cert_pem: str) -> set:
                 .get_values_for_type(x509.DNSName)}
     except x509.ExtensionNotFound:
         return set()
+
+
+def issuing_ca(front_crt: str) -> tuple[str, str]:
+    """What an enrolment code pins (0026 point 27): the CA certificate that issued the front's certificate, as the
+    front presents it (front.crt holds the leaf, then its CA); the fleet takes its sha256 as the pin. Pinning the CA,
+    not the leaf, keeps codes valid across a leaf's renewal. Returns (its PEM, "") or ("", why and what to do)."""
+    from cryptography import x509
+    from cryptography.exceptions import InvalidSignature
+    from cryptography.hazmat.primitives import serialization
+    again = "then run deploy/core/fleet_page.py --host again"
+    certs = x509.load_pem_x509_certificates(front_crt.encode())
+    if len(certs) < 2:
+        return "", ("deploy/secrets/front.crt holds only the front's own certificate, so an edge cannot see the CA a "
+                    "code pins. Give install.py --cert the chain (the certificate, then the CA that issued it), "
+                    + again)
+    try:
+        certs[0].verify_directly_issued_by(certs[1])
+        ca = certs[1].extensions.get_extension_for_class(x509.BasicConstraints).value.ca
+    except (ValueError, TypeError, InvalidSignature, x509.ExtensionNotFound):
+        ca = False
+    if not ca:
+        return "", ("the second certificate in deploy/secrets/front.crt is not the CA that issued the first. Put the "
+                    "front's certificate first and its issuing CA second, " + again)
+    return certs[1].public_bytes(serialization.Encoding.PEM).decode(), ""
+
+
+def pin_of(pem_text: str) -> str:
+    """The pin as the fleet computes it from pin_ca_file: the sha256 of the certificate's DER."""
+    from cryptography import x509
+    from cryptography.hazmat.primitives import serialization
+    der = x509.load_pem_x509_certificate(pem_text.encode()).public_bytes(serialization.Encoding.DER)
+    return hashlib.sha256(der).hexdigest()
+
+
+def enrolment(cfg: dict, before: dict, url: str, pin: str, old_pin: str, why: str) -> str:
+    """Enrolment by code (0026 points 14-33) in fleet.json: the admin section (the officer registry, the slots and
+    the evidence log, in a state file of its own) and the page's enrol_url and pin_ca_file, from which every code
+    gets its pin. Only with a CA: without one the page hands out no code. An admin section already there is kept as
+    it is: a new fleet id would make a new fleet (point 30), so a second run never re-keys one. Returns what to tell.
+    pin is that of the CA now written to pin_ca_file ("" for none), old_pin that of the one it replaced."""
+    if not pin:
+        if "admin" in cfg and before.get("pin_ca_file"):
+            # the fleet refuses an admin section without both: keep the last ones, so it still starts
+            cfg["page"]["enrol_url"], cfg["page"]["pin_ca_file"] = before.get("enrol_url"), before["pin_ca_file"]
+            return (f"enrolment by code keeps its last CA, but the front no longer presents a usable one, so new "
+                    f"codes fail at the edge: {why}")
+        kept = (" (the fleet's id and its state are kept, but the fleet will not start without pin_ca_file)"
+                if "admin" in cfg else "")
+        return f"enrolment by code is off{kept}: {why}"
+    cfg.setdefault("admin", {"state": ADMIN_STATE, "fleet": str(uuid.uuid4())})
+    cfg["page"]["enrol_url"], cfg["page"]["pin_ca_file"] = url, PIN_CA
+    said = f"enrolment by code: edges present at {url}; codes pin the front's CA, sha256 {pin}"
+    if old_pin not in ("", pin):
+        said += (f". The pin changed from {old_pin}: codes opened before it fail at the edge; open new slots "
+                 "for those edges")
+    return said
 
 
 def compose(o) -> list:
@@ -77,28 +142,41 @@ def page(o) -> None:
         os.chown(secret, FLEET_UID, FLEET_UID)
         secret.chmod(0o400)
     elif o.engine == "docker":
-        subprocess.run([o.engine, "run", "--rm", "-v", f"{d}:/d", "docker.io/library/busybox:1.37.0", "sh", "-c",
+        subprocess.run([o.engine, "run", "--rm", "-v", f"{d}:/d", BUSYBOX, "sh", "-c",
                         f"chown {FLEET_UID}:{FLEET_UID} /d/page.secret && chmod 0400 /d/page.secret"], check=True)
     else:
         print(f"note: deploy/secrets/fleet/page.secret needs owner {FLEET_UID}, mode 0400 (podman unshare chown, or "
               "run as root)", file=sys.stderr)
     subprocess.run(compose(o) + ["run", "--rm", "--no-deps", "-T", "setup", "fleet", page_url],
                    input=_read_secret(o, d), text=True, check=True)
+    ca_pem, why = issuing_ca((SECRETS / "front.crt").read_text(encoding="utf-8"))
+    pin_file, pin, old_pin = d / "pin-ca.crt", "", ""
+    if ca_pem:   # a certificate, no secret: the fleet's uid reads it as "other", like front-ca.crt
+        old_pin = pin_of(pin_file.read_text(encoding="utf-8")) if pin_file.exists() else ""
+        pin_file.write_text(ca_pem, encoding="utf-8")
+        pin_file.chmod(0o644)
+        pin = pin_of(ca_pem)
+    said = []
+
     def write(cfg):
         # the first officers (0026 points 16, 30): named here, kept across reruns that do not name them
-        officers = o.officers or cfg.get("page", {}).get("officers", [])
+        before = cfg.get("page", {})
+        officers = o.officers or before.get("officers", [])
         cfg["page"] = {
             "listen": f"127.0.0.1:{PAGE_PORT}", "issuer": f"{env('BROKER_URL')}/realms/{env('REALM')}",
             "client_id": "relikey-fleet", "secret_file": "/etc/relikey/fleet/page.secret",
             "redirect_url": f"{page_url}/callback", "role": "fleet-operator",
             "ca_file": "/etc/relikey/fleet/front-ca.crt", "front": "127.0.0.1:8443", "officers": officers}
+        # edges present on the edge-facing name, where the front routes /fleet/v1/enrol (Caddyfile)
+        said[:] = [enrolment(cfg, before, f"https://{env('EDGE_HOST')}{suffix}/fleet/v1/enrol", pin, old_pin, why)]
     save(write)
     sites = SECRETS / "sites"
     sites.mkdir(exist_ok=True)
     (sites / "fleet.caddy").write_text(
         f"# The fleet page (0026 point 13), written by deploy/core/fleet_page.py: only its routes.\n"
         f"https://{host}:8443 {{\n\timport tls_core\n"
-        f"\t@page path / /callback /logout /slots /officer/begin /officer/finish /anchor/begin /anchor/sign\n"
+        f"\t@page path / /callback /logout /slots /officer/begin /officer/finish /anchor/begin /anchor/sign "
+        f"/activate/begin /activate/sign\n"
         f"\thandle @page {{\n"
         f"\t\treverse_proxy 127.0.0.1:{PAGE_PORT} {{\n\t\t\theader_up Host 127.0.0.1:{PAGE_PORT}\n\t\t}}\n\t}}\n"
         f"\thandle {{\n\t\trespond 404\n\t}}\n}}\n", encoding="utf-8")
@@ -107,6 +185,7 @@ def page(o) -> None:
     subprocess.run(compose(o) + ["restart", "front"], check=True)
     subprocess.run(compose(o) + ["restart", "fleet"], check=True)
     print(f"fleet page: {page_url}/ for accounts holding the client role fleet-operator on relikey-fleet")
+    print(*said, file=sys.stdout if pin else sys.stderr)
 
 
 def _read_secret(o, d: Path) -> str:
@@ -115,7 +194,7 @@ def _read_secret(o, d: Path) -> str:
     try:
         return (d / "page.secret").read_text(encoding="utf-8")
     except PermissionError:
-        return subprocess.run([o.engine, "run", "--rm", "-v", f"{d}:/d:ro", "docker.io/library/busybox:1.37.0", "cat",
+        return subprocess.run([o.engine, "run", "--rm", "-v", f"{d}:/d:ro", BUSYBOX, "cat",
                                "/d/page.secret"], capture_output=True, text=True, check=True).stdout
 
 
