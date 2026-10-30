@@ -38,6 +38,7 @@ type Warpgate struct {
 	revoked      map[string]map[string]bool       // user id -> role id: removed, kept as inactive (Warpgate's soft delete)
 	sso          map[string][]warpgate.SSOCredential
 	keys         map[string][]warpgate.PublicKeyCredential
+	other        map[string]map[string][]string // user id -> credential kind (passwords, otp, certificates) -> ids
 	sessions     map[string]*fakeSession
 	targetRoles  map[string][]string // target id -> role ids
 	seq          int
@@ -58,7 +59,7 @@ type fakeSession struct {
 func NewWarpgate(token string, roles map[string][]string) *Warpgate {
 	w := &Warpgate{Token: token, Now: time.Now, users: map[string]warpgate.User{}, roles: map[string]string{},
 		assign: map[string]map[string]*time.Time{}, revoked: map[string]map[string]bool{}, sso: map[string][]warpgate.SSOCredential{},
-		keys:     map[string][]warpgate.PublicKeyCredential{},
+		keys: map[string][]warpgate.PublicKeyCredential{}, other: map[string]map[string][]string{},
 		sessions: map[string]*fakeSession{}, targetRoles: map[string][]string{},
 		params: warpgate.Parameters{AllowOwnCredentialManagement: true, SSHClientAuthPassword: true}}
 	for name, targets := range roles {
@@ -154,6 +155,43 @@ func (w *Warpgate) Keys(username string) []string {
 		if u.Username == username {
 			for _, k := range w.keys[u.ID] {
 				out = append(out, k.OpenSSHPublicKey)
+			}
+		}
+	}
+	slices.Sort(out)
+	return out
+}
+
+// AddCredential gives a user a password, one-time-password seed or certificate (kind: one of
+// warpgate.OtherCredentialKinds) behind the agent's back, as an administrator or the person with self-service would.
+// It returns the credential's id.
+func (w *Warpgate) AddCredential(username, kind string) string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	for id, u := range w.users {
+		if u.Username == username {
+			if w.other[id] == nil {
+				w.other[id] = map[string][]string{}
+			}
+			cid := w.id(kind)
+			w.other[id][kind] = append(w.other[id][kind], cid)
+			return cid
+		}
+	}
+	return ""
+}
+
+// Credentials returns a user's other credentials as "kind/id", by username.
+func (w *Warpgate) Credentials(username string) []string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	var out []string
+	for id, u := range w.users {
+		if u.Username == username {
+			for kind, ids := range w.other[id] {
+				for _, cid := range ids {
+					out = append(out, kind+"/"+cid)
+				}
 			}
 		}
 	}
@@ -259,6 +297,7 @@ func (w *Warpgate) Handler() http.Handler {
 		delete(w.assign, id)
 		delete(w.sso, id)
 		delete(w.keys, id)
+		delete(w.other, id)
 		writeJSON(rw, 204, nil)
 	})
 	h("GET "+wgBase+"/roles", func(rw http.ResponseWriter, r *http.Request) {
@@ -399,6 +438,25 @@ func (w *Warpgate) Handler() http.Handler {
 		w.keys[id] = slices.Delete(w.keys[id], i, i+1)
 		writeJSON(rw, 204, nil)
 	})
+	for _, kind := range warpgate.OtherCredentialKinds {
+		h("GET "+wgBase+"/users/{id}/credentials/"+kind, func(rw http.ResponseWriter, r *http.Request) {
+			out := []warpgate.OtherCredential{}
+			for _, cid := range w.other[r.PathValue("id")][kind] {
+				out = append(out, warpgate.OtherCredential{ID: cid})
+			}
+			writeJSON(rw, 200, out)
+		})
+		h("DELETE "+wgBase+"/users/{id}/credentials/"+kind+"/{cid}", func(rw http.ResponseWriter, r *http.Request) {
+			id, cid := r.PathValue("id"), r.PathValue("cid")
+			i := slices.Index(w.other[id][kind], cid)
+			if i < 0 {
+				writeJSON(rw, 404, nil)
+				return
+			}
+			w.other[id][kind] = slices.Delete(w.other[id][kind], i, i+1)
+			writeJSON(rw, 204, nil)
+		})
+	}
 	h("GET "+wgBase+"/role/{id}/targets", func(rw http.ResponseWriter, r *http.Request) {
 		rid := r.PathValue("id")
 		if _, ok := w.roles[rid]; !ok {

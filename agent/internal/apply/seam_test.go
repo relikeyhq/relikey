@@ -26,6 +26,7 @@ type memBastion struct {
 	grants   map[string]map[string]*time.Time // account id -> role id -> expires
 	ids      map[string][]bastion.Identity
 	keys     map[string][]bastion.Key
+	creds    map[string][]bastion.Credential
 	roles    map[string]string   // role id -> name
 	reach    map[string][]string // role id -> target names
 	sessions map[string]bastion.Session
@@ -34,7 +35,7 @@ type memBastion struct {
 
 func newMem(roles map[string][]string) *memBastion {
 	m := &memBastion{accounts: map[string]bastion.Account{}, grants: map[string]map[string]*time.Time{},
-		ids: map[string][]bastion.Identity{}, keys: map[string][]bastion.Key{}, roles: map[string]string{},
+		ids: map[string][]bastion.Identity{}, keys: map[string][]bastion.Key{}, creds: map[string][]bastion.Credential{}, roles: map[string]string{},
 		reach: map[string][]string{}, sessions: map[string]bastion.Session{}}
 	for name, targets := range roles {
 		m.roles["role-"+name] = name
@@ -168,6 +169,15 @@ func (m *memBastion) AddKey(_ context.Context, acct, label, k string) error {
 
 func (m *memBastion) RemoveKey(_ context.Context, acct, id string) error {
 	m.keys[acct] = slices.DeleteFunc(m.keys[acct], func(k bastion.Key) bool { return k.ID == id })
+	return nil
+}
+
+func (m *memBastion) Credentials(_ context.Context, acct string) ([]bastion.Credential, error) {
+	return slices.Clone(m.creds[acct]), nil
+}
+
+func (m *memBastion) RemoveCredential(_ context.Context, acct string, c bastion.Credential) error {
+	m.creds[acct] = slices.DeleteFunc(m.creds[acct], func(x bastion.Credential) bool { return x == c })
 	return nil
 }
 

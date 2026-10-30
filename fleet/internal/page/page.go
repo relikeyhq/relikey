@@ -279,9 +279,15 @@ func (p *Page) index(w http.ResponseWriter, r *http.Request) {
 		http.StatusFound)
 }
 
+// refuse ends a sign-in: the person sees why and what to do next; the error itself goes to the service's log only.
 func (p *Page) refuse(w http.ResponseWriter, why string, err error) {
+	p.refuseNext(w, why, "Open the fleet page again to start over; if it is refused again, the fleet service's log "+
+		"names the cause for its operator.", err)
+}
+
+func (p *Page) refuseNext(w http.ResponseWriter, why, next string, err error) {
 	p.Log.Warn("fleet page sign-in refused", "why", why, "err", err)
-	http.Error(w, "Sign-in refused: "+why+". Open the fleet page again to start over.", http.StatusForbidden)
+	http.Error(w, "Sign-in refused: "+why+". "+next, http.StatusForbidden)
 }
 
 func (p *Page) callback(w http.ResponseWriter, r *http.Request) {
@@ -340,7 +346,9 @@ func (p *Page) callback(w http.ResponseWriter, r *http.Request) {
 		p.refuse(w, "the ID token was issued to another client", nil)
 		return
 	case !slices.Contains(cl.Resource[p.Cfg.ClientID].Roles, p.Cfg.Role):
-		p.refuse(w, "this account does not hold the role "+p.Cfg.Role+" on the fleet's client", nil)
+		p.refuseNext(w, "this account does not hold the role "+p.Cfg.Role+" on the fleet's client",
+			"An administrator of the core grants it (deploy/core/fleet_page.py --grant <username>); then open the "+
+				"fleet page again.", nil)
 		return
 	}
 	id := random() // a fresh session id: nothing from before the sign-in carries over
