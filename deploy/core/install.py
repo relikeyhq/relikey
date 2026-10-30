@@ -36,6 +36,19 @@ KEYCLERK_UID = 10001
 HOST = re.compile(r"^(?=.{1,253}$)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$")
 
 
+def pinned_busybox(image_file: Path) -> str:
+    """The busybox an image file builds from, with its digest: the helper containers below run that same reference,
+    so a moved tag cannot change what runs with the secrets directory mounted, and Dependabot's update of the image
+    file updates them too."""
+    m = re.search(r"^FROM\s+(\S+/busybox:\S+@sha256:[0-9a-f]{64})", image_file.read_text(encoding="utf-8"), re.M)
+    if not m:
+        sys.exit(f"{image_file}: no busybox base pinned by digest")
+    return m.group(1)
+
+
+BUSYBOX = pinned_busybox(CORE / "Dockerfile.fleet")   # also fleet_page.py's helper
+
+
 CLERK_READS = ("keyclerk-writer.secret", "keyclerk-reader.secret", "relikey-setup.secret", "keyclerk-mgmt.token", "records.key", "records.pub",
                "keyclerk-seed.yaml", "people.json")   # compose.yaml: mounted into containers running as KEYCLERK_UID
 
@@ -72,14 +85,14 @@ def fix_owners(engine: str) -> None:
     todo += [("people.json", f"{KEYCLERK_UID}:{os.getgid()}", "640")]   # the operator reads the first passwords
     todo += [(f, f"0:{os.getgid()}", "640") for f in ("front.crt", "front.key")]
     script = " && ".join(f"chown {owner} /s/{name} && chmod {mode} /s/{name}" for name, owner, mode in todo)
-    subprocess.run([engine, "run", "--rm", "-v", f"{SECRETS}:/s", "docker.io/library/busybox:1.37.0", "sh", "-c", script],
+    subprocess.run([engine, "run", "--rm", "-v", f"{SECRETS}:/s", BUSYBOX, "sh", "-c", script],
                    check=True)
 
 
 def person(spec: str, what: str) -> dict:
     m = re.fullmatch(r"\s*(.+?)\s*<([^<>@\s]+@[^<>@\s]+)>\s*", spec)
     if not m:
-        sys.exit(f"--{what}: give it as \"First Last <e-mail>\"")
+        sys.exit(f"--{what} {spec!r}: no name and e-mail address found; give it as \"First Last <e-mail>\", quoted")
     name, email = m.group(1).split(), m.group(2).lower()
     return {"username": re.sub(r"[^a-z0-9._-]", "-", email.split("@")[0]), "email": email, "first_name": name[0],
             "last_name": " ".join(name[1:]) or name[0], "anchor": f"op:{uuid.uuid4()}",
@@ -179,9 +192,12 @@ def main() -> int:
                  "KeyClerk image)")
     hosts = [h.lower() for h in (o.broker_host, o.desk_host, o.edge_host)]
     if len(set(hosts)) != 3 or not all(HOST.match(h) for h in hosts):
-        sys.exit("give three different DNS names for the broker, the desk and the edge-facing side")
+        sys.exit(f"--broker-host, --desk-host and --edge-host ({', '.join(hosts)}): each needs a DNS name of its "
+                 "own (lower-case, with a dot), as the front tells the three sides apart by name; give three "
+                 "different ones")
     if not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,62}", o.realm) or o.realm == "master":
-        sys.exit("--realm: a lower-case name, not master")
+        sys.exit(f"--realm {o.realm}: lower-case letters, digits and dashes, and not master (the broker's own "
+                 "administration realm); leave it out for the default relikey")
     if bool(o.cert) != bool(o.key):
         sys.exit("give both --cert and --key, or neither for a local CA")
     port = 8443 if o.lab else o.port
@@ -230,7 +246,10 @@ def main() -> int:
         root, officer = person(o.root, "root"), person(o.officer, "officer")
         people = [root, officer] + ([person(o.edge_officer, "edgeofficer")] if o.edge_officer else [])             + [person(p, "person") for p in o.person]
         if len({p["email"] for p in people}) != len(people):
-            sys.exit("the root holder, the security officer, the edge officer and each --person are different people")
+            twice = sorted({p["email"] for p in people if [q["email"] for q in people].count(p["email"]) > 1})
+            sys.exit(f"{', '.join(twice)} given more than once: the root holder, the security officer, the edge "
+                     "officer and each --person are different people, so no one approves their own powers. Give each "
+                     "role a person of its own")
         write("people.json", json.dumps(people, indent=1) + "\n")
         when = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
         # Persons, the catalogue and the groups' carries are records, never desk actions (KeyClerk 0.24.0): a fresh
@@ -281,16 +300,21 @@ def main() -> int:
             v = subprocess.run(["git", "-C", o.keyclerk_src, "-c", f"gpg.ssh.allowedSignersFile={signers}", "tag", "-v", ref],
                                capture_output=True, text=True)
             if v.returncode != 0 or 'Good "git" signature for keyclerk-releases' not in v.stdout + v.stderr:
-                sys.exit(f"KeyClerk {ref}: no good signature from the pinned key ({signers.name}); refusing to build it")
+                sys.exit(f"KeyClerk {ref}: no good signature from the pinned key ({signers.name}); refusing to build "
+                         f"it. Check that {o.keyclerk_src} is a clone of KeyClerk's own repository with its tags "
+                         f"fetched (git fetch --tags), then see why with: git tag -v {ref}")
             commit = subprocess.run(["git", "-C", o.keyclerk_src, "rev-list", "-n", "1", ref],
                                     capture_output=True, text=True).stdout.strip()
             if commit != KEYCLERK_COMMIT:
-                sys.exit(f"KeyClerk {ref} resolves to {commit or 'nothing'}, not the pinned {KEYCLERK_COMMIT}; refusing")
+                sys.exit(f"KeyClerk {ref} resolves to {commit or 'nothing'}, not the pinned {KEYCLERK_COMMIT}; "
+                         "refusing. A moved tag is never built: fetch the tags again from KeyClerk's own repository "
+                         "(git fetch --tags --force), and if it still differs, report it to the ReliKey maintainers")
         archive = subprocess.Popen(["git", "-C", o.keyclerk_src, "archive", "--end-of-options", ref], stdout=subprocess.PIPE)
         # -f names the Containerfile: podman finds it by default, docker only looks for "Dockerfile" (full-stack run)
         subprocess.run([o.engine, "build", "-f", "Containerfile", "-t", image, "-"], stdin=archive.stdout, check=True)
         if archive.wait() != 0:
-            sys.exit(f"git archive {ref} failed in {o.keyclerk_src}")
+            sys.exit(f"git archive {ref} failed in {o.keyclerk_src} (its message is above); check that the ref exists "
+                     "there, then run this installer again: it keeps every secret it wrote")
         if o.keyclerk_ref:
             with open(SECRETS / "core.env", "a", encoding="utf-8") as f:
                 f.write(f"KEYCLERK_IMAGE={image}\n")
@@ -325,7 +349,10 @@ def main() -> int:
         time.sleep(3)
     print("the reconciler's first run, a dry run (nothing written):\n" + (r.stdout or r.stderr).strip())
     if r.returncode != 0:
-        sys.exit("the dry run did not pass: fix that before the reconciler writes the broker")
+        sys.exit("the reconciler's dry run did not pass (its output is above), so it does not start: nothing was "
+                 "written to the broker. Fix what it names, then run this installer again (it keeps every secret it "
+                 f"wrote), or start it by hand once a dry run passes: {' '.join(compose)} up -d --no-recreate "
+                 "reconcile")
     if not o.yes and input("start the reconciler (it applies from now on)? [y/N] ").strip().lower() != "y":
         print(f"not started; when ready: {' '.join(compose)} up -d --no-recreate reconcile")
     else:

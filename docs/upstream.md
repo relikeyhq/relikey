@@ -22,7 +22,7 @@ github.com/vdhome-dev/warpgate (account vdhome-dev).
 | U-11 | Warpgate | Configurable desktop recording frame rate | Busy RDP at ~5 MB/s on small edges | **PR #2784** (4.5x smaller at 5 fps, measured) |
 | U-12 | Warpgate | Bind SSO credentials to the IdP subject, not only the e-mail | E-mail is the identity key today (0010) | **Issue #2787** |
 | U-13 | Warpgate | SSO roles claim revokes role assignments made outside SSO | A roles mapper on the IdP would wipe KeyClerk's leases (0010, lab) | **Issue #2785**, corrected publicly: only the unmapped default; `role_mappings` limits SSO to mapped roles (verified live), so a docs note may be enough |
-| U-14 | Warpgate | End sessions when the role assignment that admitted them expires or is revoked | Leases end sessions without the agent's help (0008 RT-11) | **Issue #2786**, confirmed live; **PR #2789** (2026-10-23): sweep plus revoke hook, same query as admission, ticket sessions untouched; tests pass on the branch, fail on main and under mutation |
+| U-14 | Warpgate | End sessions when the role assignment that admitted them expires or is revoked | Leases end sessions without the agent's help (0008 RT-11) | **Issue #2786**, confirmed live; **PR #2789** (2026-10-23): sweep plus revoke hook, same query as admission, ticket sessions untouched; tests pass on the branch, fail on main and under mutation; released in 0.30.2 |
 | - | Warpgate (housekeeping) | Bump `ctutils` for RUSTSEC-2026-0385 | cargo-deny fails on every PR | **PR #2783**; with #2775 (not ours) cargo-deny is clean |
 
 ## PR plan

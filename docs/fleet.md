@@ -59,6 +59,7 @@ says why; on a core that already has enrolment it keeps the last CA, so the flee
 will fail at the edge until the chain is fixed. If the CA changes, it says the pin changed: codes opened before carry
 the old pin and fail at the edge. The rate cap is the fleet's own, one for the
 whole fleet, and needs no setting.
+`relikey-fleet -version` prints the version, the commit and the Go release, as the agent's `version` does.
 
 ## The fleet page (0026 point 13)
 Operators see the inventory on a page of its own name, signed in at ReliKey's broker; no action on any edge. The page

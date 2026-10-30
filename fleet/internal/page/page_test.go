@@ -198,6 +198,29 @@ func TestSignInsThatMustBeRefused(t *testing.T) {
 	}
 }
 
+// A refused sign-in says why and what completes it (issue 22): a missing role names who grants it and how; any other
+// refusal starts over, and its cause is in the service's log.
+func TestARefusedSignInSaysWhyAndWhatToDoNext(t *testing.T) {
+	for name, c := range map[string]struct {
+		bad  func(c map[string]any)
+		next string
+	}{
+		"no client role": {func(c map[string]any) { c["resource_access"] = map[string]any{} },
+			"An administrator of the core grants it (deploy/core/fleet_page.py --grant <username>)"},
+		"another sign-in's nonce": {func(c map[string]any) { c["nonce"] = "replayed" }, "Open the fleet page again"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			b, _, srv, browser := rig(t)
+			b.claims = c.bad
+			code, body, _ := get(t, browser, srv.URL+"/")
+			if code != http.StatusForbidden || !strings.Contains(body, "Sign-in refused: ") ||
+				!strings.Contains(body, c.next) {
+				t.Fatalf("%d %s", code, body)
+			}
+		})
+	}
+}
+
 func TestACallbackWithoutTheStartingBrowserOrWithAnotherStateIsRefused(t *testing.T) {
 	_, _, srv, browser := rig(t)
 	if code, _, _ := get(t, browser, srv.URL+"/callback?code=c1&state=x"); code != http.StatusForbidden {

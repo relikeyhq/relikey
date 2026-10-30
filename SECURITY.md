@@ -5,13 +5,25 @@ responsibly.
 
 ## Reporting a weakness
 
-Report privately, never in a public issue or pull request:
+Report privately, never in a public issue or pull request, through a private security advisory on this repository:
+https://github.com/relikeyhq/relikey/security/advisories/new
 
-- a private security advisory on this repository (preferred), or
-- the maintainer contact listed on the repository.
+Include what you found, how to reproduce it, and the impact as you see it. We will agree a disclosure timeline with you
+before anything is made public, and credit you if you want it.
 
-Include what you found, how to reproduce it, and the impact as you see it. You will get an acknowledgement; we will
-agree a disclosure timeline with you before anything is made public, and credit you if you want it.
+### Response targets
+
+- We acknowledge a report within 5 working days.
+- For a confirmed issue we give you a fix or a plan with dates within 30 days.
+
+These are targets for a small project, not guarantees; if we need longer we say so and why.
+
+## Supported versions
+
+| Version | Supported |
+|---|---|
+| 0.1.x | yes, only the latest 0.1 patch release gets fixes |
+| older | no |
 
 ## Scope
 

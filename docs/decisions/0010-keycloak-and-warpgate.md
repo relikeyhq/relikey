@@ -31,9 +31,11 @@ into the edge (0005).
    admin-editable only; KeyClerk sets `emailVerified`. Warpgate refuses `email_verified: false` (lab) but trusts a
    missing claim, so the claim stays in the token. Binding to the subject instead is proposed upstream
    (warp-tech/warpgate#2787).
-5. **No back-channel logout from Keycloak to the edge**: Warpgate's endpoint would need Keycloak to connect into the
-   edge (0005). Logout and revocation reach the edge as KeyClerk revocations in the bundle; the agent ends the
-   sessions (0008), until Warpgate does it itself (warp-tech/warpgate#2786).
+5. **No back-channel logout from Keycloak to the edge**: Warpgate 0.30.0 added OpenID Connect back-channel logout (the
+   route `/@warpgate/api/sso/providers/<name>/backchannel-logout`), but using it would need Keycloak to connect into
+   the edge (0005), so the route stays unused. Logout and revocation reach the edge as KeyClerk revocations in the
+   bundle. Since 0.30.2 Warpgate itself ends a session when the role assignment that admitted it is revoked
+   (warp-tech/warpgate#2789); the agent's close (0008) remains as the second line.
 6. **Offline**, Warpgate's SSO is unavailable; sign-in follows decision 0006 (visit leases, phoned unlock, break-glass).
 
 ## Lab results (2026-10-23)

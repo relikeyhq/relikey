@@ -1,0 +1,1 @@
+- docs/maintaining.md: how issues, milestones, pull requests, the required checks, merging and releases work.

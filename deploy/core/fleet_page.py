@@ -35,6 +35,7 @@ PIN_CA = "/etc/relikey/fleet/pin-ca.crt"   # deploy/secrets/fleet/pin-ca.crt, mo
 HOST = re.compile(r"[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+")
 sys.path.insert(0, str(CORE))
 from fleet_edge import save   # noqa: E402  the same locked, atomic write as the known edges
+from install import BUSYBOX   # noqa: E402  the busybox Dockerfile.fleet pins, by digest
 
 
 def env(name: str) -> str:
@@ -141,7 +142,7 @@ def page(o) -> None:
         os.chown(secret, FLEET_UID, FLEET_UID)
         secret.chmod(0o400)
     elif o.engine == "docker":
-        subprocess.run([o.engine, "run", "--rm", "-v", f"{d}:/d", "docker.io/library/busybox:1.37.0", "sh", "-c",
+        subprocess.run([o.engine, "run", "--rm", "-v", f"{d}:/d", BUSYBOX, "sh", "-c",
                         f"chown {FLEET_UID}:{FLEET_UID} /d/page.secret && chmod 0400 /d/page.secret"], check=True)
     else:
         print(f"note: deploy/secrets/fleet/page.secret needs owner {FLEET_UID}, mode 0400 (podman unshare chown, or "
@@ -193,7 +194,7 @@ def _read_secret(o, d: Path) -> str:
     try:
         return (d / "page.secret").read_text(encoding="utf-8")
     except PermissionError:
-        return subprocess.run([o.engine, "run", "--rm", "-v", f"{d}:/d:ro", "docker.io/library/busybox:1.37.0", "cat",
+        return subprocess.run([o.engine, "run", "--rm", "-v", f"{d}:/d:ro", BUSYBOX, "cat",
                                "/d/page.secret"], capture_output=True, text=True, check=True).stdout
 
 
