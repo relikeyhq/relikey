@@ -1,0 +1,65 @@
+# SPDX-License-Identifier: EUPL-1.2
+# The documentation site: docs/ plus the README as the home page. Built in strict mode on every pull request (a broken
+# link fails it) and published from main by .github/workflows/docs.yml.
+site_name: ReliKey
+site_description: A distribution of the access-governance and bastion pieces for legacy systems
+site_url: https://relikeyhq.github.io/relikey/
+repo_url: https://github.com/relikeyhq/relikey
+repo_name: relikeyhq/relikey
+edit_uri: edit/main/docs/
+docs_dir: docs
+site_dir: _site
+strict: true
+validation:
+  omitted_files: info
+  absolute_links: warn
+  unrecognized_links: warn
+  anchors: warn
+
+# docs/README.md is the documentation index for the repository view; on the site the nav is that index.
+exclude_docs: |
+  /README.md
+
+hooks:
+  - docs-site/home.py
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.action.edit
+    - search.suggest
+  palette:
+    - scheme: default
+      media: "(prefers-color-scheme: light)"
+    - scheme: slate
+      media: "(prefers-color-scheme: dark)"
+
+markdown_extensions:
+  - tables
+  - admonition
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Run it:
+      - Installation checklist: installation-checklist.md
+      - Publishing: publishing.md
+  - Understand it:
+      - Architecture: architecture.md
+      - The edge agent: agent.md
+      - The fleet: fleet.md
+      - The KeyClerk edge interface: keyclerk-edge-interface.md
+      - Decisions: decisions/README.md
+  - Look it up:
+      - Reference: reference/README.md
+  - Work on it:
+      - Go engineering: go-engineering.md
+      - Measurements: measurements.md
+      - Component facts: component-facts.md
+      - Warpgate internals: warpgate-internals.md
+      - Upstream work: upstream.md
+      - The Windows port: warpgate-windows-port.md
+      - Prior art: prior-art.md

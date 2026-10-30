@@ -40,6 +40,7 @@ the legacy system that bypasses the bastion.
 
 ## Repository
 - `model/` - components, flows, patterns, contracts and open decisions, as YAML; `tools/check_model.py` checks them.
+- `docs/` - the documentation, published as a site at https://relikeyhq.github.io/relikey/ (`mkdocs.yml`).
 - `docs/decisions/` - decision records; `docs/prior-art.md` - what exists and what ReliKey adds.
 - `agent/` - the edge agent (Go): applies signed leases, decides nothing; `build.py` runs the full gate.
 - `deploy/core/` - the shared core as one composed pod (Caddy in front, Keycloak, KeyClerk, zot); `install.py` stands
