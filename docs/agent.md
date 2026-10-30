@@ -21,6 +21,8 @@ for linux amd64, arm64, armv7). How it is written and built: `docs/go-engineerin
   exists), then remove roles, SSO credentials and every other credential, delete users without leases, then create
   users (stripping Warpgate's default roles), add SSO credentials (provider and e-mail, decision 0010) and roles
   with `expires_at`.
+  Since Warpgate 0.30.2 Warpgate itself ends a session when the role assignment that admitted it is revoked; the agent's
+  close is the second line, and a session already gone counts as closed.
   Since edge protocol 1.3 the bundle carries no address: the agent fetches each live lease's verified address from the
   desk, sealed for that request, and keeps it in memory only. A failed fetch is retried after 15 s; an answer without
   an address is asked again no sooner than a minute later, because the desk can learn the address after the lease went

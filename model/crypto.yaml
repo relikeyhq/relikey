@@ -20,7 +20,7 @@ components:
     tls_client: hybrid
     checked: "agent/internal/httpx: RequireHybrid allows only X25519MLKEM768 on the clerk (F-06) and bastion (F-07) links and refuses a classical peer (hybrid_test.go); the negotiated group is in status.json. Full-stack run 2: status.json reported X25519MLKEM768 on both links, against the deployed front and Warpgate 0.30.0, with hybrid required"
   bastion:
-    version: 0.30.1
+    version: 0.30.2
     tls_server: hybrid
     tls_client: hybrid
     ssh_client: hybrid
@@ -35,6 +35,8 @@ components:
       (mod.rs:743-752); russh 0.63.3 to 0.65.0. Probe 2026-10-26 (full-stack run 6, OpenSSH 10.0p2): the SSH server
       negotiates mlkem768x25519-sha256 by default, curve25519-sha256 when asked, refuses sntrup761x25519-sha512 and
       diffie-hellman-group14-sha1, as on 0.30.0
+      v0.30.2 (2026-10-26, source): rustls 0.23.46 with aws-lc-rs 1.18.2 and russh 0.65.0 as on 0.30.1
+      (Cargo.lock), the SSH client kex list unchanged (mod.rs:743-752); no new probe, no TLS or SSH change in the release
   broker:
     version: 26.8.1
     tls_server: none
