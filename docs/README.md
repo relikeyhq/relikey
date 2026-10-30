@@ -23,4 +23,5 @@ by hand.
 ## Work on it (engineering)
 - [Go engineering](go-engineering.md), [measurements](measurements.md), [component facts](component-facts.md)
 - [Warpgate internals](warpgate-internals.md), [upstream work](upstream.md), [the Windows port](warpgate-windows-port.md)
-- [Prior art](prior-art.md), [publishing](publishing.md)
+- [Prior art](prior-art.md), [publishing](publishing.md), [maintaining](maintaining.md): issues, pull requests,
+  checks, merging and releases

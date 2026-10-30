@@ -82,6 +82,17 @@ func (inv *Inventory) Accept(r fleetproto.Report, now time.Time) error {
 	return inv.save()
 }
 
+// Know adds an edge to the inventory as never reported, if it is not in it yet (an edge enrolled by code).
+func (inv *Inventory) Know(name string) error {
+	inv.mu.Lock()
+	defer inv.mu.Unlock()
+	if inv.edges[name] != nil {
+		return nil
+	}
+	inv.edges[name] = &Edge{Edge: name, State: "unknown", Basis: "self-reported"}
+	return inv.save()
+}
+
 // Transition is an edge whose state changed in Sweep.
 type Transition struct{ Edge, From, To string }
 

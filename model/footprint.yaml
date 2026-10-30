@@ -1,6 +1,11 @@
 # Where the edge must fit (decision 0005). The model check sums the edge components' estimated footprint and refuses
 # a model that does not fit every profile with its headroom, or an edge component that lacks a profile's architecture.
 # Estimates are replaced by measurements (footprint.measured: true) from a soak on real hardware before 1.0.
+#
+# known_gap: a profile the edge is known not to fit, recorded instead of hidden or silently waived. It names the issue,
+# the release that settles it (`until`), the open decision it waits on (`waits_on`) and the edge's memory need when
+# the gap was accepted (`ram_mb`). The check then warns instead of failing, but fails again when the gap lacks any of
+# these, when the decision is no longer open, when the edge grows past `ram_mb`, or when the edge fits again.
 
 headroom: 0.5       # the edge may use at most half of a profile's memory and disk; the host and its own work need the rest
 # recording_store_mb: the local store for recordings the edge cannot deliver yet (decision 0009). Below its free-disk
@@ -14,6 +19,10 @@ profiles:
     disk_mb: 1024
     recording_store_mb: 90       # hundreds of terminal session-minutes; under 20 s of a busy RDP screen
     graphical: false             # RDP/VNC targets do not fit (docs/measurements.md): terminal and LDAP only
+    # Known gap: with the pinned Caddy proxy (about 50 MB measured) the edge needs about 282 MB of the 256 MB budget.
+    # The remedy - tuning Caddy, a smaller proxy, or a revised profile - is chosen in 0.3.0, after measuring on the
+    # reference hardware.
+    known_gap: {issue: 62, until: "0.3.0", waits_on: R-10, ram_mb: 282}
     note: The small end of switch app hosting; x86 switch platforms are covered by the amd64 builds.
 
   - id: router-container

@@ -8,8 +8,13 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json/v2"
+	"encoding/pem"
+	"math/big"
 	"strings"
 	"testing"
 	"time"
@@ -91,9 +96,60 @@ func (w *world) activate(a Activation) ([]Slot, error) {
 	return Activate(rp, w.reg, w.slots, a, st, w.ann.sign(st), t0.Add(2*time.Minute))
 }
 
+// item types the first typed characters of the slot's fingerprint.
 func item(s Slot, typed int, readBy, how string) Item {
 	fp := Fingerprint(s.Key)
-	return Item{Slot: s.ID, Fingerprint: fp, Typed: plain(fp)[len(plain(fp))-typed:], ReadBy: readBy, ReadHow: how}
+	return Item{Slot: s.ID, Fingerprint: fp, Typed: plain(fp)[:typed], ReadBy: readBy, ReadHow: how}
+}
+
+// The typed check carries at least 80 bits (point 24): 16 characters anywhere but the last 16, which carry 76 (the
+// last character carries one bit), so a run ending there needs 17; or the whole fingerprint, spaced as shown.
+func TestTheTypedCheckCarriesEightyBits(t *testing.T) {
+	w := newWorld(t)
+	s, _ := w.present(t, "plant-a", Edge)
+	fp := Fingerprint(s.Key)
+	flat := plain(fp)
+	for name, c := range map[string]struct {
+		typed string
+		ok    bool
+	}{
+		"the first 16":               {flat[:16], true},
+		"16 just before the last":    {flat[len(flat)-17 : len(flat)-1], true},
+		"the last 17":                {flat[len(flat)-17:], true},
+		"the whole, spaced as shown": {strings.ToLower(fp), true},
+		"the last 16 (76 bits)":      {flat[len(flat)-16:], false},
+		"15":                         {flat[:15], false},
+		"16 not from it":             {strings.Repeat("A", 16), false},
+	} {
+		it := Item{Slot: s.ID, Fingerprint: fp, Typed: c.typed, ReadBy: "Joe", ReadHow: "phone"}
+		if _, err := Check(w.slots, Activation{Fleet: "fleet-1", Approver: "ann", Items: []Item{it}}, t0); (err == nil) != c.ok {
+			t.Errorf("%s: %v, want accepted %v", name, err, c.ok)
+		}
+	}
+}
+
+// The code pins the fleet's CA (point 27): a CA certificate gives its sha256; a leaf or anything else is refused.
+func TestTheCodePinsTheCANeverTheLeaf(t *testing.T) {
+	caKey, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	caTmpl := &x509.Certificate{SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "fleet CA"},
+		NotBefore: t0, NotAfter: t0.Add(time.Hour), IsCA: true, BasicConstraintsValid: true, KeyUsage: x509.KeyUsageCertSign}
+	caDER, _ := x509.CreateCertificate(rand.Reader, caTmpl, caTmpl, &caKey.PublicKey, caKey)
+	ca, _ := x509.ParseCertificate(caDER)
+	leafKey, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	leafDER, _ := x509.CreateCertificate(rand.Reader, &x509.Certificate{SerialNumber: big.NewInt(2),
+		Subject: pkix.Name{CommonName: "fleet.example"}, DNSNames: []string{"fleet.example"}, NotBefore: t0,
+		NotAfter: t0.Add(time.Hour), BasicConstraintsValid: true}, ca, &leafKey.PublicKey, caKey)
+	asPEM := func(der []byte) []byte { return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}) }
+	sum := sha256.Sum256(caDER)
+	if got, err := CAPin(asPEM(caDER)); err != nil || got != hex.EncodeToString(sum[:]) {
+		t.Fatalf("the CA: %s, %v; want its sha256", got, err)
+	}
+	for name, in := range map[string][]byte{"the leaf": asPEM(leafDER), "not PEM": []byte("fleet CA"),
+		"PEM, not a certificate": pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: []byte("x")})} {
+		if got, err := CAPin(in); err == nil {
+			t.Errorf("%s: pinned %s", name, got)
+		}
+	}
 }
 
 func TestAnEdgeIsEnrolledByCodeKeyAndOnePasskey(t *testing.T) {
@@ -206,5 +262,37 @@ func TestTheCommitmentAloneDoesNotAdmit(t *testing.T) {
 	p.Secret = "not-the-code"    // ... but sends a secret it does not have
 	if _, err := Accept("fleet-1", s, p, t0); err == nil {
 		t.Fatal("a presentation without the code's secret was taken")
+	}
+}
+
+// The installer (deploy/edge/install.py) and the fleet build the same presentation and fingerprint: one vector,
+// shared with tests/test_edge_enrol.py.
+func TestThePresentationMatchesTheInstallers(t *testing.T) {
+	seed := sha256.Sum256([]byte("vector seed"))
+	c := Code{Fleet: "fleet-1", URL: "https://fleet.example/fleet/v1/enrol", Pin: pin, Anchor: anc, Slot: "slot-1", Secret: "c2VjcmV0"}
+	p := Present(c, ed25519.NewKeyFromSeed(seed[:]))
+	if p.Key != "22a0fb81251d862fee728fa2344f6243bc00776bb0bf8e4d02df31714ed90b2f" ||
+		p.Sig != "8bc7785c29059503fc16ffb0bce3a2bc4aea010546653899e053a5e6a933eb461759f8ce1f9e6bd7c26df6f5cf799444c595f085f5ff04d822ad325eed88c607" {
+		t.Fatalf("the presentation differs from the installer's: %+v", p)
+	}
+	if fp := Fingerprint(p.Key); fp != "RGTV JDH4 4BF5 I5F6 MA7K UN6X G5CQ N4LJ CNJY NFMM NM7F I3HB Q7DQ" {
+		t.Fatalf("the fingerprint differs from the installer's: %s", fp)
+	}
+}
+
+// Refused presentations close a slot: after MaxRefused, even the right secret and key are refused.
+func TestRefusedPresentationsCloseASlot(t *testing.T) {
+	s, c, err := Open("fleet-1", "https://f/e", pin, anc, "plant-a", Edge, "basic", "ann", nil, t0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, priv, _ := ed25519.GenerateKey(rand.Reader)
+	wrong := c
+	wrong.Secret = "guessed"
+	for range MaxRefused {
+		s, _ = Accept("fleet-1", s, Present(wrong, priv), t0)
+	}
+	if _, err := Accept("fleet-1", s, Present(c, priv), t0); err == nil {
+		t.Fatal("the right code was taken after the slot was closed by refusals")
 	}
 }

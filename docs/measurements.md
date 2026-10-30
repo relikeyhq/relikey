@@ -56,7 +56,7 @@ FreeRDP client through Warpgate's RDP listener, RemoteFX, default 1024x768, 60 s
   per-session measure (it also catches writes finishing from the previous session); count the recording file.
 
 ### Not measured
-The filtering proxy (not built), the edge host itself, Warpgate on arm64 and armv7, VNC, Warpgate with HTTP/web
+The proxy under load (idle: below), the edge host itself, Warpgate on arm64 and armv7, VNC, Warpgate with HTTP/web
 sessions. The edge agent: below.
 
 ## 2026-10-25, the edge agent (d4c15f6)
@@ -101,15 +101,30 @@ Not measured: CPU, the armv7 and arm64 binaries on real hardware (qemu only so f
 Nice to have (operator, 2026-10-25; fleet management first): render the status page without templates (about 1.7 MB
 back); rotate the container's stdout (`logging` options in the edge compose file).
 
+## 2026-10, the edge proxy (pinned Caddy, 2.11.7-alpine)
+
+The edge's filtering proxy ships as the pinned Caddy image (`deploy/edge/compose.yaml`, service `front`) rather than
+the minimal purpose-built proxy the model first estimated at 15 MB. A first measurement on amd64:
+
+| | Value |
+|---|---|
+| Resident memory, idle | about 50 MB |
+| Image | 67 MB |
+
+Not measured: the proxy under a session load, arm64 and armv7, real hardware (R-10). The model now carries these
+figures (`model/components.yaml`, proxy).
+
 ## What it changes
 The switch profile allows 256 MB of memory for the edge (512 MB x 0.5). With the measured peaks - Warpgate 85 MB at
-25 sessions, lldap 55 MB under a login burst - plus the estimates for the host (60), agent (30) and proxy (15), the edge
-needs about 247 MB (peaks rounded up): it fits, with about 9 MB to spare, at 25 concurrent terminal sessions during a login burst. More
-sessions, graphical sessions, or a heavier agent will not fit on that profile; the small-board profile (1 GB) has ample
-room.
+25 sessions, lldap 55 MB under a login burst, the pinned Caddy proxy 50 MB idle - plus the estimates for the host (60)
+and agent (30), the edge needs about 282 MB (peaks rounded up): it does **not** fit, by about 26 MB. With the 15 MB
+first estimated for a minimal proxy it fitted with about 9 MB to spare. The model records this as a known gap on the
+switch profile (`model/footprint.yaml`, issue #62) rather than hiding it; the remedy - tuning Caddy, a smaller proxy,
+or a revised profile - is chosen in 0.3.0 after measuring on the reference hardware. The small-board profile (1 GB)
+has ample room.
 
 Graphical sessions settle it: one busy RDP session alone needs about 112 MB for Warpgate, so the switch profile cannot
-carry graphical targets at all (the edge would need about 273 MB of its 256 MB), and its 90 MB recording store holds
+carry graphical targets at all (the edge would need about 308 MB of its 256 MB), and its 90 MB recording store holds
 under 20 seconds of a busy screen. On the small-board profile (512 MB budget) about four busy RDP sessions fit, and its
 2 GB store holds about six minutes of busy-screen recording offline. Online, every busy RDP session needs about 5 MB/s
 of upload to the evidence store. A lower recording frame rate in Warpgate would cut this several-fold (upstream U-11).

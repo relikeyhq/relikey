@@ -62,9 +62,14 @@ func fail(w http.ResponseWriter, status int, why string) {
 	writeJSON(w, status, map[string]string{"error": why})
 }
 
-// ceremony admits a passkey step: a session, on the page's own origin, sending JSON (a form from elsewhere cannot),
-// before the fleet is anchored. It decodes the body into v.
+// ceremony admits a passkey step of the anchor: a session, on the page's own origin, sending JSON (a form from
+// elsewhere cannot), before the fleet is anchored. It decodes the body into v.
 func (p *Page) ceremony(w http.ResponseWriter, r *http.Request, v any) (session, bool) {
+	return p.step(w, r, v, false)
+}
+
+// step is ceremony for either side of the anchor: anchored says which side the step belongs to.
+func (p *Page) step(w http.ResponseWriter, r *http.Request, v any, anchored bool) (session, bool) {
 	s, ok := p.current(r)
 	ct, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	switch {
@@ -74,8 +79,11 @@ func (p *Page) ceremony(w http.ResponseWriter, r *http.Request, v any) (session,
 	case ct != "application/json":
 		fail(w, http.StatusUnsupportedMediaType, "the page sends JSON")
 		return s, false
-	case p.Admin.Anchor() != "":
+	case !anchored && p.Admin.Anchor() != "":
 		fail(w, http.StatusConflict, "the fleet is anchored already: officers change through the registry")
+		return s, false
+	case anchored && p.Admin.Anchor() == "":
+		fail(w, http.StatusConflict, "the fleet has no officers yet: anchor it first")
 		return s, false
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, maxJSON)
@@ -304,12 +312,12 @@ func groups(h string) string {
 	return b.String()
 }
 
-// script runs the two passkey steps. It writes only text (never markup), talks only to this page, and reloads it
-// when a step is done. Allowed by its hash (scriptHash), so no other script can run on the page.
+// script runs the passkey steps: registering, signing the anchor, signing an activation. It writes only text (never
+// markup), talks only to this page, and reloads it when a step is done. Allowed by its hash (scriptHash), so no other script can run on the page.
 const script = `(()=>{
 const dec=s=>Uint8Array.from(atob(s.replace(/-/g,"+").replace(/_/g,"/")),c=>c.charCodeAt(0));
 const enc=b=>btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
-const out=document.getElementById("anchor-msg");
+const out=document.getElementById("anchor-msg")||document.getElementById("activate-msg");
 const say=t=>{if(out)out.textContent=t};
 async function post(path,body){
 const r=await fetch(path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body||{}),credentials:"same-origin",cache:"no-store"});
@@ -335,6 +343,14 @@ o.challenge=dec(o.challenge);
 o.allowCredentials=o.allowCredentials.map(c=>({type:c.type,id:dec(c.id)}));
 const a=await navigator.credentials.get({publicKey:o});
 await post("/anchor/sign",{client_data_json:enc(a.response.clientDataJSON),authenticator_data:enc(a.response.authenticatorData),signature:enc(a.response.signature)})});
+step("activate-sign",async()=>{
+const items=[...document.querySelectorAll("#activate tr[data-slot]")].filter(r=>r.querySelector("[name=admit]").checked).map(r=>({slot:r.dataset.slot,typed:r.querySelector("[name=typed]").value,read_by:r.querySelector("[name=read_by]").value,read_how:r.querySelector("[name=read_how]").value}));
+if(!items.length)throw new Error("select at least one edge to admit");
+const o=await post("/activate/begin",{items});
+o.challenge=dec(o.challenge);
+o.allowCredentials=o.allowCredentials.map(c=>({type:c.type,id:dec(c.id)}));
+const a=await navigator.credentials.get({publicKey:o});
+await post("/activate/sign",{client_data_json:enc(a.response.clientDataJSON),authenticator_data:enc(a.response.authenticatorData),signature:enc(a.response.signature)})});
 })();`
 
 var scriptHash = func() string {

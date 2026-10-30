@@ -4,11 +4,13 @@ package state
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"relikey/agent/internal/kcedge"
+	"relikey/agent/pkg/events"
 )
 
 func rec(serial, ceiling int64, newest string) Record {
@@ -112,4 +114,87 @@ func TestATempFileLeftByACrashIsIgnored(t *testing.T) {
 		t.Fatalf("serial %d, err %v", s2.Get().Floors.Serial, err)
 	}
 	s2.Close()
+}
+
+// AG-14: an unchanged record is not written again, before or after a restart; a change still is.
+func TestAnUnchangedRecordIsNotWrittenAgain(t *testing.T) {
+	dir := t.TempDir()
+	s, _ := Open(dir, true)
+	r := rec(5, 2, "2026-10-23T12:00:00Z")
+	if err := s.Save(r); err != nil {
+		t.Fatal(err)
+	}
+	stamp := func() string {
+		var out string
+		for _, n := range slots {
+			b, _ := os.ReadFile(filepath.Join(dir, n))
+			out += string(b) + "|"
+		}
+		return out
+	}
+	before, gen := stamp(), s.gen
+	for range 20 {
+		if err := s.Save(r); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s.Close()
+	s2, _ := Open(dir, true)
+	defer s2.Close()
+	_ = s2.Save(r)
+	if s2.gen != gen || stamp() != before {
+		t.Fatalf("an unchanged record was written: generation %d -> %d", gen, s2.gen)
+	}
+	r.AppliedSerial = 6
+	if err := s2.Save(r); err != nil || s2.gen != gen+1 || stamp() == before {
+		t.Fatalf("a changed record was not written: generation %d -> %d, %v", gen, s2.gen, err)
+	}
+}
+
+func head(epoch, seq int64) events.Head {
+	return events.Head{Epoch: epoch, Seq: seq, Hash: fmt.Sprintf("%064x", seq)}
+}
+
+// The event chain's head survives a restart, only rises, and falls back to the other slot when the newest is torn.
+func TestTheEventChainHeadSurvivesARestartAndOnlyRises(t *testing.T) {
+	dir := t.TempDir()
+	s, _ := Open(dir, true)
+	if s.Chain() != (events.Head{}) {
+		t.Fatal("a fresh chain head must be zero")
+	}
+	for i := int64(1); i <= 3; i++ {
+		if err := s.SaveChain(head(1, i)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, h := range []events.Head{head(1, 3), head(1, 2), head(0, 4)} {
+		if err := s.SaveChain(h); !errors.Is(err, ErrChainDown) {
+			t.Fatalf("saving %+v over %+v: %v", h, s.Chain(), err)
+		}
+	}
+	s.Close()
+	s2, err := Open(dir, true)
+	if err != nil || s2.Chain() != head(1, 3) {
+		t.Fatalf("head %+v after reopen, err %v", s2.Chain(), err)
+	}
+	if s2.Get().Floors.Serial != 0 {
+		t.Fatal("a chain head changed the floors")
+	}
+	s2.Close()
+	// Slot A holds sequence 3 (generations 1 and 3), slot B sequence 2: tear A, B is read.
+	p := filepath.Join(dir, "chain-a.json")
+	b, _ := os.ReadFile(p)
+	b[len(b)/2] ^= 0x01
+	_ = os.WriteFile(p, b, 0o600)
+	s3, err := Open(dir, true)
+	if err != nil || s3.Chain() != head(1, 2) {
+		t.Fatalf("head %+v with the newest slot torn, err %v", s3.Chain(), err)
+	}
+	s3.Close()
+	for _, n := range chainSlots {
+		_ = os.WriteFile(filepath.Join(dir, n), []byte("{}"), 0o600)
+	}
+	if _, err := Open(dir, true); err == nil {
+		t.Fatal("an unreadable chain head must refuse to start: the sequence would reuse numbers")
+	}
 }
