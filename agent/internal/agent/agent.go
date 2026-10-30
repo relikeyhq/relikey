@@ -16,6 +16,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"maps"
 	"math/rand/v2"
@@ -80,9 +81,9 @@ type Agent struct {
 	// Governed loads the bastion roles only leases grant, read every tick (apply.ParseGoverned); an unmanaged account
 	// holding one is reported, never changed (full-stack run 2, finding 8). Nil leaves unmanaged accounts unchecked.
 	Governed func() (map[string]bool, error)
-	// Emit writes one monitoring event (decision 0025: CloudEvents with OCSF data, the platform's alert-event fields);
-	// nil emits nothing.
-	Emit func(events.Event)
+	// Events receives the monitoring events (decision 0025: CloudEvents with OCSF data, the platform's alert-event
+	// fields), one JSON line per Write, chained and sequenced (point 2; events.Chain); nil emits nothing.
+	Events io.Writer
 	// Fleet receives the edge's signed report every pull interval (decision 0026, ReliKey's own fleet service); nil
 	// sends none. It returns only an error: the fleet service is read-only towards edges (0026 point 9).
 	Fleet interface {
@@ -94,6 +95,8 @@ type Agent struct {
 
 	statusKey []byte    // the status last written, without its per-tick fields (Status.content)
 	statusAt  time.Time // monotonic: when the status files were last written
+
+	chain *events.Chain // over Events, continuing from the head in the state directory
 
 	rogue map[string]string // the unmanaged accounts holding governed roles last reported, and their roles
 	// digest is the content digest of the last bundle pulled (kcedge.ContentDigest): an answer with the same content
@@ -225,6 +228,9 @@ type Status struct {
 	HeapSys    uint64   `json:"heap_sys"`
 	NumGC      uint32   `json:"num_gc"`
 	OpenFDs    int      `json:"open_fds"`
+	// EventChain is the head of the event chain: the last record's epoch, sequence and hash; a verifier holding the
+	// events checks them against it (events.Verify).
+	EventChain *events.Head `json:"event_chain,omitempty"`
 	// Why the last metrics copy to metrics_dir failed (empty when it was written, or none is configured), and how
 	// many copies failed. A failed copy never stops the loop.
 	MetricsDirError    string `json:"metrics_dir_error,omitempty"`
@@ -259,6 +265,9 @@ func (a *Agent) Run(ctx context.Context) error {
 	a.defaults()
 	now := a.Clock.Now()
 	a.st = Status{Version: a.Version, Mode: a.Mode, Edge: a.Pins.Edge, Started: now, Drift: []string{}}
+	if a.Events != nil {
+		a.chain = events.NewChain(a.Events, a.Store.Chain(), a.Store.SaveChain)
+	}
 	a.Log.Info("agent started", "edge", a.Pins.Edge, "mode", a.Mode, "version", a.Version)
 	a.reconcile(ctx)
 	a.pull(ctx)
@@ -665,6 +674,11 @@ func (st Status) content() []byte {
 // writeStatus writes status.json, status.html and metrics.prom when the status changed or the heartbeat is due (or
 // always, with force: the last status before the agent stops).
 func (a *Agent) writeStatus(force bool) {
+	if a.chain != nil {
+		// Before the content key: a new event moves the head, and the status then reports it at once.
+		h := a.chain.Head()
+		a.st.EventChain = &h
+	}
 	key := a.st.content()
 	unchanged := a.statusKey != nil && bytes.Equal(key, a.statusKey)
 	if !force && unchanged && time.Since(a.statusAt) < a.StatusHeartbeat {

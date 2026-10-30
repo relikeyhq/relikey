@@ -5,6 +5,7 @@
 // name's /fleet/ paths to it (model F-27, F-28).
 //
 //	relikey-fleet -config /etc/relikey/fleet.json
+//	relikey-fleet -version
 //
 // fleet.json: {"listen": "127.0.0.1:8093", "state": "/var/lib/relikey-fleet/fleet.json", "silence_seconds": 300,
 // "edges": {"plant-a": "<the edge's enrolment public key, 64 hex>"}}. Without a clerk the known edges come from here;
@@ -25,6 +26,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"strings"
 	"syscall"
 	"time"
@@ -35,6 +37,27 @@ import (
 	"relikey/fleet/internal/fleet"
 	"relikey/fleet/internal/page"
 )
+
+// version is set at release builds (-ldflags "-X main.version=...").
+var version = "dev"
+
+// versionString names the build as the agent's does: version, commit and Go release, so a release's smoke test can
+// check the binary is the tagged one.
+func versionString() string {
+	s := "relikey-fleet " + version
+	if bi, ok := debug.ReadBuildInfo(); ok {
+		for _, kv := range bi.Settings {
+			if kv.Key == "vcs.revision" && len(kv.Value) >= 12 {
+				s += " " + kv.Value[:12]
+			}
+			if kv.Key == "vcs.modified" && kv.Value == "true" {
+				s += "+dirty"
+			}
+		}
+		s += " " + bi.GoVersion
+	}
+	return s
+}
 
 type config struct {
 	Listen         string            `json:"listen"`
@@ -112,7 +135,12 @@ func load(path string) (config, map[string]ed25519.PublicKey, error) {
 
 func main() {
 	path := flag.String("config", "/etc/relikey/fleet.json", "the fleet service's configuration")
+	showVersion := flag.Bool("version", false, "print the version and exit")
 	flag.Parse()
+	if *showVersion {
+		fmt.Println(versionString())
+		return
+	}
 	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	c, keys, err := load(*path)
 	if err != nil {

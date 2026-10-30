@@ -49,6 +49,7 @@ refusals are logged at most once a minute per peer.
 `"admin": {"state": ".../admin.json", "fleet": "<this fleet's id>"}` it keeps the officer registry, the enrolment
 slots and the evidence log in that file, and takes enrolment by code: presentations on the edge-facing name,
 activations on the page.
+`relikey-fleet -version` prints the version, the commit and the Go release, as the agent's `version` does.
 
 ## The fleet page (0026 point 13)
 Operators see the inventory on a page of its own name, signed in at ReliKey's broker; no action on any edge. The page
