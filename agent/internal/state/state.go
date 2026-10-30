@@ -6,8 +6,14 @@
 // Two slots (A/B), each a generation number, a sha256 and the record. A write goes to
 // the slot not holding the newest generation: a temporary file, fsync, rename, fsync of
 // the directory. A torn or reverted write leaves the other slot readable. Floors only
-// rise. Unreadable state fails closed: losing the floors is a reinstall
+// rise. A record equal to the stored one is not written again: edge hardware often boots
+// from flash (AG-14). Unreadable state fails closed: losing the floors is a reinstall
 // (docs/go-engineering.md, State on disk; GE-14, GE-15).
+//
+// The head of the event chain (decision 0025 point 2) is kept the same way in a pair of
+// small slots of its own, written once per event, so an event never rewrites the bundle.
+// Its sequence only rises; unreadable, it fails closed too, since starting the sequence
+// again would reuse numbers.
 package state
 
 import (
@@ -26,6 +32,7 @@ import (
 	"sync"
 
 	"relikey/agent/internal/kcedge"
+	"relikey/agent/pkg/events"
 )
 
 // Record is the state of one edge.
@@ -48,7 +55,13 @@ type slot struct {
 	Body   jsontext.Value `json:"body"`
 }
 
-var slots = [2]string{"state-a.json", "state-b.json"}
+var (
+	slots      = [2]string{"state-a.json", "state-b.json"}
+	chainSlots = [2]string{"chain-a.json", "chain-b.json"}
+)
+
+// maxChainSlot is far above a chain head's size.
+const maxChainSlot = 4 << 10
 
 // maxSlot holds the largest bundle the KeyClerk client accepts (16 MiB) as base64 with room
 // to spare; Save refuses a record larger than this, so nothing written is unloadable.
@@ -61,6 +74,11 @@ type Store struct {
 	gen  int64
 	cur  int // index of the slot holding gen; -1 when empty
 	rec  Record
+	body []byte // rec as stored in slot cur, to tell an unchanged record (AG-14)
+	// The event chain's head, in its own slots.
+	chainGen int64
+	chainCur int
+	chain    events.Head
 	// unlock releases the exclusive lock: two agents on one directory would interleave
 	// generations and could lower the floors (AG-12).
 	unlock func()
@@ -93,7 +111,7 @@ func Open(dir string, lab bool) (*Store, error) {
 		root.Close()
 		return nil, fmt.Errorf("state directory %s: %w", dir, err)
 	}
-	s := &Store{root: root, cur: -1, unlock: unlock}
+	s := &Store{root: root, cur: -1, chainCur: -1, unlock: unlock}
 	if err := s.load(); err != nil {
 		unlock()
 		root.Close()
@@ -116,13 +134,27 @@ func (s *Store) Get() Record {
 }
 
 func (s *Store) load() error {
-	present, valid := 0, 0
-	for i, name := range slots {
-		b, err := s.read(name)
+	if present, valid := loadPair(s, slots, maxSlot, &s.gen, &s.cur, &s.rec, &s.body); present && !valid {
+		return errors.New("the edge state is unreadable in both slots: refusing to start without floors " +
+			"(restore the state directory from a backup, or re-enrol the edge)")
+	}
+	if present, valid := loadPair(s, chainSlots, maxChainSlot, &s.chainGen, &s.chainCur, &s.chain, nil); present && !valid {
+		return errors.New("the event chain head is unreadable in both slots: refusing to start, since the event " +
+			"sequence would start again and reuse numbers (restore the state directory from a backup; or remove " +
+			"chain-a.json and chain-b.json to start a new chain, which a verifier then sees as a break)")
+	}
+	return nil
+}
+
+// loadPair reads the newest valid slot of a pair into v, with its generation and index, and its body as stored into
+// raw when raw is not nil; it says whether either slot exists and whether either is valid.
+func loadPair[T any](s *Store, pair [2]string, limit int64, gen *int64, cur *int, v *T, raw *[]byte) (present, valid bool) {
+	for i, name := range pair {
+		b, err := s.read(name, limit)
 		if errors.Is(err, fs.ErrNotExist) {
 			continue
 		}
-		present++
+		present = true
 		if err != nil {
 			continue
 		}
@@ -134,30 +166,29 @@ func (s *Store) load() error {
 		if hex.EncodeToString(sum[:]) != sl.SHA256 {
 			continue
 		}
-		var r Record
+		var r T
 		if json.Unmarshal(sl.Body, &r) != nil {
 			continue
 		}
-		valid++
-		if s.cur == -1 || sl.Gen > s.gen {
-			s.gen, s.cur, s.rec = sl.Gen, i, r
+		valid = true
+		if *cur == -1 || sl.Gen > *gen {
+			*gen, *cur, *v = sl.Gen, i, r
+			if raw != nil {
+				*raw = sl.Body
+			}
 		}
 	}
-	if present > 0 && valid == 0 {
-		return errors.New("the edge state is unreadable in both slots: refusing to start without floors " +
-			"(restore the state directory from a backup, or re-enrol the edge)")
-	}
-	return nil
+	return present, valid
 }
 
-func (s *Store) read(name string) ([]byte, error) {
+func (s *Store) read(name string, limit int64) ([]byte, error) {
 	f, err := s.root.Open(name)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
-	b, err := io.ReadAll(io.LimitReader(f, maxSlot+1))
-	if err == nil && len(b) > maxSlot {
+	b, err := io.ReadAll(io.LimitReader(f, limit+1))
+	if err == nil && int64(len(b)) > limit {
 		err = errors.New("state slot too large")
 	}
 	return b, err
@@ -166,7 +197,8 @@ func (s *Store) read(name string) ([]byte, error) {
 // ErrFloorDown is returned when a write would lower a floor.
 var ErrFloorDown = errors.New("a floor would go down")
 
-// Save writes r as the next generation. It refuses to lower any floor.
+// Save writes r as the next generation, unless r equals the stored record. It refuses to
+// lower any floor.
 func (s *Store) Save(r Record) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -179,6 +211,9 @@ func (s *Store) Save(r Record) error {
 	body, err := json.Marshal(r)
 	if err != nil {
 		return err
+	}
+	if s.cur != -1 && bytes.Equal(body, s.body) {
+		return nil // unchanged: a rewrite would only wear the flash (AG-14)
 	}
 	sum := sha256.Sum256(body)
 	out, err := json.Marshal(slot{Gen: s.gen + 1, SHA256: hex.EncodeToString(sum[:]), Body: body})
@@ -197,7 +232,7 @@ func (s *Store) Save(r Record) error {
 		// re-read from disk on the next start.
 		return fmt.Errorf("writing the edge state: %w", err)
 	}
-	s.gen, s.cur, s.rec = s.gen+1, next, r
+	s.gen, s.cur, s.rec, s.body = s.gen+1, next, r, body
 	return nil
 }
 
@@ -230,6 +265,44 @@ func (s *Store) write(name string, b []byte) error {
 	}
 	defer d.Close()
 	return d.Sync()
+}
+
+// Chain returns the stored head of the event chain (zero before the first event).
+func (s *Store) Chain() events.Head {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.chain
+}
+
+// ErrChainDown is returned when a head would not move the sequence up: a number would be used twice.
+var ErrChainDown = errors.New("the event sequence would not rise")
+
+// SaveChain stores h as the event chain's head, in the slot not holding the newest generation. The sequence must
+// rise and the epoch must not fall.
+func (s *Store) SaveChain(h events.Head) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if h.Seq <= s.chain.Seq || h.Epoch < s.chain.Epoch {
+		return fmt.Errorf("%w: sequence %d->%d, epoch %d->%d", ErrChainDown, s.chain.Seq, h.Seq, s.chain.Epoch, h.Epoch)
+	}
+	body, err := json.Marshal(h)
+	if err != nil {
+		return err
+	}
+	sum := sha256.Sum256(body)
+	out, err := json.Marshal(slot{Gen: s.chainGen + 1, SHA256: hex.EncodeToString(sum[:]), Body: body})
+	if err != nil {
+		return err
+	}
+	next := 0
+	if s.chainCur == 0 {
+		next = 1
+	}
+	if err := s.write(chainSlots[next], out); err != nil {
+		return fmt.Errorf("writing the event chain head: %w", err)
+	}
+	s.chainGen, s.chainCur, s.chain = s.chainGen+1, next, h
+	return nil
 }
 
 var moduleName = regexp.MustCompile(`^[0-9a-f]{64}$`)

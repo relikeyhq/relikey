@@ -2,6 +2,7 @@
 
 - Status: accepted (operator, 2026-10-25), draft 2 after its red team, on the operator's condition that KeyClerk 0027
   take the red team in (2fa2e25, 4205d60). Nothing built yet.
+- Build state (2026-10-29): the line above was true when accepted; what is built since is in "Build state" below.
 - Date: 2026-10-25
 - Builds on: 0005 (a small edge and a shared core), 0006 (working without a network), 0013 (the witness on site, the
   break-glass promotion), 0021 (no telemetry relay), 0023 (role seams), 0025 (the trust sensor and its evidence log);
@@ -118,7 +119,8 @@ administrator.
 - A relay's backfill is trusted only for records the edge signed whose heads chain to the last witnessed head; what a
   relay alone witnessed is advisory until the parent witnesses it again. Until the evidence log (C-12, C-13) exists,
   backfill is unverified.
-- Not built: the fleet service, the relay, signed releases and staged rollout, enrolment-key rotation on the agent.
+- Not built (when accepted): the fleet service, the relay, signed releases and staged rollout, enrolment-key rotation
+  on the agent. Since then the fleet service is built; see "Build state".
 
 ## Amendment, 2026-10-25 (operator, decide loop on fleet administration and enrolment)
 The operator: everything is done through the admin GUI and nobody runs a script; the fleet updates its edges; edges
@@ -162,6 +164,10 @@ Straight tightenings, taken in:
     checked by a party other than the fleet server as well: the edge for anything that changes what it runs, the parent
     fleet for a child's roster, the clerk for its roster. The fleet stores and forwards statements. A statement no one
     else checks grants nothing beyond the fleet's own display. (Points 14-17 read with this; TUF: the client checks.)
+    Note, 2026-10-28 (operator, for release 0.2.0): an activation is checked by the fleet alone for now. It changes
+    only the fleet's display and which reports the fleet accepts, never what an edge runs; the signed activation is in
+    the evidence log, where an auditor can verify it again. A second live checker, the clerk checking its roster,
+    follows with the end-to-end work (#23).
 21. **A passkey signs a bound statement, not a page.** The challenge is H("relikey-fleet-stmt-v1" || the canonical
     statement), and the statement names the fleet id, the registry version, an expiry and a nonce. The checker
     requires type webauthn.get, the exact origin of FLEET_HOST, the rpId of a statement credential registered
@@ -224,7 +230,17 @@ Let the clerk hold the fleet view (KeyClerk's first proposal): one store, no sec
 would then offer no fleet management without KeyClerk, against the rule that any clerk is a stand-in; and device
 facts would drift into the governance store.
 
+## Build state (2026-10-29)
+- Built: the fleet service `relikey-fleet` (its own Go module `fleet/`: signed edge reports, the inventory and the
+  silence alarm, point 1's self-reported label), the fleet page (point 13), the anchor ceremony (points 16, 21, 30), and
+  the officer registry and enrolment building blocks (points 14 to 33). Described in `docs/fleet.md`.
+- Not built: signed releases and the enforced minimum release (slice 3), staged rollout (slice 4) and the site relay
+  (slice 6), tracked in #33; enrolment-key rotation (slice 5), tracked in #26; a clerk's governance facts.
+
 ## Changelog
+- 2026-10-29: the build state recorded (#86); the decision unchanged.
+- 2026-10-28: note on point 20: for 0.2.0 the fleet alone checks an activation (display and report intake only,
+  re-verifiable from the evidence log); the clerk as a second checker follows (#23).
 - 2026-10-25: points 14-33 accepted (operator), with one tightening: a relay or site fleet is admitted only with the
   approver reading its fingerprint themselves.
 - 2026-10-25: round 2 (points 28-33): the director signed, expiring, one release back free; registry rules with

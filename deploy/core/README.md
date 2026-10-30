@@ -34,7 +34,8 @@ install.py:
    secret it finds there, so it can run again: `core.env` (the names and URLs compose reads), the database password,
    the broker's bootstrap admin, KeyClerk's writer and reader client secrets, the records key (and its public half),
    the first people and the desk's first records (a root holder appointed by an officer, nothing granted);
-2. without `--cert`/`--key`, makes a local CA (`front-ca.crt`) and a leaf for the three names and `localhost`;
+2. without `--cert`/`--key`, makes a local CA (`front-ca.crt`) and a leaf for the three names and `localhost`
+   (`front.crt` holds the leaf followed by the CA, so the front presents the CA that enrolment codes pin);
 3. builds `localhost/keyclerk:0.26.3` from the tag, starts the front, the database and the broker, and sets up the
    realm with `realm.py`. That sets SCIM on, e-mail editable by admins only, an admin-only `anchor` attribute behind
    SCIM `externalId`, the writer (group membership only, fine-grained permissions) and the reader, the desk's public
@@ -62,6 +63,14 @@ Then compose runs the core as usual:
   vendor-link`, `realm.py passkey`) is done by your permanent admin in the broker's admin console, through the SSH
   tunnel. A core installed before the setup client existed: run `realm.py setup-client` once, while the bootstrap
   admin is still there.
+- Enrolment by code (docs/fleet.md): with `--fleet-host` the installer also writes fleet.json's `admin` section once
+  (kept on later runs, so the fleet keeps its id) and the page's `enrol_url` (the edge-facing name) and `pin_ca_file`
+  (`deploy/secrets/fleet/pin-ca.crt`, the CA that issued the front's certificate, whose sha256 the codes pin), and
+  prints the pin. The named officers then register their passkeys and
+  sign the anchor on the fleet page; after that an operator opens a slot there and carries its code to the edge. With
+  `--cert`, the file must hold the certificate followed by its issuing CA, or enrolment stays off and the installer
+  says so; fix the file and run `python deploy/core/fleet_page.py --host <name>` again. An edge whose Python is older
+  than 3.13 cannot check a pinned CA: it needs 3.13 or later to enrol.
 - The KeyClerk configuration is `deploy/core/keyclerk.yaml`, a starting point from KeyClerk's neutral configuration,
   valid against its schema. A deployment keeps its own in its own repository and sets `KEYCLERK_CONFIG=<path>` in
   `core.env`.

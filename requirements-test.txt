@@ -1,4 +1,4 @@
-# Hash-locked (CI installs with --require-hashes); regenerate: uv pip compile --generate-hashes --python-version 3.12
+# Hash-locked (CI installs with --require-hashes); regenerate: uv pip compile --generate-hashes --python-version 3.13
 # --python-platform x86_64-manylinux_2_28 from the package list in this header: pyyaml cryptography pytest bcrypt hypothesis
 bcrypt==5.0.0 \
     --hash=sha256:046ad6db88edb3c5ece4369af997938fb1c19d6a699b9c1b27b0db432faae4c4 \

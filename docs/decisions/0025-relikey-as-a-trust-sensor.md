@@ -1,8 +1,8 @@
 # 0025: ReliKey as a trust sensor: OCSF events, an evidence log, a downgrade feed and FTEF evidence
 
 - Status: accepted (operator, decide loop 2026-10-25), draft 3 after two red-team passes
-  (a review record kept with the maintainer). Points 1 and 4 built and proven on full-stack run 3; points 2, 3 and 5
-  are work items.
+  (a review record kept with the maintainer). Points 1 and 4 built and proven on full-stack run 3; point 2 is built
+  in part (sequence and hash chain); points 3 and 5 are work items.
 - Date: 2026-10-25
 - Builds on: 0001 points 4 and 5 (no deployment named; ReliKey decides nothing), 0005 (nothing dials the edge), 0009 M1
   (evidence offline), 0022 A4 (the evidence chain), contract C-12; KeyClerk's monitoring shape, its OCSF decision 0018
@@ -55,6 +55,11 @@ standard forms and its "down fast" reaches the seam quickly.
      for revoke, cut, refusal and end records, a "gap" record replaces silent loss, and a full buffer never stops a
      removal, a session cut or break-glass;
    - *two tiers:* a local detail log under its own retention, and the shipped records carrying codes (point 7).
+
+   *Built 2026-10-28 (in part):* the sequence number and id on every record, and a hash chain: each record names the
+   sha256 of the line before it, and the head is kept durably in the agent's state before its line is written. A
+   verifier holding a head detects a removed, reordered or altered record (`docs/agent.md`). Not yet built: the
+   forward-secure signing, the heartbeat head and the core's witness, the epoch link, C-13 and the buffer.
 3. **Signals: the existing ones, and only bad news counts without attestation.** ReliKey feeds the adaptive policy's
    `environment` signal (edge cut off, clock set back, bundle no longer verifying) and `behaviour` signal (attempts
    outside a lease, refused approvals, cut sessions). Per-person events stay behaviour signals. ReliKey is listed in the
@@ -107,8 +112,9 @@ standard forms and its "down fast" reaches the seam quickly.
 ## Consequences
 - Any SIEM, risk engine or registry can read ReliKey (OCSF, Shared Signals with Security Event Tokens, FTEF,
   Prometheus); no consumer is privileged.
-- Until the evidence log exists, events are neither chained nor sequenced, and they name bastion accounts; they stay in
-  the organisation's own store meanwhile.
+- Until the rest of the evidence log exists, events are sequenced and hash-chained but not signed or witnessed, so a
+  chain alone shows tampering only to a verifier that holds a head; they also name bastion accounts, and stay in the
+  organisation's own store meanwhile.
 - A signed chain on the edge is something PAM products' audit streams do not offer (they send events or syslog);
   that is the sensor's difference, and its cost is the forward-secure key handling.
 
@@ -123,6 +129,7 @@ exist to avoid.
   exact bytes, a durable sequence, a signed acknowledgement, a reserved tail and two tiers of detail; point 3 regains
   the omission cross-checks; point 7 says what change events name. Code fixed: only a verified bundle counts as a
   change for the long-poll, "held" needs half the wait, the refusal event carries a code.
+- 2026-10-28: point 2 built in part: event sequence numbers and a hash chain on the edge.
 - 2026-10-25: point 4 built (the long-poll, KeyClerk 0026).
 - 2026-10-25: draft 2 after the review (amendments 1 to 16); point 1 built.
 - 2026-10-25: proposed (decide loop on ReliKey as a trust sensor).

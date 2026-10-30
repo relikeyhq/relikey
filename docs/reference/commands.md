@@ -45,7 +45,9 @@ broker's realm and the desk's first records.
     python deploy/core/install.py --broker-host id.example --desk-host desk.example --edge-host edge.example         --root "Root Holder <root@example>" --officer "Officer Name <officer@example>"         --keyclerk-src ../keyclerk [--cert front.crt --key front.key] [--engine podman] [--lab]
 
 Writes deploy/secrets/ (git-ignored; files 0600, those KeyClerk reads owned by its uid 10001), once: running it again
-keeps every secret it finds there. Without --cert and --key it makes a local CA and a leaf for the three names.
+keeps every secret it finds there. Without --cert and --key it makes a local CA and a leaf for the three names
+(front.crt holds the leaf, then the CA). With --fleet-host it also gives the fleet its page and enrolment by code
+(fleet_page.py): fleet.json's admin section, once, and the page's enrol_url and pin_ca_file (the CA after the leaf).
 Builds KeyClerk from its tag with KeyClerk's own Containerfile, starts the broker, sets up the realm (realm.py), then
 starts the rest and prints what an edge's install.py needs: the desk's certificate pin (or the CA) and its bundle key.
 
@@ -81,7 +83,8 @@ options:
   --keyclerk-ref KEYCLERK_REF
                         lab only (with --lab): build KeyClerk from this git ref instead of the pinned tag, tagged
                         localhost/keyclerk:lab-<ref>, to try an unreleased KeyClerk
-  --cert CERT           the organisation's certificate (PEM, chain) for the three names
+  --cert CERT           the organisation's certificate for the three names (PEM): the certificate, then the CA that
+                        issued it, which enrolment codes pin
   --key KEY             its private key (PEM)
   --port PORT           the port people and edges reach the front on
   --engine ENGINE
@@ -118,7 +121,7 @@ usage: install.py [-h] --edge EDGE --desk DESK [--desk-ca DESK_CA] [--desk-pin D
                   --officer-key OFFICER_KEY [--sso-provider SSO_PROVIDER] [--engine ENGINE]
                   [--enrolment-seed-file ENROLMENT_SEED_FILE] [--re-key] [--sso-issuer SSO_ISSUER]
                   [--sso-secret-file SSO_SECRET_FILE] [--sso-client SSO_CLIENT] [--sso-ca SSO_CA]
-                  [--ca-bundle CA_BUNDLE] [--warpgate-url WARPGATE_URL] [--lab]
+                  [--ca-bundle CA_BUNDLE] [--warpgate-url WARPGATE_URL] [--enrol-code-file ENROL_CODE_FILE] [--lab]
 
 Prepare a ReliKey edge pod: secrets, the enrolment key, Warpgate's first setup and the agent's configuration.
 
@@ -134,6 +137,14 @@ identity provider sends, and Warpgate creates no users (the agent provisions the
 for a broker behind the core's local CA. SSL_CERT_FILE is process-wide in Warpgate (its rustls native roots, OpenSSL
 for RDP, the S3 client for recordings), so it names a bundle of the public roots plus that CA, never the CA alone:
 the public roots come from --ca-bundle, or certifi, or the host's bundle.
+
+With --enrol-code-file (decision 0026 point 15), the edge also enrols into its fleet: the file holds the one-time code
+from the fleet page (carried as a QR code or on a USB stick, never typed, never on the command line). The installer
+presents this edge's enrolment key with proof of the code's secret, over TLS that trusts only the fleet's CA the
+code pins (this needs Python 3.13 or later), and prints the key's fingerprint for whoever reads it to the approving
+officer. Nothing is admitted until an officer approves with their passkey. To present again for an installed edge (the fleet was unreachable, say):
+
+    python deploy/edge/install.py enrol --code-file <the code's file>
 
 options:
   -h, --help            show this help message and exit
@@ -161,6 +172,9 @@ options:
   --warpgate-url WARPGATE_URL
                         the URL people reach this edge's Warpgate on, exactly as given to the core's add_edge.py: its
                         host becomes Warpgate's external_host (sign-in return URL, cookie domain)
+  --enrol-code-file ENROL_CODE_FILE
+                        the fleet's one-time enrolment code, in a file (QR or USB stick, never typed): the edge also
+                        presents its key to its fleet (decision 0026)
   --lab                 the pod on the host network (compose.lab.yaml), to reach a core installed with --lab on the
                         same box. Never in production
 ```

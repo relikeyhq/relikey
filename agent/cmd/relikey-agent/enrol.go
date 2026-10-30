@@ -29,9 +29,16 @@ func enrolmentKey(path string) (ed25519.PrivateKey, error) {
 	}
 	seed, err := hex.DecodeString(seedHex)
 	if err != nil || len(seed) != ed25519.SeedSize {
-		return nil, fmt.Errorf("%s: an Ed25519 seed is 64 hex characters", path)
+		return nil, badSeed(path)
 	}
 	return ed25519.NewKeyFromSeed(seed), nil
+}
+
+// badSeed says why an enrolment key file is refused and what completes the task: the key edges and the desk know
+// is restored, never replaced in passing.
+func badSeed(path string) error {
+	return fmt.Errorf("%s: not an Ed25519 seed of 64 hex characters, so the agent cannot sign as this edge; restore "+
+		"the enrolment key from the edge's backup (a new key needs the edge enrolled again at the desk)", path)
 }
 
 func readStatement(path string) (kcedge.MultiSigned, kcedge.Object, error) {
@@ -93,7 +100,7 @@ func cosign(args []string) error {
 	unlockFile := fs.String("unlock-key", "", "this node's software unlock key file (optional: checks the statement names it)")
 	_ = fs.Parse(args)
 	if *in == "" || *out == "" || *keyFile == "" {
-		return errors.New("cosign -in STATEMENT -out FILE -key ENROLMENT_KEY [-unlock-key FILE]")
+		return errors.New("usage: relikey-agent cosign -in STATEMENT -out FILE -key ENROLMENT_KEY [-unlock-key FILE]")
 	}
 	key, err := enrolmentKey(*keyFile)
 	if err != nil {
@@ -112,7 +119,8 @@ func cosign(args []string) error {
 		}
 	}
 	if mine == nil {
-		return fmt.Errorf("the statement does not name this node's enrolment key %s: not signed", pub)
+		return fmt.Errorf("the statement does not name this node's enrolment key %s: not signed. Check that -key is "+
+			"this node's enrolment key, or ask the officer for the statement that names it", pub)
 	}
 	if *unlockFile != "" {
 		uk, err := unlockKey(*unlockFile)
@@ -120,7 +128,8 @@ func cosign(args []string) error {
 			return err
 		}
 		if mine["unlock_key"] != kcedge.UnlockPublicString(uk) {
-			return errors.New("the statement names another unlock key for this node: not signed")
+			return errors.New("the statement names another unlock key for this node: not signed. Check that " +
+				"-unlock-key is the one made for this node, or ask the officer for a statement that names it")
 		}
 	}
 	signed, err := kcedge.Cosign(m, key)
@@ -157,7 +166,7 @@ func unlockKeygen(args []string) error {
 	out := fs.String("out", "", "file for the new unlock key (must not exist)")
 	_ = fs.Parse(args)
 	if *out == "" {
-		return errors.New("unlock-keygen -out FILE")
+		return errors.New("usage: relikey-agent unlock-keygen -out FILE")
 	}
 	k, err := ecdh.P256().GenerateKey(rand.Reader)
 	if err != nil {

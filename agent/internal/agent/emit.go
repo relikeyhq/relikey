@@ -29,31 +29,34 @@ var actionEvents = map[apply.Kind]struct {
 	class    int
 	activity int
 }{
-	apply.CreateUser:   {"relikey.account.created.v1", ocsfAccountChange, 1},
-	apply.DeleteUser:   {"relikey.account.deleted.v1", ocsfAccountChange, 6},
-	apply.AddRole:      {"relikey.account.role_granted.v1", ocsfUserAccess, 1},
-	apply.RemoveRole:   {"relikey.account.role_revoked.v1", ocsfUserAccess, 2},
-	apply.SetExpiry:    {"relikey.account.role_extended.v1", ocsfUserAccess, 99},
-	apply.AddSSO:       {"relikey.account.sso_bound.v1", ocsfAccountChange, 99},
-	apply.DeleteSSO:    {"relikey.account.sso_unbound.v1", ocsfAccountChange, 99},
-	apply.AddKey:       {"relikey.account.key_added.v1", ocsfAccountChange, 99},
-	apply.DeleteKey:    {"relikey.account.key_removed.v1", ocsfAccountChange, 99},
-	apply.CloseSession: {"relikey.session.closed.v1", ocsfAuthentication, 2},
+	apply.CreateUser:       {"relikey.account.created.v1", ocsfAccountChange, 1},
+	apply.DeleteUser:       {"relikey.account.deleted.v1", ocsfAccountChange, 6},
+	apply.AddRole:          {"relikey.account.role_granted.v1", ocsfUserAccess, 1},
+	apply.RemoveRole:       {"relikey.account.role_revoked.v1", ocsfUserAccess, 2},
+	apply.SetExpiry:        {"relikey.account.role_extended.v1", ocsfUserAccess, 99},
+	apply.AddSSO:           {"relikey.account.sso_bound.v1", ocsfAccountChange, 99},
+	apply.DeleteSSO:        {"relikey.account.sso_unbound.v1", ocsfAccountChange, 99},
+	apply.AddKey:           {"relikey.account.key_added.v1", ocsfAccountChange, 99},
+	apply.DeleteKey:        {"relikey.account.key_removed.v1", ocsfAccountChange, 99},
+	apply.DeleteCredential: {"relikey.account.credential_removed.v1", ocsfAccountChange, 99},
+	apply.CloseSession:     {"relikey.session.closed.v1", ocsfAuthentication, 2},
 }
 
 func (a *Agent) account(name string) string { return "account:" + a.Pins.Edge + "/" + name }
 
-// emit builds and writes one event; a malformed one is a bug, logged, never written.
+// emit builds and writes one event as the next record of the chain; a malformed one is a bug, logged, never
+// written. An event whose chain head cannot be stored is not written either, and the log says which.
 func (a *Agent) emit(typ, subject, outcome, severity, reason string, ocsf map[string]any) {
-	if a.Emit == nil {
+	if a.chain == nil {
 		return
 	}
 	ev, err := events.New(a.Pins.Edge, typ, subject, outcome, severity, reason, a.Clock.Now(), ocsf)
-	if err != nil {
-		a.Log.Error("event not emitted", "err", err)
-		return
+	if err == nil {
+		err = a.chain.Emit(ev)
 	}
-	a.Emit(ev)
+	if err != nil {
+		a.Log.Error("event not emitted", "type", typ, "subject", subject, "err", err)
+	}
 }
 
 func ocsfClass(class int) (string, int) {

@@ -28,6 +28,7 @@ import (
 	"relikey/agent/internal/clock"
 	"relikey/agent/internal/fakes"
 	"relikey/agent/internal/httpx"
+	"relikey/agent/internal/kcedge"
 	"relikey/agent/internal/keyclerk"
 	"relikey/agent/internal/state"
 	"relikey/agent/internal/warpgate"
@@ -39,6 +40,7 @@ type rig struct {
 	tune   func(*Agent) // changes the agent before it runs
 	mu     sync.Mutex
 	events []events.Event
+	lines  [][]byte // the event lines as written
 	t      *testing.T
 	kc     *fakes.KeyClerk
 	wg     *fakes.Warpgate
@@ -56,7 +58,16 @@ type rig struct {
 
 func newRig(t *testing.T, mode Mode) *rig {
 	t.Helper()
-	r := &rig{t: t, dir: t.TempDir(), mode: mode, enrol: fakes.Key(9)}
+	r := newRigOff(t, mode, nil)
+	r.start()
+	t.Cleanup(r.halt)
+	return r
+}
+
+// newRigOff is a rig whose agent does not run yet: start runs it, or a test builds it and drives it alone.
+func newRigOff(t *testing.T, mode Mode, tune func(*Agent)) *rig {
+	t.Helper()
+	r := &rig{t: t, dir: t.TempDir(), mode: mode, enrol: fakes.Key(9), tune: tune}
 	r.kc = fakes.NewKeyClerk("edge-a", r.enrol.Public().(ed25519.PublicKey), []string{"idp:ann"}, []string{"plc"})
 	r.wg = fakes.NewWarpgate("tok", map[string][]string{"plc-operator": {"plc"}})
 	kcSrv, kcURL, kcPin := r.kc.Serve()
@@ -64,12 +75,19 @@ func newRig(t *testing.T, mode Mode) *rig {
 	t.Cleanup(kcSrv.Close)
 	t.Cleanup(wgSrv.Close)
 	r.kcURL, r.kcPin, r.wgURL, r.wgPin = kcURL, kcPin, wgURL, wgPin
-	r.start()
-	t.Cleanup(r.halt)
 	return r
 }
 
 func (r *rig) start() {
+	a := r.agent()
+	ctx, cancel := context.WithCancel(context.Background())
+	r.stop, r.done = cancel, make(chan struct{})
+	go func() { defer close(r.done); _ = a.Run(ctx) }()
+}
+
+// agent opens the store and builds the agent. The status heartbeat is a nanosecond, so the tests that wait for ticks
+// in status.json see every tick; the tests of the heartbeat set their own.
+func (r *rig) agent() *Agent {
 	var err error
 	if r.store, err = state.Open(r.dir, true); err != nil {
 		r.t.Fatal(err)
@@ -81,14 +99,26 @@ func (r *rig) start() {
 		Log:     slog.New(slog.NewTextHandler(io.Discard, nil)),
 		Clerk:   &keyclerk.Client{Base: r.kcURL, Edge: "edge-a", Key: r.enrol, HTTP: kcHTTP, Now: clk.Now},
 		Bastion: warpgate.Bastion{C: &warpgate.Client{Base: r.wgURL, Token: "tok", HTTP: wgHTTP, RetryBase: time.Millisecond}},
-		Tick:    100 * time.Millisecond, Pull: 300 * time.Millisecond, Grace: time.Second,
-		Emit: func(e events.Event) { r.mu.Lock(); r.events = append(r.events, e); r.mu.Unlock() }}
+		Tick:    100 * time.Millisecond, Pull: 300 * time.Millisecond, Grace: time.Second, StatusHeartbeat: time.Nanosecond,
+		Events: sink{r}}
 	if r.tune != nil {
 		r.tune(a)
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	r.stop, r.done = cancel, make(chan struct{})
-	go func() { defer close(r.done); _ = a.Run(ctx) }()
+	return a
+}
+
+// sink is the agent's event stream in the tests: each Write is one line, kept as written and parsed.
+type sink struct{ r *rig }
+
+func (s sink) Write(b []byte) (int, error) {
+	var e events.Event
+	if err := json.Unmarshal(bytes.TrimSpace(b), &e); err != nil {
+		return 0, err
+	}
+	s.r.mu.Lock()
+	s.r.lines, s.r.events = append(s.r.lines, bytes.Clone(b)), append(s.r.events, e)
+	s.r.mu.Unlock()
+	return len(b), nil
 }
 
 func (r *rig) halt() {
@@ -137,6 +167,128 @@ func TestALeaseIsAppliedAndReported(t *testing.T) {
 		var rep keyclerk.Report
 		return json.Unmarshal(r.kc.LastReport(), &rep) == nil && rep.AppliedSerial == r.kc.Serial()
 	})
+}
+
+// generation is the newest generation in the state slots: every slot write raises it by one.
+func (r *rig) generation() int64 {
+	var gen int64
+	for _, n := range []string{"state-a.json", "state-b.json"} {
+		var sl struct {
+			Gen int64 `json:"gen"`
+		}
+		b, _ := os.ReadFile(filepath.Join(r.dir, n))
+		if json.Unmarshal(b, &sl) == nil {
+			gen = max(gen, sl.Gen)
+		}
+	}
+	return gen
+}
+
+// AG-14: idle ticks and pulls that bring nothing new write no state (edge hardware often boots from flash).
+func TestIdleTicksWriteNoState(t *testing.T) {
+	r := newRig(t, Enforce)
+	r.kc.SetLeases([]fakes.FakeLease{lease("L-1", time.Now().Add(time.Hour))}, nil)
+	r.eventually("the bundle is applied", func() bool {
+		st := r.status()
+		return st.AppliedSerial > 0 && st.AppliedSerial == r.kc.Serial()
+	})
+	gen, ticks := r.generation(), r.status().Ticks
+	pulls, _ := r.kc.Counts()
+	r.eventually("20 idle ticks and 3 idle pulls", func() bool {
+		n, _ := r.kc.Counts()
+		return r.status().Ticks >= ticks+20 && n >= pulls+3
+	})
+	if got := r.generation(); gen == 0 || got != gen {
+		t.Fatalf("idle ticks wrote the state: generation %d -> %d", gen, got)
+	}
+}
+
+// Idle ticks and pulls leave the status files alone until the heartbeat, which still comes, so `updated` keeps telling
+// a live agent from a stalled one (issue 54).
+func TestIdleTicksWriteTheStatusOnlyAtTheHeartbeat(t *testing.T) {
+	r := newRigTuned(t, func(a *Agent) { a.StatusHeartbeat = time.Second })
+	r.kc.SetLeases([]fakes.FakeLease{lease("L-1", time.Now().Add(time.Hour))}, nil)
+	r.eventually("the bundle is applied", func() bool {
+		st := r.status()
+		return st.AppliedSerial > 0 && st.AppliedSerial == r.kc.Serial()
+	})
+	first := r.status()
+	pulls, _ := r.kc.Counts()
+	writes := map[time.Time]bool{}
+	for end := time.Now().Add(4 * time.Second); time.Now().Before(end); time.Sleep(10 * time.Millisecond) {
+		if st := r.status(); !st.Updated.IsZero() && !st.Updated.Equal(first.Updated) {
+			writes[st.Updated] = true
+		}
+	}
+	last := r.status()
+	if n, _ := r.kc.Counts(); last.Ticks < first.Ticks+20 || n < pulls+3 {
+		t.Fatalf("not idle long enough: ticks %d -> %d, pulls %d -> %d", first.Ticks, last.Ticks, pulls, n)
+	}
+	// 40 ticks in 4 s at a 1 s heartbeat: about 4 writes; every tick would be about 40, none would be 0.
+	if len(writes) < 2 || len(writes) > 6 {
+		t.Fatalf("%d status writes over %d idle ticks, want 2 to 6 (the heartbeat)", len(writes), last.Ticks-first.Ticks)
+	}
+}
+
+// A change reaches the status files at once, not at the heartbeat; nothing else is written meanwhile.
+func TestTheStatusIsWrittenWhenItChanges(t *testing.T) {
+	r := newRigTuned(t, func(a *Agent) { a.StatusHeartbeat = time.Hour })
+	r.eventually("the first status", func() bool { return r.status().Ticks > 0 })
+	r.kc.SetLeases([]fakes.FakeLease{lease("L-1", time.Now().Add(time.Hour))}, nil)
+	r.eventually("the lease applied, nothing left over", func() bool {
+		st := r.status()
+		return st.LiveLeases == 1 && st.AppliedSerial > 0 && st.AppliedSerial == r.kc.Serial() && st.NonEmptyStreak == 0
+	})
+	before := r.status()
+	time.Sleep(time.Second) // ten idle ticks, three idle pulls
+	if after := r.status(); !after.Updated.Equal(before.Updated) {
+		t.Fatalf("an idle second rewrote the status: ticks %d -> %d", before.Ticks, after.Ticks)
+	}
+}
+
+// A bundle with a new serial but the content already held is still stored: its serial and signed time are the replay
+// floors. Here the desk issued 1 (ann), 2 (ann and eve), 3 (ann again); the edge saw 1 and 3, and 2 replayed later must
+// be refused, or eve's revoked lease would come back.
+func TestASameContentBundleWithANewSerialRaisesTheFloor(t *testing.T) {
+	r := newRigOff(t, Enforce, nil)
+	a := r.agent()
+	t.Cleanup(func() { r.store.Close() })
+	a.defaults()
+	a.st = Status{Drift: []string{}}
+	ctx := context.Background()
+	pull := func() keyclerk.Pulled {
+		t.Helper()
+		got, err := a.Clerk.Pull(ctx, 0, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return got
+	}
+	ann := lease("L-1", time.Now().Add(time.Hour))
+	eve := lease("L-2", time.Now().Add(time.Hour))
+	eve.Username = "eve"
+	r.kc.SetLeases([]fakes.FakeLease{ann}, nil)
+	b1 := pull()
+	r.kc.SetLeases([]fakes.FakeLease{ann, eve}, nil)
+	b2 := pull()
+	r.kc.SetLeases([]fakes.FakeLease{ann}, nil)
+	b3 := pull()
+	d1, _ := kcedge.ContentDigest(*b1.Bundle, a.Pins)
+	d3, _ := kcedge.ContentDigest(*b3.Bundle, a.Pins)
+	if d1 == "" || d1 != d3 {
+		t.Fatalf("bundles 1 and 3 should have the same content: %q, %q", d1, d3)
+	}
+	a.handlePull(ctx, b1, nil)
+	gen := r.generation()
+	a.handlePull(ctx, b3, nil)
+	if f := a.Store.Get().Floors.Serial; f != 3 || r.generation() <= gen {
+		t.Fatalf("the same content under serial 3 was not stored: floor %d, generation %d -> %d", f, gen, r.generation())
+	}
+	a.handlePull(ctx, b2, nil)
+	if a.st.Refused != 1 || a.Store.Get().Floors.Serial != 3 || r.roles("eve") != nil {
+		t.Fatalf("bundle 2 replayed after 3 was taken: refused %d, floor %d, eve %v", a.st.Refused,
+			a.Store.Get().Floors.Serial, r.roles("eve"))
+	}
 }
 
 func TestTheClerksGovernedRolesAloneReportAnUnmanagedHolder(t *testing.T) {
@@ -221,7 +373,7 @@ func TestAnUnmanagedHolderIsAFindingOnceAndResolvedOnce(t *testing.T) {
 			last = e
 		}
 	}
-	if last.Data["class_uid"] != 2003 || last.Data["status"] != "Resolved" {
+	if last.Data["class_uid"] != float64(2003) || last.Data["status"] != "Resolved" {
 		t.Fatalf("not a resolved compliance finding: %+v", last.Data)
 	}
 }
@@ -229,14 +381,7 @@ func TestAnUnmanagedHolderIsAFindingOnceAndResolvedOnce(t *testing.T) {
 // newRigTuned is newRig with the agent changed before it starts.
 func newRigTuned(t *testing.T, tune func(*Agent)) *rig {
 	t.Helper()
-	r := &rig{t: t, dir: t.TempDir(), mode: Enforce, enrol: fakes.Key(9), tune: tune}
-	r.kc = fakes.NewKeyClerk("edge-a", r.enrol.Public().(ed25519.PublicKey), []string{"idp:ann"}, []string{"plc"})
-	r.wg = fakes.NewWarpgate("tok", map[string][]string{"plc-operator": {"plc"}})
-	kcSrv, kcURL, kcPin := r.kc.Serve()
-	wgSrv, wgURL, wgPin := r.wg.Serve()
-	t.Cleanup(kcSrv.Close)
-	t.Cleanup(wgSrv.Close)
-	r.kcURL, r.kcPin, r.wgURL, r.wgPin = kcURL, kcPin, wgURL, wgPin
+	r := newRigOff(t, Enforce, tune)
 	r.start()
 	t.Cleanup(r.halt)
 	return r
@@ -531,6 +676,53 @@ func TestARestartReappliesFromTheStoredBundle(t *testing.T) {
 	r.eventually("ann is restored from the stored bundle", func() bool { return r.roles("ann") != nil })
 }
 
+// The events chain across a restart (decision 0025 point 2): the sequence goes on, the new run opens a new epoch,
+// status.json reports the head, and a record removed or altered breaks the chain.
+func TestTheEventsChainAcrossARestart(t *testing.T) {
+	r := newRig(t, Enforce)
+	r.kc.SetLeases([]fakes.FakeLease{lease("L-1", time.Now().Add(time.Hour))}, nil)
+	r.eventually("ann's account is an event", func() bool {
+		return slices.Contains(r.seen("account:edge-a/ann"), "relikey.account.created.v1")
+	})
+	r.halt()
+	r.mu.Lock()
+	before := len(r.lines)
+	r.mu.Unlock()
+	r.start()
+	r.kc.SetLeases(nil, []string{"L-1"})
+	r.eventually("ann's deletion is an event", func() bool {
+		return slices.Contains(r.seen("account:edge-a/ann"), "relikey.account.deleted.v1")
+	})
+	r.mu.Lock()
+	lines := slices.Clone(r.lines)
+	r.mu.Unlock()
+	head, restarts, err := events.Verify(lines, &events.Head{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if head.Seq != int64(len(lines)) || !slices.Equal(restarts, []int64{1, int64(before) + 1}) || head.Epoch != 2 {
+		t.Fatalf("head %+v, restarts %v after %d lines, %d before the restart", head, restarts, len(lines), before)
+	}
+	r.eventually("status.json reports the head", func() bool {
+		st := r.status()
+		return st.EventChain != nil && *st.EventChain == head
+	})
+	if r.store.Chain() != head {
+		t.Fatalf("the stored head %+v is not the last line's %+v", r.store.Chain(), head)
+	}
+	if _, _, err := events.Verify(slices.Delete(slices.Clone(lines), before, before+1), &events.Head{}); err == nil {
+		t.Fatal("the chain holds without the first record after the restart")
+	}
+	altered := slices.Clone(lines)
+	altered[0] = bytes.Replace(altered[0], []byte(`"outcome":"success"`), []byte(`"outcome":"failure"`), 1)
+	if bytes.Equal(altered[0], lines[0]) {
+		t.Fatal("the test did not alter the record")
+	}
+	if _, _, err := events.Verify(altered, &events.Head{}); err == nil {
+		t.Fatal("the chain holds with an altered record")
+	}
+}
+
 // AG-1: a lease for a person outside the officer's ceiling is never applied, though the
 // bundle key signed it.
 // A visit needs an assured edge by its ceiling and its attestation (KeyClerk
@@ -579,6 +771,50 @@ func TestTheAgentRestoresTheBastionHardening(t *testing.T) {
 	})
 	r.wg.SetParameters(warpgate.Parameters{AllowOwnCredentialManagement: true}) // an administrator turns it back on
 	r.eventually("self-service turned off again", func() bool { return !r.wg.GetParameters().AllowOwnCredentialManagement })
+}
+
+// A password, one-time-password seed or certificate on a managed account is out of policy whatever its history (made
+// before the agent ran, by an administrator, by the person while self-service was on): the next tick in enforce mode
+// removes it and says so; shadow mode only reports it; the lease's SSO credential and an unmanaged account stay.
+func TestACredentialAddedOutsideTheAgentIsRemovedOnTheNextTick(t *testing.T) {
+	shadow := newRig(t, Shadow)
+	shadow.kc.SetLeases([]fakes.FakeLease{lease("L-1", time.Now().Add(time.Hour))}, nil)
+	shadow.wg.AddUser("ann", apply.Marker)
+	shadow.wg.AddCredential("ann", "passwords")
+	shadow.eventually("the credential is reported", func() bool {
+		return strings.Contains(shadow.status().Plan, "delete-credential 1")
+	})
+	if len(shadow.wg.Credentials("ann")) != 1 {
+		t.Fatal("shadow mode removed a credential")
+	}
+
+	r := newRig(t, Enforce)
+	r.wg.AddUser("breakglass", "made by the installer")
+	r.wg.AddCredential("breakglass", "passwords")
+	r.kc.SetLeases([]fakes.FakeLease{lease("L-1", time.Now().Add(time.Hour))}, nil)
+	r.eventually("ann gets the role", func() bool { _, ok := r.roles("ann")["plc-operator"]; return ok })
+	for _, kind := range warpgate.OtherCredentialKinds {
+		r.wg.AddCredential("ann", kind)
+	}
+	r.eventually("every credential no lease grants is removed", func() bool { return len(r.wg.Credentials("ann")) == 0 })
+	r.eventually("and each removal is an event", func() bool {
+		n := 0
+		for _, typ := range r.seen("account:edge-a/ann") {
+			if typ == "relikey.account.credential_removed.v1" {
+				n++
+			}
+		}
+		return n == len(warpgate.OtherCredentialKinds)
+	})
+	if _, emails := r.wg.Snapshot(apply.Marker); !slices.Equal(emails["ann"], []string{"ann@example.test"}) {
+		t.Fatalf("the lease's SSO credential went too: %v", emails["ann"])
+	}
+	if _, ok := r.roles("ann")["plc-operator"]; !ok {
+		t.Fatal("the lease's role went too")
+	}
+	if len(r.wg.Credentials("breakglass")) != 1 {
+		t.Fatal("an unmanaged account's credential was touched")
+	}
 }
 
 type lockedBuf struct {
