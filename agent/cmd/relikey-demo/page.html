@@ -1,0 +1,48 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: EUPL-1.2 -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ReliKey demo</title>
+<style>
+  :root { --bg: #f7f7f5; --fg: #1d1d1b; --muted: #5f5f5a; --line: #d9d9d4; --demo: #8a4b00; --demo-bg: #fff1dc; --bad: #a31d1d; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #161615; --fg: #ececea; --muted: #a3a39d; --line: #34342f; --demo: #ffc06b; --demo-bg: #3a2a12; --bad: #ff8a8a; }
+  }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.5 system-ui, sans-serif; }
+  .demo { background: var(--demo-bg); color: var(--demo); padding: 10px 16px; font-weight: 600; border-bottom: 1px solid var(--line); }
+  main { max-width: 960px; margin: 0 auto; padding: 16px; display: grid; gap: 24px; grid-template-columns: 2fr 1fr; }
+  @media (max-width: 720px) { main { grid-template-columns: 1fr; } }
+  h1 { font-size: 22px; margin: 16px 16px 0; max-width: 960px; }
+  h2 { font-size: 15px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 8px; }
+  ol, ul { margin: 0; padding: 0; list-style: none; }
+  .step { border-left: 3px solid var(--line); padding: 4px 0 8px 12px; margin-bottom: 4px; }
+  .step p { margin: 2px 0 0; color: var(--muted); }
+  .at { font-family: ui-monospace, monospace; color: var(--muted); margin-right: 8px; }
+  aside li { padding: 2px 0; font-family: ui-monospace, monospace; }
+  .none { color: var(--muted); }
+  #state { margin-top: 12px; color: var(--muted); }
+  #state.bad { color: var(--bad); }
+</style>
+<script src="/page.js" defer></script>
+</head>
+<body>
+<div class="demo">DEMO: stand-ins for KeyClerk, Warpgate and the identity broker on this computer only.
+  Keys are generated for this run; nothing here is a real system or a real secret.</div>
+<h1>ReliKey demo</h1>
+<main>
+  <section>
+    <h2>Story</h2>
+    <ol id="steps"></ol>
+    <p id="state">Starting...</p>
+  </section>
+  <aside>
+    <h2>Bastion accounts</h2>
+    <ul id="accounts"><li class="none">none</li></ul>
+    <h2 style="margin-top:16px">Open sessions</h2>
+    <ul id="sessions"><li class="none">none</li></ul>
+  </aside>
+</main>
+</body>
+</html>

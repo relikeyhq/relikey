@@ -58,6 +58,11 @@ contracts still marked `needed` in the model. Releases themselves carry signed t
 build provenance since 0.1.2 (see "Verifying a release"). Not production-ready; treat it as a working architecture
 you can stand up in a lab. What comes next is in [ROADMAP.md](ROADMAP.md).
 
+## Try it: the demo
+With Go installed, `cd agent && go run ./cmd/relikey-demo` runs the real edge agent against stand-ins for KeyClerk,
+Warpgate and the identity broker and shows, on a local page, a lease applied, a session, a revoke and a lease that
+ends while the edge is offline. Keys are generated per run and nothing is left behind: [docs/demo.md](docs/demo.md).
+
 ## Quickstart: a lab on one box
 A core and one edge on the same Linux host, the way full-stack run 2 stood them up (`docs/reviews/`). You need Python
 3.11+, podman or docker with compose, a clone of KeyClerk beside this repository (with its signed release tags), and three names for the core plus one

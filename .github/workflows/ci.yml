@@ -55,6 +55,8 @@ jobs:
           else python agent/build.py check --no-mutants; fi
         env:
           BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}   # empty on main and nightly
+      - run: go run ./cmd/relikey-demo -headless    # the demo story end to end (docs/demo.md)
+        working-directory: agent
       - run: python agent/build.py race
       - run: python agent/build.py vuln
 
