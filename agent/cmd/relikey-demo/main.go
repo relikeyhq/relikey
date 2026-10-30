@@ -85,6 +85,26 @@ type Story struct {
 	err   string
 	out   io.Writer
 	wg    *fakes.Warpgate
+
+	viewOnce sync.Once
+	viewed   chan struct{} // closed when the page is first loaded
+}
+
+// Viewed is closed once the page has been loaded, so the story can wait for its audience (-wait).
+func (s *Story) Viewed() <-chan struct{} { return s.viewedCh() }
+
+func (s *Story) viewedCh() chan struct{} {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.viewed == nil {
+		s.viewed = make(chan struct{})
+	}
+	return s.viewed
+}
+
+func (s *Story) markViewed() {
+	ch := s.viewedCh()
+	s.viewOnce.Do(func() { close(ch) })
 }
 
 func (s *Story) add(key, title, detail string) {
@@ -126,6 +146,7 @@ func (s *Story) handler() http.Handler {
 		rw.Header().Set("Content-Security-Policy",
 			"default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; connect-src 'self'")
 		_, _ = rw.Write(page)
+		s.markViewed()
 	})
 	mux.HandleFunc("GET /page.js", func(rw http.ResponseWriter, r *http.Request) {
 		rw.Header().Set("Content-Type", "text/javascript; charset=utf-8")
@@ -371,6 +392,7 @@ func main() {
 	addr := flag.String("addr", "127.0.0.1:0", "the page's loopback address")
 	noOpen := flag.Bool("no-open", false, "do not open a browser (print the page's address only)")
 	pace := flag.Duration("pace", 2*time.Second, "pause after each step when the page is shown")
+	wait := flag.Bool("wait", false, "start the story when the page is first opened (for a forwarded port)")
 	flag.Parse()
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
@@ -399,6 +421,15 @@ func main() {
 	fmt.Println("Press Ctrl-C to stop; nothing is left behind.")
 	if !*noOpen {
 		openBrowser(u)
+	}
+	if *wait {
+		fmt.Println("The story starts when the page is opened.")
+		select {
+		case <-s.Viewed():
+		case <-ctx.Done():
+			_ = srv.Close()
+			return
+		}
 	}
 	err = Run(ctx, s, Options{Pace: *pace, Out: os.Stdout})
 	if err != nil && !errors.Is(err, context.Canceled) {

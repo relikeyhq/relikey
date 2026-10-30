@@ -35,6 +35,7 @@ public:
   # directories cleared for publication
   - LICENSES/
   - .github/
+  - .devcontainer/
   - adapters/
   - agent/
   - fleet/

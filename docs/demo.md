@@ -39,6 +39,14 @@ terminal to stop.
 | `-addr` | `127.0.0.1:0` | The page's loopback address (port 0 picks a free one) |
 | `-no-open` | off | Print the page's address instead of opening a browser |
 | `-pace` | `2s` | Pause after each step on the page, so you can follow it |
+| `-wait` | off | Start the story when the page is first opened, not at start (for a forwarded port) |
+
+## In a Codespace
+The README's Codespaces badge opens this repository with `.devcontainer/devcontainer.json`: the Go image pinned by
+digest, the demo built on create and started on attach with `-addr 127.0.0.1:8080 -no-open -wait`. Codespaces forwards
+the port privately to you and opens the page in the editor's preview; the story starts when the page loads. Nothing
+else runs in the Codespace and no secrets are used. Stop it with Ctrl-C in the terminal; delete the Codespace when you
+are done (your GitHub account's Codespaces quota applies).
 
 ## In CI
 `go test ./cmd/relikey-demo` plays the whole story headless and fails unless every step happens in order and the

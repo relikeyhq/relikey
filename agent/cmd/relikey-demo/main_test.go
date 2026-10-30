@@ -77,3 +77,30 @@ func TestPageSaysDemo(t *testing.T) {
 		t.Fatal(r2.Status)
 	}
 }
+
+// TestViewedOnFirstPageLoad: -wait starts the story on the first page load; the story route alone does not count.
+func TestViewedOnFirstPageLoad(t *testing.T) {
+	s := &Story{}
+	srv := httptest.NewServer(s.handler())
+	defer srv.Close()
+	get := func(path string) {
+		resp, err := http.Get(srv.URL + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+	}
+	get("/api/story")
+	select {
+	case <-s.Viewed():
+		t.Fatal("viewed before the page was loaded")
+	default:
+	}
+	get("/")
+	get("/") // a reload must not close the channel twice
+	select {
+	case <-s.Viewed():
+	case <-time.After(time.Second):
+		t.Fatal("not viewed after the page was loaded")
+	}
+}
