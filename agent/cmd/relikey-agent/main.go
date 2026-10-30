@@ -41,7 +41,6 @@ import (
 	"relikey/agent/internal/keyclerk"
 	"relikey/agent/internal/state"
 	"relikey/agent/internal/warpgate"
-	"relikey/agent/pkg/events"
 	"relikey/agent/pkg/fleetproto"
 )
 
@@ -361,7 +360,7 @@ func run(args []string, once bool) error {
 		Tick: time.Duration(c.TickSeconds) * time.Second, Pull: time.Duration(c.PullSeconds) * time.Second,
 		Grace: time.Duration(c.GraceSeconds) * time.Second, Wait: wait, MetricsDir: c.MetricsDir,
 	}
-	a.Emit = (&events.Writer{W: os.Stdout}).Emit // JSON lines beside the log, told apart by "specversion" (decision 0025)
+	a.Events = os.Stdout // chained JSON lines beside the log, told apart by "specversion" (decision 0025)
 	if c.Fleet.URL != "" {
 		fu, ferr := url.Parse(c.Fleet.URL)
 		cu, _ := url.Parse(c.Clerk.URL)

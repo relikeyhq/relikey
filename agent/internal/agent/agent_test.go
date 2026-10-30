@@ -40,6 +40,7 @@ type rig struct {
 	tune   func(*Agent) // changes the agent before it runs
 	mu     sync.Mutex
 	events []events.Event
+	lines  [][]byte // the event lines as written
 	t      *testing.T
 	kc     *fakes.KeyClerk
 	wg     *fakes.Warpgate
@@ -99,11 +100,25 @@ func (r *rig) agent() *Agent {
 		Clerk:   &keyclerk.Client{Base: r.kcURL, Edge: "edge-a", Key: r.enrol, HTTP: kcHTTP, Now: clk.Now},
 		Bastion: warpgate.Bastion{C: &warpgate.Client{Base: r.wgURL, Token: "tok", HTTP: wgHTTP, RetryBase: time.Millisecond}},
 		Tick:    100 * time.Millisecond, Pull: 300 * time.Millisecond, Grace: time.Second, StatusHeartbeat: time.Nanosecond,
-		Emit: func(e events.Event) { r.mu.Lock(); r.events = append(r.events, e); r.mu.Unlock() }}
+		Events: sink{r}}
 	if r.tune != nil {
 		r.tune(a)
 	}
 	return a
+}
+
+// sink is the agent's event stream in the tests: each Write is one line, kept as written and parsed.
+type sink struct{ r *rig }
+
+func (s sink) Write(b []byte) (int, error) {
+	var e events.Event
+	if err := json.Unmarshal(bytes.TrimSpace(b), &e); err != nil {
+		return 0, err
+	}
+	s.r.mu.Lock()
+	s.r.lines, s.r.events = append(s.r.lines, bytes.Clone(b)), append(s.r.events, e)
+	s.r.mu.Unlock()
+	return len(b), nil
 }
 
 func (r *rig) halt() {
@@ -358,7 +373,7 @@ func TestAnUnmanagedHolderIsAFindingOnceAndResolvedOnce(t *testing.T) {
 			last = e
 		}
 	}
-	if last.Data["class_uid"] != 2003 || last.Data["status"] != "Resolved" {
+	if last.Data["class_uid"] != float64(2003) || last.Data["status"] != "Resolved" {
 		t.Fatalf("not a resolved compliance finding: %+v", last.Data)
 	}
 }
@@ -659,6 +674,53 @@ func TestARestartReappliesFromTheStoredBundle(t *testing.T) {
 	r.kc.SetFaults(true, false)
 	r.start()
 	r.eventually("ann is restored from the stored bundle", func() bool { return r.roles("ann") != nil })
+}
+
+// The events chain across a restart (decision 0025 point 2): the sequence goes on, the new run opens a new epoch,
+// status.json reports the head, and a record removed or altered breaks the chain.
+func TestTheEventsChainAcrossARestart(t *testing.T) {
+	r := newRig(t, Enforce)
+	r.kc.SetLeases([]fakes.FakeLease{lease("L-1", time.Now().Add(time.Hour))}, nil)
+	r.eventually("ann's account is an event", func() bool {
+		return slices.Contains(r.seen("account:edge-a/ann"), "relikey.account.created.v1")
+	})
+	r.halt()
+	r.mu.Lock()
+	before := len(r.lines)
+	r.mu.Unlock()
+	r.start()
+	r.kc.SetLeases(nil, []string{"L-1"})
+	r.eventually("ann's deletion is an event", func() bool {
+		return slices.Contains(r.seen("account:edge-a/ann"), "relikey.account.deleted.v1")
+	})
+	r.mu.Lock()
+	lines := slices.Clone(r.lines)
+	r.mu.Unlock()
+	head, restarts, err := events.Verify(lines, &events.Head{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if head.Seq != int64(len(lines)) || !slices.Equal(restarts, []int64{1, int64(before) + 1}) || head.Epoch != 2 {
+		t.Fatalf("head %+v, restarts %v after %d lines, %d before the restart", head, restarts, len(lines), before)
+	}
+	r.eventually("status.json reports the head", func() bool {
+		st := r.status()
+		return st.EventChain != nil && *st.EventChain == head
+	})
+	if r.store.Chain() != head {
+		t.Fatalf("the stored head %+v is not the last line's %+v", r.store.Chain(), head)
+	}
+	if _, _, err := events.Verify(slices.Delete(slices.Clone(lines), before, before+1), &events.Head{}); err == nil {
+		t.Fatal("the chain holds without the first record after the restart")
+	}
+	altered := slices.Clone(lines)
+	altered[0] = bytes.Replace(altered[0], []byte(`"outcome":"success"`), []byte(`"outcome":"failure"`), 1)
+	if bytes.Equal(altered[0], lines[0]) {
+		t.Fatal("the test did not alter the record")
+	}
+	if _, _, err := events.Verify(altered, &events.Head{}); err == nil {
+		t.Fatal("the chain holds with an altered record")
+	}
 }
 
 // AG-1: a lease for a person outside the officer's ceiling is never applied, though the

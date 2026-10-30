@@ -64,7 +64,7 @@ name.
 | Package | Role |
 |---|---|
 | `internal/kcedge` | KeyClerk's edge interface in Go: canonical JSON, sealed objects, bundle verification, the ceiling policy, signed requests, the ended notice |
-| `internal/state` | A/B slots with generation and sha256, atomic writes through `os.Root`, floors only rise, exclusive lock, status.json |
+| `internal/state` | A/B slots with generation and sha256, atomic writes through `os.Root`, floors only rise, the event chain's head, exclusive lock, status.json |
 | `internal/clock` | wall and boot clock behind one interface; `Trusted` |
 | `internal/httpx` | per-peer HTTP clients: timeouts, no redirects, no proxy, capped bodies, certificate pinning |
 | `internal/keyclerk` | signed pull and report |
@@ -119,8 +119,20 @@ made on the bastion (`relikey.account.created`, `deleted`, `role_granted`, `role
 `sso_bound`, `sso_unbound`, `key_added`, `key_removed`, `credential_removed`; `relikey.session.closed`), an
 unmanaged account holding a governed role (`relikey.drift.rogue_account`, once when found and once when gone; which
 roles stays in the local drift report), a refused bundle (`relikey.bundle.refused`) and an ended edge
-(`relikey.edge.ended`). Events name bastion accounts and lease ids, never an e-mail; they are not yet chained or
-sequenced (the evidence log, 0025 point 2).
+(`relikey.edge.ended`). Events name bastion accounts and lease ids, never an e-mail.
+
+**The event chain** (the first part of decision 0025 point 2, inside the agent): every record carries its sequence
+number and its id in OCSF `metadata.sequence` and `metadata.uid`, and in `unmapped.chain` its epoch and `prev`, the
+sha256 of the line before it exactly as written (empty for the first record ever). The sequence goes on across a
+restart; each run that emits opens a new epoch, one above the last, so a restart shows in the stream. The head (epoch,
+sequence, hash of the last line) is kept in the state directory in two slots of its own (`chain-a.json`, `chain-b.json`,
+generation and sha256, like the floors), stored before its line is written: a crash between the two leaves one number
+unused, never one used twice, and an event whose head cannot be stored is not written (the log says so). The head only
+rises; unreadable in both slots, the agent refuses to start. `status.json` reports it as `event_chain`, written when the
+head moves. `events.Verify` checks a stream against a head the verifier holds: a record removed or reordered breaks the
+sequence, one altered or replaced breaks the next record's `prev`, and an altered last record no longer matches a head
+reported later. Signing, the epoch link to the previous head, the core's witness and the delivery contract follow (0025
+point 2, C-12, C-13).
 
 `fleet.url` (optional): the agent sends ReliKey's fleet service its signed report every pull interval
 (`docs/fleet.md`, decision 0026); it must be the clerk's own host, and the agent takes nothing back from it.
@@ -264,6 +276,8 @@ KeyClerk 0.22.0 sends the verified e-mail on each lease (KC-10) and a stable `fr
 `ceiling.rego` meanwhile), the LDAP facade and lease credentials, offline levels, evidence, TPM. Not yet run: armv7 on real hardware (qemu-user only so far).
 
 ## Changelog
+- 2026-10-28: the event chain (decision 0025 point 2, first part): sequence numbers and the previous record's hash in
+  every event, the head kept crash-safe in the state directory and reported in status.json, `events.Verify`; 4 mutants.
 - 2026-10-25: long-poll for the bundle (KeyClerk decision 0026): grants and revokes in seconds; pulls beside the loop; the interval as the floor after an unchanged immediate answer; KeyClerk's request vectors; the conformance set vendored from the public edge protocol v1.2.0 (126 cases); 61 mutants.
 - 2026-10-25: monitoring events (decision 0025 point 1): CloudEvents with OCSF 1.6.0 data for the agent's changes, findings, refusals and an ended edge; 59 mutants. A test-only second emitter (`internal/testemit`, decision 0017).
 - 2026-10-25: governed roles (finding 8): an unmanaged account holding one is reported, never changed; sources the edge's targets file and KeyClerk's signed `governed_roles` (decision 0025, vectors from KeyClerk main f6b6648); 118 conformance cases, 57 mutants.
