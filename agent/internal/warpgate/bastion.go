@@ -5,6 +5,7 @@ package warpgate
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"relikey/agent/internal/bastion"
@@ -12,7 +13,8 @@ import (
 
 // Bastion adapts Warpgate's admin API to the bastion role (decision 0023): Warpgate's users are accounts, its role
 // assignments with expires_at are grants (removed ones stay listed as inactive: Warpgate's soft delete), its SSO
-// credentials are identities and its public-key credentials are keys.
+// credentials are identities, its public-key credentials are keys, and its passwords, one-time-password seeds and
+// client certificates are the other credentials.
 type Bastion struct{ C *Client }
 
 var _ bastion.Admin = Bastion{}
@@ -123,6 +125,29 @@ func (b Bastion) AddKey(ctx context.Context, accountID, label, openssh string) e
 
 func (b Bastion) RemoveKey(ctx context.Context, accountID, id string) error {
 	return nf(b.C.DeletePublicKey(ctx, accountID, id))
+}
+
+// Credentials lists the user's passwords, one-time-password seeds and client certificates; one list that cannot be
+// read fails the whole read.
+func (b Bastion) Credentials(ctx context.Context, accountID string) ([]bastion.Credential, error) {
+	var out []bastion.Credential
+	for _, kind := range OtherCredentialKinds {
+		cs, err := b.C.OtherCredentials(ctx, accountID, kind)
+		if err != nil {
+			return nil, nf(err)
+		}
+		for _, c := range cs {
+			out = append(out, bastion.Credential{ID: c.ID, Kind: kind})
+		}
+	}
+	return out, nil
+}
+
+func (b Bastion) RemoveCredential(ctx context.Context, accountID string, c bastion.Credential) error {
+	if !slices.Contains(OtherCredentialKinds, c.Kind) {
+		return fmt.Errorf("credential kind %q is not one Warpgate has", c.Kind)
+	}
+	return nf(b.C.DeleteOtherCredential(ctx, accountID, c.Kind, c.ID))
 }
 
 func (b Bastion) ActiveSessions(ctx context.Context) ([]bastion.Session, error) {

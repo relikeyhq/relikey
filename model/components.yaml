@@ -104,16 +104,21 @@ components:
     role: >
       Terminates TLS on the user HTTPS port and forwards everything except Warpgate's admin paths (under both /@warpgate and /_warpgate) to Warpgate on
       loopback; holds only the TLS certificate (decision 0008). Removed when Warpgate has a separate admin listener (U-08).
+      Built as the edge's front: Caddy, as in the core, with its own site file (deploy/edge/Caddyfile; decision 0008
+      point 1, 2026-10-25), which also refuses Warpgate's self-service credential routes.
     tier: edge
-    image: null             # a minimal static Go binary (decision 0011), until warp-tech/warpgate#2782 lands
-    version: null
-    digest: null
-    licence: null
+    image: docker.io/library/caddy   # deploy/edge/compose.yaml, service front
+    version: "2.11.7-alpine"
+    digest: sha256:eb4d35b7452d1ab6171fbdbe8d9275b2301dad6dad92115d91e19fb9b24d510f
+    licence: Apache-2.0
     zone: appliance
     plane: control
     arch: [amd64, arm64, armv7]
-    footprint: {ram_mb: 15, disk_mb: 10, measured: false}
-    upstream: null
+    # The pinned Caddy that deploy/edge/compose.yaml runs as `front`, from a first amd64 measurement (2026-10): about
+    # 50 MB resident at idle, a 67 MB image. It replaces the 15 MB estimate of a minimal proxy, and puts the edge over
+    # the switch profile's memory: a known gap there (model/footprint.yaml, #62).
+    footprint: {ram_mb: 50, disk_mb: 67, measured: true}
+    upstream: https://github.com/caddyserver/caddy
 
   - id: facade
     name: LDAP facade
@@ -121,8 +126,8 @@ components:
     role: The directory an LDAP-only system binds against; its passwords are lease credentials, never a person's own.
     tier: edge
     image: docker.io/lldap/lldap   # decision 0012 (R-02): lldap, with a compatibility test set of what legacy systems send
-    version: "0.6.3"
-    digest: null
+    version: "v0.6.3-alpine-rootless"   # the tag as deploy/edge/compose.yaml runs it
+    digest: sha256:ba2c50930ea998eefd5454aa678a7977448019248b1827da87d330df0b71c284
     licence: GPL-3.0
     zone: appliance
     plane: control
@@ -202,7 +207,7 @@ components:
       profile, link crypto - serves the fleet view, and raises the silence alarm. Works with any clerk or none; a clerk
       adds its governance facts. Evidence and governance events only, never device telemetry (0021).
     tier: core
-    image: null             # a static Go binary (relikey-fleet), built in agent/ beside the agent
+    image: null             # a static Go binary (relikey-fleet, fleet/), built by agent/build.py; image pin open (R-21)
     version: null
     digest: null
     licence: null

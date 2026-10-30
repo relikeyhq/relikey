@@ -4,8 +4,9 @@ open:
   - id: R-10
     question: Which target hardware is the reference for the footprint soak?
     lean: One switch with app hosting (arm64, 512 MB for apps) and a Raspberry Pi 4 or 5; armv7 as a stretch.
-      Done 2026-10-23 on amd64 for Warpgate and lldap (docs/measurements.md); arm64, graphical recordings, agent and
-      proxy still to measure.
+      Done 2026-10-23 on amd64 for Warpgate and lldap (docs/measurements.md), and the proxy at idle on amd64 (2026-10);
+      arm64, graphical recordings, the agent and the proxy under load still to measure. The switch profile's known gap
+      (#62) waits on this.
   - id: R-21
     question: How is the fleet service (relikey-fleet, decision 0026) packaged and pinned in the core pod?
     lean: Decided 2026-10-25 (operator) - a scratch image like the agent's (deploy/core/Dockerfile.fleet), built by

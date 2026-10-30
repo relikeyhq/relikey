@@ -29,16 +29,17 @@ var actionEvents = map[apply.Kind]struct {
 	class    int
 	activity int
 }{
-	apply.CreateUser:   {"relikey.account.created.v1", ocsfAccountChange, 1},
-	apply.DeleteUser:   {"relikey.account.deleted.v1", ocsfAccountChange, 6},
-	apply.AddRole:      {"relikey.account.role_granted.v1", ocsfUserAccess, 1},
-	apply.RemoveRole:   {"relikey.account.role_revoked.v1", ocsfUserAccess, 2},
-	apply.SetExpiry:    {"relikey.account.role_extended.v1", ocsfUserAccess, 99},
-	apply.AddSSO:       {"relikey.account.sso_bound.v1", ocsfAccountChange, 99},
-	apply.DeleteSSO:    {"relikey.account.sso_unbound.v1", ocsfAccountChange, 99},
-	apply.AddKey:       {"relikey.account.key_added.v1", ocsfAccountChange, 99},
-	apply.DeleteKey:    {"relikey.account.key_removed.v1", ocsfAccountChange, 99},
-	apply.CloseSession: {"relikey.session.closed.v1", ocsfAuthentication, 2},
+	apply.CreateUser:       {"relikey.account.created.v1", ocsfAccountChange, 1},
+	apply.DeleteUser:       {"relikey.account.deleted.v1", ocsfAccountChange, 6},
+	apply.AddRole:          {"relikey.account.role_granted.v1", ocsfUserAccess, 1},
+	apply.RemoveRole:       {"relikey.account.role_revoked.v1", ocsfUserAccess, 2},
+	apply.SetExpiry:        {"relikey.account.role_extended.v1", ocsfUserAccess, 99},
+	apply.AddSSO:           {"relikey.account.sso_bound.v1", ocsfAccountChange, 99},
+	apply.DeleteSSO:        {"relikey.account.sso_unbound.v1", ocsfAccountChange, 99},
+	apply.AddKey:           {"relikey.account.key_added.v1", ocsfAccountChange, 99},
+	apply.DeleteKey:        {"relikey.account.key_removed.v1", ocsfAccountChange, 99},
+	apply.DeleteCredential: {"relikey.account.credential_removed.v1", ocsfAccountChange, 99},
+	apply.CloseSession:     {"relikey.session.closed.v1", ocsfAuthentication, 2},
 }
 
 func (a *Agent) account(name string) string { return "account:" + a.Pins.Edge + "/" + name }
