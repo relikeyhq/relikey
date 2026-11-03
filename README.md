@@ -136,6 +136,16 @@ example is v0.1.2; run the checks from a clone of this repository, the last two 
        gh attestation verify relikey-agent-linux-amd64 --repo relikeyhq/relikey \
            --predicate-type https://cyclonedx.org/bom
 
+5. **The images** (from 0.3.0): `ghcr.io/relikeyhq/relikey-agent` and `ghcr.io/relikeyhq/relikey-fleet`, tagged with the
+   version and listed by digest in the release notes. Use the digest, not the tag. Each is signed with keyless cosign by
+   the release workflow and has a provenance attestation in the registry:
+
+       cosign verify ghcr.io/relikeyhq/relikey-agent@DIGEST \
+           --certificate-identity https://github.com/relikeyhq/relikey/.github/workflows/release.yml@refs/tags/v0.3.0 \
+           --certificate-oidc-issuer https://token.actions.githubusercontent.com
+       gh attestation verify oci://ghcr.io/relikeyhq/relikey-agent@DIGEST --repo relikeyhq/relikey \
+           --signer-workflow relikeyhq/relikey/.github/workflows/release.yml
+
 From 0.2.0 a release is also built only from a commit whose CI passed on `main`, and its binaries are smoke-tested
 before anything is attested. The attestation bundles are release files too (`relikey-provenance.intoto.jsonl`,
 `NAME.cdx.intoto.jsonl`), so `gh attestation verify --bundle FILE` checks them offline.

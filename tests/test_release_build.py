@@ -189,7 +189,8 @@ def test_nothing_is_built_before_ci_passed_on_the_tagged_commit():
     assert any("tools/release_gate.py" in r for r in _runs_of(jobs["ci-passed"]))
     assert jobs["ci-passed"]["permissions"] == {"contents": "read", "actions": "read"}
     assert jobs["build"]["needs"] == "ci-passed"
-    assert set(jobs["github-release"]["needs"]) == {"build", "sbom-attest"}
+    assert set(jobs["github-release"]["needs"]) == {"build", "sbom-attest", "images"}
+    assert jobs["images"]["needs"] == "build"
 
 
 def test_the_built_binaries_are_smoke_tested_before_anything_is_attested():

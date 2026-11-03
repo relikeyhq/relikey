@@ -50,7 +50,7 @@ def pinned_busybox(image_file: Path) -> str:
     """The busybox the agent image builds from, with its digest (the core's install.py reads its image file the same
     way): the helper containers below run that same reference, so a moved tag cannot change what runs with the secrets
     or Warpgate's volume mounted, and Dependabot's update of the image file updates them too."""
-    m = re.search(r"^FROM\s+(\S+/busybox:\S+@sha256:[0-9a-f]{64})", image_file.read_text(encoding="utf-8"), re.M)
+    m = re.search(r"^FROM\s+(?:--platform=\S+\s+)?(\S+/busybox:\S+@sha256:[0-9a-f]{64})", image_file.read_text(encoding="utf-8"), re.M)
     if not m:
         sys.exit(f"{image_file}: no busybox base pinned by digest")
     return m.group(1)

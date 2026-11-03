@@ -1,6 +1,7 @@
 # relikey-agent image: the static binary from agent/build.py (dist/), nothing else.
 # Build from the repository root:  podman build -f deploy/edge/Dockerfile.agent -t relikey-agent:dev .
-FROM docker.io/library/busybox:1.38.0@sha256:a46257e06c82ad85242d0d38077d0a52d9896389ca60a1a59d3463db586e5fa4 AS prep
+# The prep stage only makes directories: it runs on the build platform, so other targets need no emulation.
+FROM --platform=$BUILDPLATFORM docker.io/library/busybox:1.38.0@sha256:a46257e06c82ad85242d0d38077d0a52d9896389ca60a1a59d3463db586e5fa4 AS prep
 # The state directory exists in the image 0700 and owned by the agent's user, so a fresh
 # named volume starts with the rights the agent insists on (it refuses anything looser). The metrics directory
 # (metrics_dir, optional) is 0755 for the same reason: a collector reads it, the agent writes it.

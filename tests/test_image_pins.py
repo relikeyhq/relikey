@@ -11,7 +11,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 IMAGE_FILES = sorted((ROOT / "deploy").glob("*/Dockerfile.*"))
-FROM = re.compile(r"^FROM\s+(?!scratch\b)(\S+)", re.M | re.I)
+FROM = re.compile(r"^FROM\s+(?:--platform=\S+\s+)?(?!scratch\b)(\S+)", re.M | re.I)
 
 
 def test_image_files_exist():

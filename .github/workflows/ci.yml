@@ -60,6 +60,24 @@ jobs:
       - run: python agent/build.py race
       - run: python agent/build.py vuln
 
+  images:
+    name: Release images (build only)
+    # The agent and fleet images for every platform, as release.yml builds them, pushed nowhere (#29)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.27.3"        # build.py refuses any other toolchain (GE-9)
+          cache-dependency-path: agent/go.sum
+      - run: python3 agent/build.py dist
+      - run: |
+          docker buildx create --use --driver docker-container
+          python3 tools/release_images.py build
+
   agent-mutants:
     name: Edge agent mutants (shard ${{ matrix.shard }}/4)
     # main, nightly and on demand: every mutant, in four parallel parts (not for a pull request or the merge queue)
