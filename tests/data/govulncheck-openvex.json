@@ -1,0 +1,78 @@
+{
+  "@context": "https://openvex.dev/ns/v0.2.0",
+  "@id": "govulncheck/vex:3d41a41b6a77f56d6dfb4ed2c5ebc8730205bb64668543c0a3a6511a95c172ef",
+  "author": "Unknown Author",
+  "timestamp": "2026-11-03T17:25:23.1316644Z",
+  "version": 1,
+  "tooling": "https://pkg.go.dev/golang.org/x/vuln/cmd/govulncheck",
+  "statements": [
+    {
+      "vulnerability": {
+        "@id": "https://pkg.go.dev/vuln/GO-2022-1059",
+        "name": "GO-2022-1059",
+        "description": "Denial of service via crafted Accept-Language header in golang.org/x/text/language",
+        "aliases": [
+          "CVE-2022-32149",
+          "GHSA-69ch-w2m2-3vjp"
+        ]
+      },
+      "products": [
+        {
+          "@id": "Unknown Product",
+          "subcomponents": [
+            {
+              "@id": "pkg:golang/golang.org%2Fx%2Ftext@v0.3.7"
+            }
+          ]
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "Govulncheck determined that the vulnerable code isn't called"
+    },
+    {
+      "vulnerability": {
+        "@id": "https://pkg.go.dev/vuln/GO-2026-5970",
+        "name": "GO-2026-5970",
+        "description": "Infinite loop on invalid input in golang.org/x/text",
+        "aliases": [
+          "CVE-2026-56852"
+        ]
+      },
+      "products": [
+        {
+          "@id": "Unknown Product",
+          "subcomponents": [
+            {
+              "@id": "pkg:golang/golang.org%2Fx%2Ftext@v0.3.7"
+            }
+          ]
+        }
+      ],
+      "status": "affected"
+    },
+    {
+      "vulnerability": {
+        "@id": "https://pkg.go.dev/vuln/GO-2026-6629",
+        "name": "GO-2026-6629",
+        "description": "Panic parsing crafted input in x/text/secure/precis in golang.org/x/text",
+        "aliases": [
+          "CVE-2026-56851"
+        ]
+      },
+      "products": [
+        {
+          "@id": "Unknown Product",
+          "subcomponents": [
+            {
+              "@id": "pkg:golang/golang.org%2Fx%2Ftext@v0.3.7"
+            }
+          ]
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "Govulncheck determined that the vulnerable code isn't called"
+    }
+  ]
+}

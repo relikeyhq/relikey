@@ -41,8 +41,8 @@ and removes them, and the tag follows its merge. `release.yml` first checks that
 `main` (`tools/release_gate.py`, which waits for a run still in progress), then calls the reusable
 `release-build.yml`, which builds the agent and the fleet service reproducibly with a CycloneDX SBOM for each binary,
 smoke-tests them (`build.py smoke`: the binaries for the runner's architecture must run and report the tag's version
-and commit, the others must be ELF files for their target), attests their provenance and each SBOM, signs the sums
-and each binary with keyless cosign, and pushes the agent and fleet images to ghcr.io, attested and signed by digest.
+and commit, the others must be ELF files for their target), writes the release's VEX (below) and adds it to the sums,
+attests their provenance and each SBOM, signs the sums, each binary and the VEX with keyless cosign, and pushes the agent and fleet images to ghcr.io, attested and signed by digest.
 Because the build is a reusable workflow, every attestation and signature names it as the builder (SLSA Build L3).
 `release.yml` then publishes the GitHub release with that section and the image digests as its notes. How to verify
 one: README.md, "Verifying a release".
@@ -56,6 +56,24 @@ Tag the merge commit by its full hash, after the change it needs has merged and 
 re-run that run before tagging, or the release stops at the CI check. Release tags are never moved or deleted (a
 ruleset enforces it): a tag whose release build fails stays, and the next version number carries the fix, as 0.1.0
 and 0.1.1 did.
+
+### The VEX
+Each release from 0.3.0 carries one OpenVEX document, `relikey.openvex.json`, written by `python agent/build.py vex`
+after the smoke test. It runs govulncheck (pinned in `agent/tools/go.mod`) in source mode on each binary's module, for
+that binary's GOOS and GOARCH, against the Go vulnerability database of that moment, and turns its findings into
+statements: for each known vulnerability in a module or the standard library the binary is built from, `not_affected`
+with govulncheck's justification when the vulnerable code is not called, or `affected` when it is. Each product is a
+binary, named by the package URL in its SBOM's `metadata.component.purl` and by its SHA-256; one verdict on one
+vulnerability across several binaries is one statement. The timestamp is the tagged commit's time and the `@id` the
+file's release download URL, so building it twice for one release gives the same bytes while the database is unchanged.
+
+An `affected` statement stops the release build before anything is attested or signed: the fix goes to `main` and the
+next version carries it, the tag stays. CI's `build.py vuln` checks the agent's module on every change; the check at
+release time also covers the fleet service and an advisory published after CI ran. A VEX with no statements is valid:
+govulncheck knew of no vulnerability in the binaries' dependencies.
+
+The VEX is a snapshot at release time; nothing re-runs it or changes it for a published release. An advisory published
+later is answered by the next release and its VEX.
 
 ## How main stays signed
 Every commit on `main` is a squash merge that GitHub makes and signs: the `main` ruleset requires a pull request and
