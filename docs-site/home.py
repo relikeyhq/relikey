@@ -10,7 +10,6 @@ import os
 import re
 from pathlib import Path, PurePosixPath
 
-from mkdocs.structure.files import File
 
 ROOT = Path(__file__).resolve().parent.parent
 BLOB = "https://github.com/relikeyhq/relikey/blob/main/"
@@ -26,6 +25,8 @@ def _rewrite(match):
 
 
 def on_files(files, config):
+    from mkdocs.structure.files import File  # here, so the tests import this hook without mkdocs
+
     files.append(File.generated(config, "index.md", content=_home()))
     return files
 
