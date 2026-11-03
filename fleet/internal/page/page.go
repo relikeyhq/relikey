@@ -151,12 +151,16 @@ type Page struct {
 	HTTP     *http.Client // to the broker; nil: the request's context decides (tests)
 	Admin    *admin.Store // the registry, slots and evidence log; nil: no enrolment on this page
 	Pin      string       // what the codes pin: enrol.CAPin of Cfg.PinCAFile, set by the fleet service at start
+	// Held is the key (hex) the fleet holds for an edge now (fleet.Server.Held): a rotation is approved only while
+	// the key it replaces is still held. Nil: none is held, so no rotation can be approved.
+	Held func(edge string) (string, bool)
 
 	aead        cipher.AEAD // seals pending sign-ins; a restart voids those in flight (start again)
 	mu          sync.Mutex
 	sessions    map[string]session
 	challenges  map[string]challenge         // passkey registrations in flight, by session
 	activations map[string]pendingActivation // activations being signed, by session
+	rotations   map[string]pendingRotation   // rotation approvals being signed, by session
 }
 
 // New discovers the broker and builds the page. secret is the client secret's content.
@@ -200,6 +204,8 @@ func (p *Page) Handler() http.Handler {
 	m.HandleFunc("POST /anchor/sign", p.anchorSign)
 	m.HandleFunc("POST /activate/begin", p.activateBegin)
 	m.HandleFunc("POST /activate/sign", p.activateSign)
+	m.HandleFunc("POST /rotate/begin", p.rotateBegin)
+	m.HandleFunc("POST /rotate/sign", p.rotateSign)
 	m.HandleFunc("POST /backchannel-logout", p.backchannel)
 	return fleet.LoopbackOnly(headers(m)) // DNS rebinding: loopback names only (the front sets Host)
 }
@@ -616,7 +622,7 @@ Until all have signed, no edge can be enrolled. Check that the list below is the
 {{range .Named}}<tr><td><span class="edge">{{.Name}}</span></td><td data-k="Passkey">{{if .Alarm}}<b class="bad">{{.Passkey}}</b>{{else}}{{.Passkey}}{{end}}</td><td data-k="Anchor">{{if .Signed}}signed{{else if .Registered}}<span class="none">not signed</span>{{else}}<span class="none">-</span>{{end}}</td></tr>
 {{end}}</tbody></table>
 {{if .Hash}}<p class="basis">Officer list version 1, fingerprint {{.Hash}}; it can be signed until {{.Until}}.</p>{{end}}
-{{if .MeNamed}}<p class="open">{{if .MeSign}}<button type="button" id="anchor-sign">Sign the officer list with my passkey</button> {{end}}<button type="button" id="officer-register">{{if .MeHas}}Replace my officer passkey{{else}}Register my officer passkey{{end}}</button></p>
+{{if .MeNamed}}<p class="open">{{if .MeSign}}<button type="button" id="anchor-sign" data-msg="anchor-msg">Sign the officer list with my passkey</button> {{end}}<button type="button" id="officer-register" data-msg="anchor-msg">{{if .MeHas}}Replace my officer passkey{{else}}Register my officer passkey{{end}}</button></p>
 <p id="anchor-msg" role="status" aria-live="polite"></p><noscript><p>The passkey steps need JavaScript in this browser.</p></noscript>
 <script>{{.Script}}</script>{{else}}<p class="basis">You are not one of the named first officers: they register and sign here.</p>{{end}}{{end}}
 {{else}}<form method="post" action="/slots" class="open"><label>Name <input name="name" required pattern="[a-z0-9][a-z0-9-]{0,62}" maxlength="63"></label>
@@ -636,9 +642,28 @@ read its screen yourself, on site. Then sign with your officer passkey: up to te
 <td data-k="Read by"><input name="read_by" maxlength="120" aria-label="who read the screen of {{.Name}}"></td>
 <td data-k="How"><select name="read_how" aria-label="how the screen of {{.Name}} was read"><option>on site</option><option>phone</option><option>video call</option><option>message</option></select></td></tr>{{end}}
 </tbody></table></form>
-<p class="open"><button type="button" id="activate-sign">Admit the selected with my officer passkey</button></p>
-<p id="activate-msg" role="status" aria-live="polite"></p><noscript><p>The passkey step needs JavaScript in this browser.</p></noscript>
-<script>{{.Script}}</script>{{else}}<p class="basis">Keys are waiting for approval: an officer admits them here with their officer passkey.</p>{{end}}{{end}}{{end}}{{end}}
+<p class="open"><button type="button" id="activate-sign" data-msg="activate-msg">Admit the selected with my officer passkey</button></p>
+<p id="activate-msg" role="status" aria-live="polite"></p>{{else}}<p class="basis">Keys are waiting for approval: an officer admits them here with their officer passkey.</p>{{end}}{{end}}
+{{if .Rotations}}{{$me := .MeOfficer}}<h2 class="sec">Key rotations</h2>
+<p class="basis">The desk rotated these edges' enrolment keys; each edge handed its new key over, signed by its old key and
+the new one. The fleet keeps the old key until an officer approves. The desk's statement is shown as the edge sent it:
+the fleet cannot check the desk's officer, so compare the new key with the desk's rotation record before approving. More
+than one rotation waiting for one edge is an alarm: someone else may hold its old key.</p>
+{{if $me}}<p class="basis">To approve: select the rotation, type at least 20 characters of the new key exactly as the desk's
+rotation record (or the edge where the key was made) shows it, not from this page, record who read it and how, and sign
+with your officer passkey.</p>{{end}}
+<form id="rotate"><table><thead><tr><th>Edge</th><th>New key</th><th>Desk statement</th>{{if $me}}<th>New key, as read from the desk</th><th>Read by</th><th>How</th>{{end}}</tr></thead><tbody>
+{{range .Rotations}}<tr data-rotation="{{.ID}}"><td>{{if $me}}<label><input type="radio" name="pick"> {{end}}<span class="edge">{{.Edge}}</span>{{if $me}}</label>{{end}}<span class="st">{{if .Source}}from {{.Source}}, {{end}}{{.Received}}; old key {{.OldKeyID}}</span>{{if .Others}}<span class="behind">{{.Others}} more waiting for this edge</span>{{end}}{{if .Stale}}<span class="behind">the fleet no longer holds the old key</span>{{end}}</td>
+<td data-k="New key"><code>{{.NewKey}}</code></td>
+<td data-k="Desk statement">rotation by {{.Officer}}, officer key {{.OfficerKeyID}}</td>
+{{if $me}}<td data-k="Typed"><input name="typed" autocomplete="off" spellcheck="false" minlength="20" maxlength="80" aria-label="new key characters for {{.Edge}}"></td>
+<td data-k="Read by"><input name="read_by" maxlength="120" aria-label="who read the new key of {{.Edge}}"></td>
+<td data-k="How"><select name="read_how" aria-label="how the new key of {{.Edge}} was read"><option>desk record</option><option>on site</option><option>phone</option><option>video call</option></select></td>{{end}}</tr>{{end}}
+</tbody></table></form>
+{{if $me}}<p class="open"><button type="button" id="rotate-sign" data-msg="rotate-msg">Approve the selected rotation with my officer passkey</button></p>
+<p id="rotate-msg" role="status" aria-live="polite"></p>{{else}}<p class="basis">An officer approves a rotation here with their officer passkey.</p>{{end}}{{end}}
+{{if and .MeOfficer (or .Presented .Rotations)}}<noscript><p>The passkey step needs JavaScript in this browser.</p></noscript>
+<script>{{.Script}}</script>{{end}}{{end}}{{end}}
 <footer>This page commands no edge: a slot it opens admits nothing until an officer approves with their passkey. It does not refresh on its own; reload to see the latest reports.</footer>
 </main></body></html>
 `))
@@ -649,6 +674,7 @@ type enrolView struct {
 	Slots     []slotRow
 	Error     string
 	Presented []presentedRow // keys awaiting approval
+	Rotations []rotationRow  // key rotations awaiting approval (#26)
 	MeOfficer bool           // the signed-in person is an officer of the registry in force
 	Script    template.JS
 }
@@ -687,6 +713,7 @@ func (p *Page) enrolView(s session) *enrolView {
 		}
 		v.Slots = append(v.Slots, r)
 	}
+	v.Rotations = p.rotationRows()
 	return v
 }
 

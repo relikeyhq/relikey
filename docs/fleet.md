@@ -21,6 +21,9 @@ restart) and the report's time must lie within five minutes of the service's.
 ## API (loopback)
 - `POST /fleet/v1/report`: a signed report; 204, or 403 with the reason in the service's log only. The front routes
   this one path, POST only, on the edge-facing name (`deploy/core/Caddyfile`).
+- `POST /fleet/v1/rotation`: an edge's key handover after the desk rotated its enrolment key (below); 204 pending (the
+  same handover again is 204 too), 403 with the reason in the log, 404 on a fleet without officers. The front routes
+  it like the report.
 - `GET /fleet/v1/edges`: the inventory as JSON, on loopback only: never served on the edge-facing name.
 
 ## The agent's side
@@ -75,8 +78,8 @@ ceremony need the browser's WebAuthn API, and that one script is allowed by its 
   Back-channel logout to `http://127.0.0.1:8094/backchannel-logout`, inside the pod, never through the front.
 - The page checks the ID token's issuer, audience, authorised party and nonce, the state against a pre-sign-in cookie
   (one use, 5 minutes), and starts a fresh session (15 minutes, `__Host-` cookie, `HttpOnly`, `Secure`).
-- The front proxies only `/`, `/callback`, `/logout`, `/slots`, the four anchor routes and the two activation routes
-  on the page's name to
+- The front proxies only `/`, `/callback`, `/logout`, `/slots`, the four anchor routes, the two activation routes and
+  the two rotation routes on the page's name to
   `127.0.0.1:8094` (`deploy/secrets/sites/fleet.caddy`); the JSON route stays on loopback 8093.
 - The page reaches the broker only: its client trusts only `ca_file` (the front's CA or chain) and dials the issuer's
   host at the front on the pod's loopback (`front`), so neither DNS nor a hairpin route matters.
@@ -130,7 +133,7 @@ Playwright is installed).
    puts it in the inventory.
 Guards: the enrolment route takes at most 20 presentations a minute for the whole fleet; three refused presentations
 close a slot; a second key for a used slot is refused and shown. An enrolled name cannot be opened again (a new key is
-a rotation, slice 5) nor activated under a second key; a name configured in `edges` and enrolled by code under
+a rotation, below) nor activated under a second key; a name configured in `edges` and enrolled by code under
 another key is refused for both, and logged with what to do, until one is removed. Tested in Go
 (`fleet/internal/fleet/enrolled_test.go`, with `deploy/edge/install.py` itself presenting where Python is 3.13 or later
 with cryptography, set by `build.py check`; `fleet/internal/page/activate_test.go`; `fleet/internal/enrol`, the typed
@@ -151,6 +154,43 @@ check's 80 bits and the CA pin) and in Python (`tests/test_edge_enrol.py`, one v
   a typed check of 80 bits from the edge's screen (16 base32 characters, not the last 16, or the whole fingerprint),
   and who read it and how; a relay or site fleet only with the approver reading its screen on site.
 
+## Enrolment-key rotation (0026 point 3, slice 5, #26)
+The desk rotates an edge's enrolment key (KeyClerk `rotate_edge`: its officer and the edge's new key sign a rotation
+statement, the security officer completes it) and from then on refuses the old key. The agent follows on its own
+(`docs/agent.md`, "Rotating the enrolment key"); the fleet does not follow the desk, because its trust root is its own
+officer registry:
+1. Once the desk took the new key, the agent sends `POST /fleet/v1/rotation` a handover: its exact JSON bytes (edge, old
+   key, new key, time, the desk's statement as staged) signed by the old key and by the new one over
+   `relikey-fleet-rotation-v1` + newline + the bytes (`agent/pkg/fleetproto`: `SignHandover`, `VerifyHandover`). The
+   context keeps it from passing for a report or a clerk request.
+2. The fleet checks that the old key is the one it holds for that edge name (from `edges` in fleet.json, an enrolled
+   slot, or an earlier approved rotation), both signatures, the time (five minutes), and that the statement is a
+   `kc-edge-officer-v2` with purpose `rotation` for this edge, naming the new key as its one node and signed by exactly
+   that key and the officer key it names. The officer's signature is checked against the key the statement names
+   itself, so it is consistent, not trusted: the fleet cannot know the desk's officers. The rotation is then pending,
+   in the evidence log; the same handover again changes nothing; at most three wait per edge.
+3. The page lists pending rotations under "Key rotations": the edge, where the handover came from, the old key's id,
+   the new key whole, and the desk's officer and officer key as the statement names them. More than one waiting for one
+   edge is shown as an alarm (someone else may hold its old key), and one whose old key the fleet no longer holds is
+   marked. An officer of the registry in force types at least 20 characters of the new key (80 bits) as the desk's
+   rotation record, or the edge where the key was made, shows it, records who read it and how, and signs the approval
+   with their officer passkey (`/rotate/begin`, `/rotate/sign`; a statement of kind `rotate`, bound to the fleet, the
+   registry version, the approval's hash, five minutes and a nonce, used once), as for an activation.
+4. The fleet verifies the signature against the registry in force and that it still holds the old key, and records the
+   approval, signed, in the evidence log. From then on it holds the new key for that edge and refuses the old one: an
+   enrolled edge's slot takes the new key, and a configured edge is held under the new key while fleet.json still names
+   the old one (write the new one with `fleet_edge.py` when convenient). Other rotations waiting for that edge become
+   void. The report sequence is kept per edge name, so it carries across the change: a replay under the new key is
+   refused.
+
+Until the approval the agent signs its reports with the old key, so reporting never stops; when the fleet refuses the
+old key, the agent reports with the new one and deletes the old key's file. A stolen old key alone cannot move the
+fleet: its handover only waits, and the approver compares the new key with the desk's record. Not in this slice: a
+rotation that also changes the edge's officer (the agent refuses it at start; a new officer needs the edge enrolled
+again), and declining a pending rotation on the page (it waits, or goes void when another is approved). Tested in Go:
+`fleet/internal/fleet/rotation_test.go`, `fleet/internal/page/rotate_test.go`, `fleet/internal/enrol/rotation_test.go`,
+`agent/pkg/fleetproto/handover_test.go`, and end to end with the agent in `agent/internal/agent/rotation_test.go`.
+
 ## Not built yet (0026's slices)
 The digest pin (once releases are signed), a clerk's governance facts,
-signed releases and the enforced minimum release (slice 3), staged rollout (slice 4), enrolment-key rotation (slice 5), the site relay (slice 6).
+signed releases and the enforced minimum release (slice 3), staged rollout (slice 4), the site relay (slice 6).

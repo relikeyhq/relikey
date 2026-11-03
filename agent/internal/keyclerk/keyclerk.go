@@ -35,6 +35,23 @@ type Client struct {
 	// PollHTTP carries long-polls: the same pin and TLS as HTTP, with timeouts above the desk's hold (55 s). Nil: HTTP.
 	PollHTTP *http.Client
 	Now      func() time.Time
+	// Rotation, when set, holds the enrolment key instead of Key, with a staged next key during a rotation (#26).
+	Rotation Rotation
+}
+
+// Rotation is the edge's enrolment-key rotation as the desk client uses it (agent/internal/enrolkey).
+type Rotation interface {
+	Current() ed25519.PrivateKey // the key the desk holds
+	Next() ed25519.PrivateKey    // the staged key, nil when none
+	// Promote makes the staged key the current one: the desk took a request signed with it.
+	Promote(next ed25519.PrivateKey)
+}
+
+func (c *Client) key() ed25519.PrivateKey {
+	if c.Rotation != nil {
+		return c.Rotation.Current()
+	}
+	return c.Key
 }
 
 // MaxWait is the longest hold the desk grants a long-poll (KeyClerk decision 0026); a longer wait is clamped.
@@ -62,16 +79,47 @@ func (c *Client) call(ctx context.Context, method, path string, body []byte, lim
 }
 
 func (c *Client) callWith(ctx context.Context, hc *http.Client, method, path string, body []byte, limit int64) (int, []byte, error) {
-	return c.callNonce(ctx, hc, method, path, body, limit, kcedge.NewNonce())
+	status, b, _, err := c.callNonce(ctx, hc, method, path, body, limit)
+	return status, b, err
 }
 
-func (c *Client) callNonce(ctx context.Context, hc *http.Client, method, path string, body []byte, limit int64, nonce string) (int, []byte, error) {
+// callNonce signs and sends a request with a fresh nonce, and returns the nonce the answer belongs to. During a
+// rotation (#26) the desk refuses the key it held once its security officer completed the rotation, with 401 and no
+// notice: the same request is then signed again with the staged key and a fresh nonce, and only when the desk takes
+// it is the staged key promoted. A 401 the staged key does not cure is returned as it came: nothing changes.
+func (c *Client) callNonce(ctx context.Context, hc *http.Client, method, path string, body []byte, limit int64) (int, []byte, string, error) {
+	nonce, used := kcedge.NewNonce(), c.key()
+	status, b, err := c.send(ctx, hc, used, method, path, body, limit, nonce)
+	if err != nil || status != http.StatusUnauthorized || c.Rotation == nil {
+		return status, b, nonce, err
+	}
+	next := c.Rotation.Next()
+	if cur := c.Rotation.Current(); next == nil && !cur.Equal(used) {
+		next = cur // another request promoted the staged key while this one was signed with the old
+	}
+	if next == nil {
+		return status, b, nonce, nil
+	}
+	retry := kcedge.NewNonce()
+	s2, b2, err := c.send(ctx, hc, next, method, path, body, limit, retry)
+	if err != nil || !accepted(s2) {
+		return status, b, nonce, nil
+	}
+	c.Rotation.Promote(next)
+	return s2, b2, retry, nil
+}
+
+// accepted is an answer the desk gives only to an enrolled edge it identified: a success, or the sealed ended notice.
+func accepted(status int) bool { return status/100 == 2 || status == http.StatusGone }
+
+func (c *Client) send(ctx context.Context, hc *http.Client, key ed25519.PrivateKey, method, path string, body []byte,
+	limit int64, nonce string) (int, []byte, error) {
 	req, err := http.NewRequestWithContext(ctx, method, c.Base+path, bytes.NewReader(body))
 	if err != nil {
 		return 0, nil, err
 	}
 	// Sign exactly what is sent: the request URI as built and the body bytes (GE-12).
-	req.Header.Set(kcedge.RequestHeader, kcedge.SignRequest(c.Key, c.Edge, method, req.URL.RequestURI(), body,
+	req.Header.Set(kcedge.RequestHeader, kcedge.SignRequest(key, c.Edge, method, req.URL.RequestURI(), body,
 		c.Now().Unix(), nonce))
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
@@ -185,8 +233,9 @@ func (c *Client) SendReport(ctx context.Context, r Report) error {
 	return nil
 }
 
-// EnrolmentKey is the edge's public enrolment key, the one an ended notice must name (AG-18).
-func (c *Client) EnrolmentKey() ed25519.PublicKey { return c.Key.Public().(ed25519.PublicKey) }
+// EnrolmentKey is the edge's public enrolment key, the one an ended notice must name (AG-18): after a rotation, the
+// promoted key.
+func (c *Client) EnrolmentKey() ed25519.PublicKey { return c.key().Public().(ed25519.PublicKey) }
 
 // ErrNoLiveLease is the desk's 404 to an e-mail request: the lease is not in the last bundle served, or not live.
 var ErrNoLiveLease = errors.New("the desk knows no live lease by that id")
@@ -197,9 +246,8 @@ var ErrRateLimited = errors.New("the desk limits e-mail requests for this lease:
 // Email asks the desk for a lease's verified address (edge protocol 1.3, GET /api/v1/edge/lease/{id}/email). It returns
 // the sealed answer and the nonce this request was signed with: the caller verifies both (kcedge.VerifyEmail).
 func (c *Client) Email(ctx context.Context, leaseID string) (*kcedge.Sealed, string, error) {
-	nonce := kcedge.NewNonce()
-	status, b, err := c.callNonce(ctx, c.HTTP, http.MethodGet, "/api/v1/edge/lease/"+url.PathEscape(leaseID)+"/email", nil,
-		16<<10, nonce)
+	status, b, nonce, err := c.callNonce(ctx, c.HTTP, http.MethodGet, "/api/v1/edge/lease/"+url.PathEscape(leaseID)+"/email", nil,
+		16<<10)
 	if err != nil {
 		return nil, "", err
 	}

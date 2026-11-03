@@ -213,6 +213,7 @@ func main() {
 			pg.HTTP = hc
 			pg.Admin = st
 			pg.Pin = pin
+			pg.Held = s.Held // a rotation is approved only while the key it replaces is held (#26)
 			psrv := &http.Server{Addr: c.Page.Listen, Handler: pg.Handler(), ReadHeaderTimeout: 10 * time.Second,
 				ReadTimeout: 20 * time.Second, WriteTimeout: 20 * time.Second}
 			go func() { <-ctx.Done(); _ = psrv.Close() }()

@@ -312,13 +312,11 @@ func groups(h string) string {
 	return b.String()
 }
 
-// script runs the passkey steps: registering, signing the anchor, signing an activation. It writes only text (never
+// script runs the passkey steps: registering, signing the anchor, signing an activation or a rotation. It writes only text (never
 // markup), talks only to this page, and reloads it when a step is done. Allowed by its hash (scriptHash), so no other script can run on the page.
 const script = `(()=>{
 const dec=s=>Uint8Array.from(atob(s.replace(/-/g,"+").replace(/_/g,"/")),c=>c.charCodeAt(0));
 const enc=b=>btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
-const out=document.getElementById("anchor-msg")||document.getElementById("activate-msg");
-const say=t=>{if(out)out.textContent=t};
 async function post(path,body){
 const r=await fetch(path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body||{}),credentials:"same-origin",cache:"no-store"});
 let j={};try{j=await r.json()}catch(e){}
@@ -326,6 +324,7 @@ if(!r.ok)throw new Error(j.error||("the fleet answered "+r.status));
 return j}
 function step(id,run){
 const b=document.getElementById(id);if(!b)return;
+const out=document.getElementById(b.dataset.msg);const say=t=>{if(out)out.textContent=t};
 if(!window.PublicKeyCredential||!navigator.credentials){b.disabled=true;say("This browser cannot use passkeys: open the page in a current browser.");return}
 b.addEventListener("click",async()=>{
 b.disabled=true;say("Waiting for your passkey...");
@@ -351,6 +350,14 @@ o.challenge=dec(o.challenge);
 o.allowCredentials=o.allowCredentials.map(c=>({type:c.type,id:dec(c.id)}));
 const a=await navigator.credentials.get({publicKey:o});
 await post("/activate/sign",{client_data_json:enc(a.response.clientDataJSON),authenticator_data:enc(a.response.authenticatorData),signature:enc(a.response.signature)})});
+step("rotate-sign",async()=>{
+const r=[...document.querySelectorAll("#rotate tr[data-rotation]")].find(r=>r.querySelector("[name=pick]").checked);
+if(!r)throw new Error("select the rotation to approve");
+const o=await post("/rotate/begin",{rotation:r.dataset.rotation,typed:r.querySelector("[name=typed]").value,read_by:r.querySelector("[name=read_by]").value,read_how:r.querySelector("[name=read_how]").value});
+o.challenge=dec(o.challenge);
+o.allowCredentials=o.allowCredentials.map(c=>({type:c.type,id:dec(c.id)}));
+const a=await navigator.credentials.get({publicKey:o});
+await post("/rotate/sign",{client_data_json:enc(a.response.clientDataJSON),authenticator_data:enc(a.response.authenticatorData),signature:enc(a.response.signature)})});
 })();`
 
 var scriptHash = func() string {

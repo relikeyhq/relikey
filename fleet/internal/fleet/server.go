@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"maps"
@@ -53,12 +54,19 @@ func (s *Server) allowPresent() bool {
 }
 
 // keys are the edges' report keys: the configured ones and those enrolled by code. A name both list with different
-// keys is in neither: a second key for an edge is shown and refused, never chosen (0026 point 15).
+// keys is in neither: a second key for an edge is shown and refused, never chosen (0026 point 15). An approved
+// rotation moves a configured edge from its old key to the new one (#26); approving it updates an enrolled edge's slot.
 func (s *Server) keys() map[string]ed25519.PublicKey {
 	if s.Admin == nil {
 		return s.Keys
 	}
 	out := maps.Clone(s.Keys)
+	for _, r := range s.Admin.ApprovedRotations() {
+		k, err := hex.DecodeString(r.NewKey)
+		if have, ok := out[r.Edge]; ok && err == nil && hex.EncodeToString(have) == r.OldKey {
+			out[r.Edge] = ed25519.PublicKey(k)
+		}
+	}
 	for name, h := range s.Admin.Enrolled() {
 		k, err := hex.DecodeString(h)
 		if err != nil || len(k) != ed25519.PublicKeySize {
@@ -73,6 +81,12 @@ func (s *Server) keys() map[string]ed25519.PublicKey {
 		out[name] = ed25519.PublicKey(k)
 	}
 	return out
+}
+
+// Held is the key (hex) the fleet holds for an edge now: what its reports must be signed with.
+func (s *Server) Held(edge string) (string, bool) {
+	k, ok := s.keys()[edge]
+	return hex.EncodeToString(k), ok
 }
 
 func (s *Server) warn(peer string, err error) {
@@ -137,6 +151,33 @@ func (s *Server) Handler() http.Handler {
 			s.warn(r.RemoteAddr, err)
 			http.Error(w, "refused", http.StatusForbidden)
 		}
+	})
+	// An edge hands its new enrolment key over after the desk took it (0026 point 3, #26): signed by the key the fleet
+	// holds and the new one, carrying the desk's rotation statement. 204: pending, for an officer to approve on the page
+	// (the same handover again is 204 too); 403 anything else (the reason in the service's log). Until the approval
+	// the fleet holds the old key; the fleet never checks the desk officer's signature, its trust root is its own.
+	mux.HandleFunc("POST /fleet/v1/rotation", func(w http.ResponseWriter, r *http.Request) {
+		if s.Admin == nil {
+			http.Error(w, "rotation needs the fleet's officers (the admin section)", http.StatusNotFound)
+			return
+		}
+		var signed fleetproto.SignedHandover
+		if err := json.NewDecoder(io.LimitReader(r.Body, maxReport)).Decode(&signed); err != nil {
+			http.Error(w, "a signed handover: {handover, old_signature, new_signature}", http.StatusBadRequest)
+			return
+		}
+		h, f, err := fleetproto.VerifyHandover(signed, s.keys(), s.Now())
+		if err == nil {
+			err = s.Admin.Handover(h, f, r.Header.Get("X-Forwarded-For"), s.Now())
+		}
+		if err != nil {
+			s.warn(r.RemoteAddr, fmt.Errorf("rotation handover: %w", err))
+			http.Error(w, "refused", http.StatusForbidden)
+			return
+		}
+		s.Log.Warn("an edge handed over a new enrolment key: an officer approves it on the fleet page",
+			"edge", h.Edge, "new_key_fingerprint", enrol.Fingerprint(h.NewKey))
+		w.WriteHeader(http.StatusNoContent)
 	})
 	mux.HandleFunc("GET /fleet/v1/edges", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

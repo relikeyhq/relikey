@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"io"
 	"net/http"
@@ -45,6 +46,25 @@ func Key(seed byte) ed25519.PrivateKey {
 }
 
 func Hex(k ed25519.PrivateKey) string { return hex.EncodeToString(k.Public().(ed25519.PublicKey)) }
+
+// RotationStatement is the desk's rotation statement as KeyClerk's rotate_edge writes it (kc-edge-officer-v2, purpose
+// rotation, one node), signed by the officer and co-signed with the edge's next key: the file an operator stages as
+// rotation_statement_file. change, when set, alters what it says before it is signed.
+func RotationStatement(edge string, officer, next ed25519.PrivateKey, change func(kcedge.Object)) []byte {
+	says := kcedge.Object{"edge": edge, "format": kcedge.OfficerFormat, "officer": "idp:officer", "officer_key": Hex(officer),
+		"purpose": "rotation", "nodes": []kcedge.Value{kcedge.Object{"enrolment_key": Hex(next), "unlock_key": nil, "tpm": nil}}}
+	if change != nil {
+		change(says)
+	}
+	raw := kcedge.Encode(says)
+	m := kcedge.MultiSigned{Bytes: base64.StdEncoding.EncodeToString(raw)}
+	for _, k := range []ed25519.PrivateKey{officer, next} {
+		m.Signatures = append(m.Signatures, kcedge.Signature{Key: Hex(k), KeyID: kcedge.KeyID(Hex(k)),
+			Signature: hex.EncodeToString(ed25519.Sign(k, raw))})
+	}
+	b, _ := json.Marshal(m)
+	return b
+}
 
 // FakeLease is a lease the fake desk grants.
 type FakeLease struct {
@@ -390,6 +410,14 @@ func (k *KeyClerk) RefusedCount() int {
 	k.mu.Lock()
 	defer k.mu.Unlock()
 	return k.Refused
+}
+
+// SetEnrolment is the desk's half of a completed rotation (KeyClerk rotate_edge): from now on it takes requests signed
+// with this key only, and refuses the old one with 401.
+func (k *KeyClerk) SetEnrolment(pub ed25519.PublicKey) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	k.Enrolment = pub
 }
 
 // SetEnded makes the desk answer 410 with a sealed ended notice (or stop doing so).

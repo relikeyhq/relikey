@@ -234,10 +234,14 @@ facts would drift into the governance store.
 - Built: the fleet service `relikey-fleet` (its own Go module `fleet/`: signed edge reports, the inventory and the
   silence alarm, point 1's self-reported label), the fleet page (point 13), the anchor ceremony (points 16, 21, 30), and
   the officer registry and enrolment building blocks (points 14 to 33). Described in `docs/fleet.md`.
+- Built (2026-11-03, #26): enrolment-key rotation (slice 5, point 3): the agent follows the desk's `rotate_edge` with a
+  staged key and hands the new key to the fleet, which takes it after an officer's passkey approval. A rotation that
+  also changes the edge's officer is refused. Described in `docs/fleet.md` and `docs/agent.md`.
 - Not built: signed releases and the enforced minimum release (slice 3), staged rollout (slice 4) and the site relay
-  (slice 6), tracked in #33; enrolment-key rotation (slice 5), tracked in #26; a clerk's governance facts.
+  (slice 6), tracked in #33; a clerk's governance facts.
 
 ## Changelog
+- 2026-11-03: the build state of slice 5 recorded (#26); the decision unchanged.
 - 2026-10-29: the build state recorded (#86); the decision unchanged.
 - 2026-10-28: note on point 20: for 0.2.0 the fleet alone checks an activation (display and report intake only,
   re-verifiable from the evidence log); the clerk as a second checker follows (#23).
