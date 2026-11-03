@@ -71,6 +71,8 @@ jobs:
               "--certificate-oidc-issuer https://token.actions.githubusercontent.com\`," \
               "then \`gh attestation verify oci://IMAGE@DIGEST --repo ${GITHUB_REPOSITORY}\`."
           } >> notes/notes.md
+          # a release candidate (vX.Y.Z-rc.N) is a pre-release: it never becomes the latest release
+          prerelease=(); [[ "${GITHUB_REF_NAME}" == *-* ]] && prerelease=(--prerelease)
           gh release create "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --verify-tag --title "${GITHUB_REF_NAME}" \
-            --notes-file notes/notes.md \
+            "${prerelease[@]}" --notes-file notes/notes.md \
             dist/*
