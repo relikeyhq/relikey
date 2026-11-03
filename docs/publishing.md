@@ -68,9 +68,9 @@ vulnerability across several binaries is one statement. The timestamp is the tag
 file's release download URL, so building it twice for one release gives the same bytes while the database is unchanged.
 
 An `affected` statement stops the release build before anything is attested or signed: the fix goes to `main` and the
-next version carries it, the tag stays. CI's `build.py vuln` checks the agent's module on every change; the check at
-release time also covers the fleet service and an advisory published after CI ran. A VEX with no statements is valid:
-govulncheck knew of no vulnerability in the binaries' dependencies.
+next version carries it, the tag stays. CI's `build.py vuln` checks the agent's and the fleet service's modules on
+every change; the check at release time also runs for each binary's target and catches an advisory published after CI
+ran. A VEX with no statements is valid: govulncheck knew of no vulnerability in the binaries' dependencies.
 
 The VEX is a snapshot at release time; nothing re-runs it or changes it for a published release. An advisory published
 later is answered by the next release and its VEX.

@@ -6,7 +6,7 @@
                                --no-mutants: none (CI runs them as parallel jobs on main and nightly)
     python build.py mutants    every mutant; --shard I/N runs part I of N (see mutants.py)
     python build.py race       go test -race (needs cgo and a C compiler: Linux amd64/arm64 only)
-    python build.py vuln       govulncheck on the source
+    python build.py vuln       govulncheck on the source of the agent and the fleet service
     python build.py dist       a development build of the three binaries into dist/ (for images and labs)
     python build.py release    the five static binaries, built twice from a clean tagged checkout and compared;
                                dist/ gets the binaries, a CycloneDX SBOM and the build info of each, and SHA256SUMS
@@ -119,11 +119,13 @@ def race():
 
 
 def vuln():
+    """govulncheck on each module a released binary is built from (the agent and the fleet service)."""
     toolchain()
-    rc, out = tool("govulncheck", "./...")
-    print(out.splitlines()[-1] if out else "")
-    if rc != 0:
-        sys.exit(out)
+    for module in sorted({b[4] for b in binaries()}):
+        rc, out = tool("govulncheck", "./...", cwd=HERE.parent / module)
+        print(f"{module}: " + (out.splitlines()[-1] if out else ""))
+        if rc != 0:
+            sys.exit(f"{module}:\n{out}")
 
 
 def binaries():
