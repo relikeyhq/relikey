@@ -58,17 +58,20 @@ def test_missing_binaries_refuse(tmp_path, monkeypatch):
 
 
 def test_release_workflow_signs_and_lists_images_by_digest():
-    wf = yaml.safe_load((ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8"))
-    jobs = wf["jobs"]
-    job = jobs["images"]
+    workflows = ROOT / ".github" / "workflows"
+    jobs = yaml.safe_load((workflows / "release.yml").read_text(encoding="utf-8"))["jobs"]
+    built = yaml.safe_load((workflows / "release-build.yml").read_text(encoding="utf-8"))
+    job = built["jobs"]["images"]   # in the reusable build workflow (#28), its digests passed out to the release
+    assert built[True]["workflow_call"]["outputs"]["agent"]["value"] == "${{ jobs.images.outputs.agent }}"
     assert job["permissions"] == {"contents": "read", "packages": "write", "id-token": "write",
                                   "attestations": "write"}
     steps = "\n".join(str(s.get("run", "")) + str(s.get("uses", "")) + str(s.get("with", "")) for s in job["steps"])
     assert "release_images.py push" in steps
     assert "cosign sign --yes" in steps
     assert "attest-build-provenance" in steps and "push-to-registry" in steps
-    assert "images" in jobs["github-release"]["needs"]
-    release = "\n".join(str(s.get("run", "")) for s in jobs["github-release"]["steps"])
+    assert jobs["github-release"]["needs"] == "build"
+    release = "\n".join(str(s.get("run", "")) + str(s.get("env", "")) for s in jobs["github-release"]["steps"])
+    assert "needs.build.outputs.agent" in release
     assert "digests" in release   # the release notes list each image's digest
 
 
