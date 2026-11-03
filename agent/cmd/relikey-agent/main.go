@@ -36,6 +36,7 @@ import (
 	"relikey/agent/internal/agent"
 	"relikey/agent/internal/apply"
 	"relikey/agent/internal/clock"
+	"relikey/agent/internal/enrolkey"
 	"relikey/agent/internal/httpx"
 	"relikey/agent/internal/kcedge"
 	"relikey/agent/internal/keyclerk"
@@ -63,6 +64,13 @@ type Config struct {
 	Lab bool `json:"lab"`
 	// Required. The edge's enrolment key (relikey-agent keygen), mode 0600, owned by the agent's user.
 	EnrolmentKeyFile string `json:"enrolment_key_file"`
+	// Optional. A rotation's next enrolment key (relikey-agent keygen), in the directory of enrolment_key_file: once the
+	// desk refuses the current key, the agent retries with this one and, when the desk takes it, makes it the
+	// enrolment key (#26). The file is gone after that; the setting may stay.
+	NextEnrolmentKeyFile string `json:"next_enrolment_key_file"`
+	// With next_enrolment_key_file: the desk's rotation statement (rotate_edge), co-signed with the next key
+	// (relikey-agent cosign -key NEXT). The agent hands it to the fleet with the new key, for an officer to approve.
+	RotationStatementFile string `json:"rotation_statement_file"`
 	// The keys the edge trusts, pinned on site at enrolment; never fetched from the network.
 	Pins struct {
 		// Required. KeyClerk's bundle signing key (hex), from the enrolment.
@@ -278,13 +286,13 @@ func run(args []string, once bool) error {
 		return err
 	}
 	log := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
-	seedHex, err := readSecret(c.EnrolmentKeyFile)
+	// The enrolment key and a staged rotation (#26): one holder for the desk's and the fleet's clients, so a promotion
+	// reaches both at once.
+	keys, err := enrolkey.Load(enrolkey.Options{Current: c.EnrolmentKeyFile, Next: c.NextEnrolmentKeyFile,
+		Statement: c.RotationStatementFile, Edge: c.Edge, OfficerKey: c.Pins.OfficerKey, HoldOld: c.Fleet.URL != "",
+		Read: readSecret, Log: log})
 	if err != nil {
 		return err
-	}
-	seed, err := hex.DecodeString(seedHex)
-	if err != nil || len(seed) != ed25519.SeedSize {
-		return badSeed(c.EnrolmentKeyFile)
 	}
 	token, err := readSecret(c.Bastion.TokenFile)
 	if err != nil {
@@ -354,7 +362,7 @@ func run(args []string, once bool) error {
 		// The composition root is the one place that names products: the clerk speaks the edge protocol (KeyClerk is the
 		// reference clerk), the bastion is the Warpgate adapter (bastion.kind checked above).
 		Clerk: &keyclerk.Client{Base: strings.TrimRight(c.Clerk.URL, "/"), Edge: c.Edge,
-			Key: ed25519.NewKeyFromSeed(seed), HTTP: kcHTTP, PollHTTP: pollHTTP, Now: clk.Now},
+			Rotation: keys, HTTP: kcHTTP, PollHTTP: pollHTTP, Now: clk.Now},
 		Bastion:  warpgate.Bastion{C: &warpgate.Client{Base: strings.TrimRight(c.Bastion.URL, "/"), Token: token, HTTP: wgHTTP}},
 		ClerkTLS: clerkTLS, BastionTLS: bastionTLS,
 		Tick: time.Duration(c.TickSeconds) * time.Second, Pull: time.Duration(c.PullSeconds) * time.Second,
@@ -368,7 +376,7 @@ func run(args []string, once bool) error {
 			(fu.Path != "" && fu.Path != "/") || fu.RawQuery != "" || fu.Fragment != "" {
 			return fmt.Errorf("fleet.url: https://<the clerk's own host>, no path, query or user (%s)", c.Clerk.URL)
 		}
-		a.Fleet = &fleetproto.Client{URL: c.Fleet.URL, HTTP: kcHTTP, Key: ed25519.NewKeyFromSeed(seed)}
+		a.Fleet = &fleetproto.Client{URL: c.Fleet.URL, HTTP: kcHTTP, Rotation: keys}
 	}
 	if f := c.Bastion.GovernedRolesFile; f != "" {
 		a.Governed = func() (map[string]bool, error) {

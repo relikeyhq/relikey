@@ -67,7 +67,8 @@ name.
 | `internal/state` | A/B slots with generation and sha256, atomic writes through `os.Root`, floors only rise, the event chain's head, exclusive lock, status.json |
 | `internal/clock` | wall and boot clock behind one interface; `Trusted` |
 | `internal/httpx` | per-peer HTTP clients: timeouts, no redirects, no proxy, capped bodies, certificate pinning |
-| `internal/keyclerk` | signed pull and report |
+| `internal/keyclerk` | signed pull and report; the 401 retry with a staged key during a rotation |
+| `internal/enrolkey` | the enrolment key and its rotation: the staged key, the crash-safe swap, the old key kept for the fleet |
 | `internal/warpgate` | the admin API on loopback; idempotent requests retried with backoff |
 | `internal/apply` | desired state from leases, observed state of Warpgate, the ordered plan, execution with shutdown grace |
 | `internal/agent` | the loop, shadow mode, status |
@@ -136,6 +137,33 @@ point 2, C-12, C-13).
 
 `fleet.url` (optional): the agent sends ReliKey's fleet service its signed report every pull interval
 (`docs/fleet.md`, decision 0026); it must be the clerk's own host, and the agent takes nothing back from it.
+
+**Rotating the enrolment key** (decision 0026 point 3, #26). The desk rotates the key (KeyClerk `rotate_edge`); the
+agent follows without a command after the approval:
+1. On the edge: `relikey-agent keygen -out /var/lib/relikey/enrolment.next.key` (in the directory of
+   `enrolment_key_file`, so the swap is one rename). It prints the new key: give it to the desk's officer.
+2. The officer starts the rotation at the desk with that key (same officer: see below) and hands the edge the statement;
+   the edge co-signs it: `relikey-agent cosign -in rotation.json -out rotation.signed.json -key
+   /var/lib/relikey/enrolment.next.key`, and the statement goes back to the desk.
+3. Stage both in `agent.json`: `"next_enrolment_key_file": "/var/lib/relikey/enrolment.next.key"`,
+   `"rotation_statement_file": "/var/lib/relikey/rotation.signed.json"`, and restart the agent. At start it checks that
+   the statement is a rotation of this edge to the staged key, co-signed with it, under the pinned officer key.
+4. The desk's security officer completes the rotation; from then on the desk refuses the old key with 401 and sends no
+   notice. The agent signs the refused request again with the staged key; when the desk takes it, the staged key's
+   file replaces `enrolment_key_file` (one rename) and every desk request is signed with it. A 401 the staged key
+   does not cure changes nothing: the old key stays, and the log says the pull failed as before.
+5. With a fleet, the old key is kept beside the new one (`enrolment_key_file` + `.old`) and fleet reports go on with
+   it, because the fleet trusts its own officers, not the desk's: the agent sends the fleet a handover signed by both
+   keys with the statement, until the fleet takes it. When an officer has approved it on the fleet page, the fleet
+   refuses the old key; the agent then reports with the new one and deletes the `.old` file (logged). Without a fleet
+   the old key is deleted at the swap.
+Crash safety: the old key is written to its own file before the swap; a restart in between finds it equal to the key
+in use, removes it and starts over, and a restart after the swap starts with the new key and the handover pending.
+Refused at start, each with the next step: a staged key outside the key's directory, a staged key without its
+statement or the reverse, a staged key equal to the one in use, a statement for another edge or key or not a
+rotation, a second rotation staged while the fleet has not taken the first, and a rotation that also changes the
+edge's officer: the agent verifies the ceiling with `pins.officer_key`, so a new officer needs the edge enrolled again
+(not in #26). The settings may stay in `agent.json` after the rotation; with the staged file gone they do nothing.
 
 `governed_roles_file` (optional) is a SCIM list of the groups only leases grant, written by `deploy/edge/targets.py`
 from the edge's targets. With it, or with `governed_roles` in the signed bundle (KeyClerk 0.25.0, its decision 0025),
@@ -276,6 +304,8 @@ KeyClerk 0.22.0 sends the verified e-mail on each lease (KC-10) and a stable `fr
 `ceiling.rego` meanwhile), the LDAP facade and lease credentials, offline levels, evidence, TPM. Not yet run: armv7 on real hardware (qemu-user only so far).
 
 ## Changelog
+- 2026-11-03: enrolment-key rotation (#26): the staged next key, the 401 retry and crash-safe promotion, the handover
+  to the fleet and the old key's deletion once the fleet takes the new one; 12 mutants on the agent's side.
 - 2026-10-28: the event chain (decision 0025 point 2, first part): sequence numbers and the previous record's hash in
   every event, the head kept crash-safe in the state directory and reported in status.json, `events.Verify`; 4 mutants.
 - 2026-10-25: long-poll for the bundle (KeyClerk decision 0026): grants and revokes in seconds; pulls beside the loop; the interval as the floor after an unchanged immediate answer; KeyClerk's request vectors; the conformance set vendored from the public edge protocol v1.2.0 (126 cases); 61 mutants.

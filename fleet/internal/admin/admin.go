@@ -48,6 +48,8 @@ type data struct {
 	// version 1 they are signing. Both go once the fleet is anchored.
 	Candidates map[string]registry.Officer `json:"candidates,omitempty"`
 	Draft      *registry.Change            `json:"draft,omitempty"`
+	// Rotations are the edges' enrolment-key handovers (point 3, #26): pending, approved by an officer, or void.
+	Rotations []Rotation `json:"rotations,omitempty"`
 }
 
 // Store is the fleet's administrative state.

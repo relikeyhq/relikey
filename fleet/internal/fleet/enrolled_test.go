@@ -29,6 +29,7 @@ import (
 type enrolRig struct {
 	st  *admin.Store
 	inv *Inventory
+	s   *Server
 	srv *httptest.Server
 	ann *regtest.Authenticator
 	pin string
@@ -51,11 +52,11 @@ func newEnrolRig(t *testing.T) *enrolRig {
 		t.Fatal(err)
 	}
 	inv, _ := Open(filepath.Join(t.TempDir(), "fleet.json"), []string{"plant-a"}, time.Minute)
-	srv := httptest.NewTLSServer((&Server{Inv: inv, Keys: keys(), Now: time.Now, Admin: st,
-		Log: slog.New(slog.NewTextHandler(io.Discard, nil))}).Handler())
+	s := &Server{Inv: inv, Keys: keys(), Now: time.Now, Admin: st, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	srv := httptest.NewTLSServer(s.Handler())
 	t.Cleanup(srv.Close)
 	sum := sha256.Sum256(srv.Certificate().Raw)
-	return &enrolRig{st: st, inv: inv, srv: srv, ann: ann, pin: hex.EncodeToString(sum[:])}
+	return &enrolRig{st: st, inv: inv, s: s, srv: srv, ann: ann, pin: hex.EncodeToString(sum[:])}
 }
 
 func (g *enrolRig) open(t *testing.T, name string) enrol.Code {

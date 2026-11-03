@@ -791,7 +791,13 @@ func (a *Agent) reportToFleet(ctx context.Context) {
 		defer a.fleetSending.Store(false)
 		sctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 		defer cancel()
-		if err := a.Fleet.Send(sctx, r); err != nil {
+		err := a.Fleet.Send(sctx, r)
+		var handover *fleetproto.HandoverError
+		switch {
+		case errors.As(err, &handover):
+			a.Log.Warn("the fleet has not taken the enrolment-key rotation's handover; reports go on with the key it "+
+				"holds, and the handover is sent again next interval", "err", err)
+		case err != nil:
 			a.Log.Warn("fleet report not delivered; sent again next interval", "err", err)
 		}
 	}()
