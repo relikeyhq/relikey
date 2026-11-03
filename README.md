@@ -120,7 +120,9 @@ example is v0.1.2; run the checks from a clone of this repository, the last two 
        sha256sum -c SHA256SUMS
 
 3. **The provenance** shows a binary was built by this repository's release workflow. The command exits 0 when the
-   attestation matches and non-zero when it does not (piped or in a script it prints nothing on success):
+   attestation matches and non-zero when it does not (piped or in a script it prints nothing on success). Up to 0.2.0
+   the builder is `release.yml`; from 0.3.0 the build runs in the reusable `release-build.yml` (SLSA Build L3), so
+   name that one:
 
        gh attestation verify relikey-agent-linux-amd64 --repo relikeyhq/relikey \
            --signer-workflow relikeyhq/relikey/.github/workflows/release.yml
@@ -131,15 +133,23 @@ example is v0.1.2; run the checks from a clone of this repository, the last two 
        gh attestation verify relikey-agent-linux-amd64 --repo relikeyhq/relikey \
            --predicate-type https://cyclonedx.org/bom
 
-5. **The images** (from 0.3.0): `ghcr.io/relikeyhq/relikey-agent` and `ghcr.io/relikeyhq/relikey-fleet`, tagged with the
+5. **The keyless signatures** (from 0.3.0), for readers without the GitHub CLI: `SHA256SUMS` and each binary come with
+   a Sigstore bundle, `FILE.sigstore.json`, made by the release build with no long-lived key. Check the sums' bundle,
+   then the sums as in step 2:
+
+       cosign verify-blob SHA256SUMS --bundle SHA256SUMS.sigstore.json \
+           --certificate-identity https://github.com/relikeyhq/relikey/.github/workflows/release-build.yml@refs/tags/v0.3.0 \
+           --certificate-oidc-issuer https://token.actions.githubusercontent.com
+
+6. **The images** (from 0.3.0): `ghcr.io/relikeyhq/relikey-agent` and `ghcr.io/relikeyhq/relikey-fleet`, tagged with the
    version and listed by digest in the release notes. Use the digest, not the tag. Each is signed with keyless cosign by
-   the release workflow and has a provenance attestation in the registry:
+   the release build and has a provenance attestation in the registry:
 
        cosign verify ghcr.io/relikeyhq/relikey-agent@DIGEST \
-           --certificate-identity https://github.com/relikeyhq/relikey/.github/workflows/release.yml@refs/tags/v0.3.0 \
+           --certificate-identity https://github.com/relikeyhq/relikey/.github/workflows/release-build.yml@refs/tags/v0.3.0 \
            --certificate-oidc-issuer https://token.actions.githubusercontent.com
        gh attestation verify oci://ghcr.io/relikeyhq/relikey-agent@DIGEST --repo relikeyhq/relikey \
-           --signer-workflow relikeyhq/relikey/.github/workflows/release.yml
+           --signer-workflow relikeyhq/relikey/.github/workflows/release-build.yml
 
 From 0.2.0 a release is also built only from a commit whose CI passed on `main`, and its binaries are smoke-tested
 before anything is attested. The attestation bundles are release files too (`relikey-provenance.intoto.jsonl`,

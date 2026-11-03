@@ -58,7 +58,8 @@ request is updated and its checks run again. Branches are deleted on merge.
 In short ([publishing.md](publishing.md) has the detail): a release pull request runs
 `python tools/changelog.py release X.Y.Z`, which folds the fragments into `## [X.Y.Z]`; after it merges, the
 maintainer signs the tag `vX.Y.Z` on that merge commit by its full hash with the release key, in their own terminal;
-`release.yml` builds reproducibly, attests provenance and publishes the release with that section as its notes. A tag
+`release.yml` runs the reusable `release-build.yml` (reproducible build, attestations, keyless signatures, images) and
+publishes the release with that section as its notes. A tag
 is never moved: a failed release is fixed in the next version.
 
 ## Dependencies

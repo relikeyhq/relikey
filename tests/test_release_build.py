@@ -93,7 +93,7 @@ def _runs(version="v0.2.0", rev=REV, rc=0):
 
 def test_the_release_binaries_are_the_ones_release_yml_attests():
     assert [b[0] for b in build.binaries()] == NAMES
-    jobs = yaml.safe_load((ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8"))["jobs"]
+    jobs = yaml.safe_load((ROOT / ".github" / "workflows" / "release-build.yml").read_text(encoding="utf-8"))["jobs"]
     assert jobs["sbom-attest"]["strategy"]["matrix"]["binary"] == NAMES
 
 
@@ -174,10 +174,22 @@ def test_the_sbom_tool_is_pinned_in_its_own_module():
     assert any("/agent/tools/sbom" in u.get("directories", []) for u in gomod)
 
 
-# release.yml: the gate before the build, the smoke test after it, the attestations, and the workflow hygiene.
+# release.yml: the gate, then the build in the reusable release-build.yml (SLSA Build L3, #28), then the release;
+# the smoke test, the attestations, the keyless signatures, and the workflow hygiene.
+
+WORKFLOWS = ROOT / ".github" / "workflows"
+
+
+def _jobs(name):
+    return yaml.safe_load((WORKFLOWS / name).read_text(encoding="utf-8"))["jobs"]
+
 
 def _release_jobs():
-    return yaml.safe_load((ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8"))["jobs"]
+    return _jobs("release.yml")
+
+
+def _build_jobs():
+    return _jobs("release-build.yml")
 
 
 def _runs_of(job):
@@ -189,30 +201,61 @@ def test_nothing_is_built_before_ci_passed_on_the_tagged_commit():
     assert any("tools/release_gate.py" in r for r in _runs_of(jobs["ci-passed"]))
     assert jobs["ci-passed"]["permissions"] == {"contents": "read", "actions": "read"}
     assert jobs["build"]["needs"] == "ci-passed"
-    assert set(jobs["github-release"]["needs"]) == {"build", "sbom-attest", "images"}
-    assert jobs["images"]["needs"] == "build"
+    assert jobs["github-release"]["needs"] == "build"
 
 
-def test_the_built_binaries_are_smoke_tested_before_anything_is_attested():
-    steps = _release_jobs()["build"]["steps"]
+def test_the_build_runs_in_the_reusable_workflow():
+    jobs = _release_jobs()
+    assert jobs["build"]["uses"] == "./.github/workflows/release-build.yml"
+    assert set(jobs) == {"ci-passed", "build", "github-release"}   # nothing is built or signed in the caller
+    for job in jobs.values():
+        assert not any("attest" in s.get("uses", "") or "cosign" in s.get("uses", "") for s in job.get("steps", []))
+    called = yaml.safe_load((WORKFLOWS / "release-build.yml").read_text(encoding="utf-8"))
+    assert list(called[True]) == ["workflow_call"]   # PyYAML reads the key `on` as True
+    assert set(_build_jobs()) == {"build", "sbom-attest", "images"}
+
+
+def test_the_built_binaries_are_smoke_tested_before_anything_is_attested_or_signed():
+    steps = _build_jobs()["build"]["steps"]
     runs = [s.get("run", "") for s in steps]
     release, smoke = runs.index("python agent/build.py release"), runs.index("python agent/build.py smoke")
-    first_attest = next(i for i, s in enumerate(steps) if "actions/attest" in s.get("uses", ""))
-    assert release < smoke < first_attest
+    first = next(i for i, s in enumerate(steps) if "attest" in s.get("uses", "") or "cosign" in s.get("uses", ""))
+    assert release < smoke < first
+
+
+def test_the_sums_and_each_binary_get_a_keyless_signature_before_upload():
+    steps = _build_jobs()["build"]["steps"]
+    sign = next(i for i, s in enumerate(steps) if "cosign sign-blob" in s.get("run", ""))
+    upload = next(i for i, s in enumerate(steps) if s.get("uses", "").startswith("actions/upload-artifact@"))
+    assert sign < upload
+    run = steps[sign]["run"]
+    assert "SHA256SUMS" in run and "--bundle" in run and "--yes" in run
+    assert _build_jobs()["build"]["permissions"]["id-token"] == "write"
 
 
 def test_each_sbom_is_attested_against_its_binary():
-    job = _release_jobs()["sbom-attest"]
+    job = _build_jobs()["sbom-attest"]
     attest = next(s for s in job["steps"] if s.get("uses", "").startswith("actions/attest@"))
     assert attest["with"] == {"subject-path": "dist/${{ matrix.binary }}",
                               "sbom-path": "dist/${{ matrix.binary }}.cdx.json"}
     assert job["permissions"] == {"contents": "read", "id-token": "write", "attestations": "write"}
 
 
+def test_the_caller_grants_the_build_what_its_jobs_need():
+    granted = _release_jobs()["build"]["permissions"]
+    for name, job in _build_jobs().items():
+        for scope, level in job["permissions"].items():
+            assert granted.get(scope) in (level, "write"), (name, scope)
+
+
 def test_every_release_job_has_a_timeout_and_pinned_actions():
-    text = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
-    for name, job in _release_jobs().items():
-        assert isinstance(job.get("timeout-minutes"), int), name
-        assert "permissions" in job, name
-    for line in re.findall(r"uses:\s*(\S+.*)", text):
-        assert re.fullmatch(r"[\w./-]+@[0-9a-f]{40}\s+# v\d+\.\d+\.\d+", line), line
+    for wf, jobs in (("release.yml", _release_jobs()), ("release-build.yml", _build_jobs())):
+        for name, job in jobs.items():
+            assert "permissions" in job, (wf, name)
+            if "uses" not in job:   # a job that calls a reusable workflow cannot set a timeout; its jobs do
+                assert isinstance(job.get("timeout-minutes"), int), (wf, name)
+        text = (WORKFLOWS / wf).read_text(encoding="utf-8")
+        for line in re.findall(r"uses:\s*(\S+.*)", text):
+            if line.startswith("./"):
+                continue
+            assert re.fullmatch(r"[\w./-]+@[0-9a-f]{40}\s+# v\d+\.\d+\.\d+", line), line

@@ -38,10 +38,13 @@ A release is a signed tag `vX.Y.Z` on `main`, signed with ReliKey's own release 
 passphrase in Bitwarden and writes that file). The tag needs a `## [X.Y.Z]` section in CHANGELOG.md: a release pull
 request runs `python tools/changelog.py release X.Y.Z`, which folds the fragments in `changelog.d/` into that section
 and removes them, and the tag follows its merge. `release.yml` first checks that CI passed on the tagged commit on
-`main` (`tools/release_gate.py`, which waits for a run still in progress), then builds the agent and the fleet service
-reproducibly with a CycloneDX SBOM for each binary, smoke-tests them (`build.py smoke`: the binaries for the runner's
-architecture must run and report the tag's version and commit, the others must be ELF files for their target),
-attests their provenance and each SBOM, and publishes the GitHub release with that section as its notes. How to verify
+`main` (`tools/release_gate.py`, which waits for a run still in progress), then calls the reusable
+`release-build.yml`, which builds the agent and the fleet service reproducibly with a CycloneDX SBOM for each binary,
+smoke-tests them (`build.py smoke`: the binaries for the runner's architecture must run and report the tag's version
+and commit, the others must be ELF files for their target), attests their provenance and each SBOM, signs the sums
+and each binary with keyless cosign, and pushes the agent and fleet images to ghcr.io, attested and signed by digest.
+Because the build is a reusable workflow, every attestation and signature names it as the builder (SLSA Build L3).
+`release.yml` then publishes the GitHub release with that section and the image digests as its notes. How to verify
 one: README.md, "Verifying a release".
 
 Tag the merge commit by its full hash, after the change it needs has merged and CI has passed on it on `main`, not
