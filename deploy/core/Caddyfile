@@ -52,7 +52,8 @@ https://{$EDGE_HOST}:8443 {
 	# the edge-facing name.
 	@fleet {
 		method POST
-		path /fleet/v1/report /fleet/v1/enrol   # the report, and an enrolling edge's key (0026 point 15)
+		# the report, an enrolling edge's key (0026 point 15), and a rotated key's handover (0026 point 3)
+		path /fleet/v1/report /fleet/v1/enrol /fleet/v1/rotation
 	}
 	handle @fleet {
 		request_body {

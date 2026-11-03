@@ -11,6 +11,8 @@ The edge agent's configuration (`relikey-agent run -config /etc/relikey/agent.js
 | `state_dir` | string | Required. Where the verified bundle, floors and status files live; must be the agent's own, persistent directory. |
 | `lab` | boolean | Allows a volatile or shared state directory and a non-loopback bastion: tests and the soak only, never a site. |
 | `enrolment_key_file` | string | Required. The edge's enrolment key (relikey-agent keygen), mode 0600, owned by the agent's user. |
+| `next_enrolment_key_file` | string | Optional. A rotation's next enrolment key (relikey-agent keygen), in the directory of enrolment_key_file: once the desk refuses the current key, the agent retries with this one and, when the desk takes it, makes it the enrolment key (#26). The file is gone after that; the setting may stay. |
+| `rotation_statement_file` | string | With next_enrolment_key_file: the desk's rotation statement (rotate_edge), co-signed with the next key (relikey-agent cosign -key NEXT). The agent hands it to the fleet with the new key, for an officer to approve. |
 | `pins` | object | The keys the edge trusts, pinned on site at enrolment; never fetched from the network. |
 | `pins.bundle_key` | string | Required. KeyClerk's bundle signing key (hex), from the enrolment. |
 | `pins.officer_key` | string | Required. The edge officer's key (hex), from the officer's own console; it seals the edge's ceiling. |
