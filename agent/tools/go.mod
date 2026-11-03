@@ -1,8 +1,6 @@
 module relikey/agent/tools
 
-go 1.27
-
-toolchain go1.27.3
+go 1.27.3
 
 tool (
 	golang.org/x/vuln/cmd/govulncheck

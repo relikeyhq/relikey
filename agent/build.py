@@ -53,7 +53,10 @@ def go(*args, check=True, cwd=None, **extra):
 
 
 def toolchain():
-    want = re.search(r"^toolchain (go[\d.]+)$", (HERE / "go.mod").read_text(), re.M).group(1)
+    # go mod tidy drops the toolchain line when the go line names the same release
+    mod = (HERE / "go.mod").read_text()
+    found = re.search(r"^toolchain go([\d.]+)$", mod, re.M) or re.search(r"^go (\d+\.\d+\.\d+)$", mod, re.M)
+    want = "go" + found.group(1)
     have = go("env", "GOVERSION")
     if have != want:
         sys.exit(f"toolchain {have}, go.mod names {want}: install {want} (golang.org/dl) and put it first on PATH")
