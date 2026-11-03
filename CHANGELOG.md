@@ -10,6 +10,19 @@ Releases are semver tags, `v0.1.0` first. A ReliKey release is its pins and its 
 0001): each release lists the component versions it composes, as below, and its images by digest in
 `model/components.yaml`.
 
+### Pins in 0.2.0
+
+| Component | Version | Image |
+|---|---|---|
+| Keycloak | 26.8.1 | `quay.io/keycloak/keycloak` |
+| Broker database | 16.8-alpine | `docker.io/library/postgres` |
+| Front proxy | 2.11.7-alpine | `docker.io/library/caddy` |
+| KeyClerk | 0.26.3 | `localhost/keyclerk`, built from the signed source tag on github.com/keyclerk/keyclerk |
+| Warpgate | 0.30.2 | `ghcr.io/warp-tech/warpgate` |
+| Edge filtering proxy | 2.11.7-alpine | `docker.io/library/caddy` |
+| LDAP facade | 0.6.3 | `docker.io/lldap/lldap` |
+| Update mirror | v2.1.22 | `ghcr.io/project-zot/zot` |
+
 ### Pins in 0.1.0
 
 | Component | Version | Image |
@@ -24,10 +37,129 @@ Releases are semver tags, `v0.1.0` first. A ReliKey release is its pins and its 
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-03
+
+### Added
+- Fleet enrolment by code, wired end to end (decision 0026 points 15, 24, 32, 33): the edge installer takes the
+  slot code from a file (`--enrol-code-file`, or `install.py enrol --code-file` for an installed edge), presents the
+  edge's key over TLS that trusts only the fleet's CA the code pins (never a leaf; Python 3.13 or later) and prints
+  its fingerprint; an officer activates the slot on the fleet page with their passkey, typing 80 bits of the
+  fingerprint (16 characters, not the last 16, or all of it) as read from the edge's screen; the edge's reports are
+  then taken in. The enrolment route takes at most 20 presentations a minute, three refusals close a slot, and an
+  enrolled name is never opened or activated again under another key.
+- The agent's events form a hash chain (decision 0025 point 2, first part): every record carries its sequence
+  number (OCSF `metadata.sequence`) and the sha256 of the line before it, the sequence survives a restart (each run
+  opens a new epoch), the chain head is kept crash-safe in the state directory and reported in `status.json` as
+  `event_chain`, and `events.Verify` shows a record removed, reordered or altered.
+- A release is built only from a commit whose CI run passed on `main`: `release.yml` checks it first
+  (`tools/release_gate.py`, waiting for a run still in progress), so a tag on a broken commit fails before anything is
+  built. The built binaries are then smoke-tested (`build.py smoke`): those for the runner's architecture must run and
+  report the tag's version and commit, the others must be ELF files for their target. `relikey-fleet -version` prints
+  its version, commit and Go release, like the agent's `version`.
+- Each released binary has a CycloneDX SBOM (`NAME.cdx.json`, made by `cyclonedx-gomod` from the binary's module data,
+  reproducible like the binary), listed in `SHA256SUMS`, covered by the build provenance attestation and attested as
+  the binary's SBOM. README.md, "Verifying a release", shows how to check one.
+- CI hygiene: every workflow job has a `timeout-minutes`, `.github/CODEOWNERS` names the maintainer, and
+  `tests/test_doc_links.py` fails a pull request when a relative Markdown link or #anchor in the docs does not resolve.
+- `relikey-demo`: one command (`go run ./cmd/relikey-demo` in `agent/`) runs the real edge agent loop against
+  stand-ins for KeyClerk, Warpgate and the identity broker, and shows a sign-in, a lease applied, a session, a revoke
+  that removes the access and a lease that ends while the edge is offline, on a local page. Keys are generated per
+  run, everything listens on loopback and nothing is left behind; CI plays the story headless (`docs/demo.md`).
+- The demo opens from the README in a GitHub Codespace (`.devcontainer/`), and `-wait` starts its story when the
+  page is first opened.
+- Documentation site: `docs/` and the README built with MkDocs Material (`mkdocs.yml`, hash-locked
+  `requirements-docs.txt`) and published to GitHub Pages from `main` by `.github/workflows/docs.yml`; every pull
+  request builds it in strict mode, so a broken link fails CI.
+- Changelog fragments: a pull request adds `changelog.d/<issue>.<section>.md` instead of editing `CHANGELOG.md`, so
+  open pull requests no longer conflict with each other; `tools/changelog.py` checks them and folds them into the
+  release section when a release is prepared.
+- The agent's ten metric names in `metrics.prom` are a stable interface: a test pins each name and its type, and
+  `docs/agent.md` lists them with their meaning. A rename or removal lands only in a tagged release, under Changed
+  or Removed.
+- Agent: `metrics_dir` (optional) writes a copy of `metrics.prom` as `relikey-agent.prom` to a directory of its own,
+  replaced atomically and readable by other users, for node_exporter's textfile collector or a similar reader; the
+  state directory stays private and the agent still serves nothing. A missing or unwritable directory is reported in
+  the log and `status.json` (`metrics_dir_error`) and never stops the agent. The image carries
+  `/var/lib/relikey-metrics` for it.
+- The core installer writes enrolment by code: with `--fleet-host`, fleet.json gets its `admin` section once (kept
+  on later runs, so the fleet never changes its id in passing) and the page its `enrol_url` on the edge-facing name
+  and its `pin_ca_file`, the CA that issued the front's certificate (decision 0026 point 27). The local CA's
+  `front.crt` now holds the leaf followed by the CA; without an issuing CA in `front.crt` enrolment stays off and the
+  installer says why and what to do.
+- docs/maintaining.md: how issues, milestones, pull requests, the required checks, merging and releases work.
+
 ### Changed
 - The base image of the fleet and agent images (busybox 1.37.0) is pinned by its multi-arch index digest, and the two
   image files are renamed `Dockerfile.fleet` and `Dockerfile.agent` so Dependabot's docker ecosystem proposes updates
   to the pin weekly.
+- CI: a pull request runs only the mutants it can affect (`agent/mutants.py --changed BASE`: those in a changed file
+  or in a package whose tests changed, all of them when a shared test helper or the harness changed); main, a nightly
+  schedule and a manual run take the full set in four parallel shards (`--shard i/n`).
+- The agent's state store skips a write when the record is unchanged, so idle ticks and pulls that bring nothing new
+  never rewrite the state slots, sparing the flash that edge hardware often boots from (AG-14). A test counts the
+  slot writes over idle ticks; a mutant that always writes is killed.
+- The model marks contracts C-01 (lease as role assignment), C-04 (signed lease bundles) and C-10 (per-edge ceiling)
+  as built, each naming the agent tests that show it; C-10 also names what is not yet applied (hardware attestation,
+  remote-reach mode and ports).
+- The agent's KeyClerk conformance vectors are regenerated from the signed 0.26.3 tag (cfc5793), the version the
+  release pins; `edge.json` is byte-identical to the 0.26.1 vectors and the agent passes all of it.
+- SECURITY.md: a supported-versions table (0.1.x, latest patch only), response-time targets and a direct link to
+  private vulnerability reporting.
+- README: a "Verifying a release" section (tag signature, checksums, build provenance) and a Status paragraph that
+  separates what releases carry since 0.1.2 from fleet-enforced signed releases, which are not done.
+- Errors say why and what to do next: the installers' refusals, the agent's configuration, key and usage errors,
+  its health report, the fleet service's configuration errors and the fleet page's role refusal now name the value
+  at fault and the step, command or person that completes the task. A missing role on the fleet page points to
+  `fleet_page.py --grant`. The edge installer checks the bundle and officer keys before it writes anything, instead
+  of the agent refusing them at its first start. CONTRIBUTING.md holds the guideline for new messages.
+- The core and edge installers and the fleet page run their helper busybox (owners of the secrets, reading a secret
+  into a pipe, Warpgate's first setup) by the digest their image file pins, read from that file, instead of the
+  1.37.0 tag; a test refuses a busybox reference by tag anywhere in `deploy/`.
+- The model matches what ships: the edge's filtering proxy is recorded as the pinned Caddy front it was built as, and
+  the LDAP facade carries the tag and digest the edge runs. C-05 names the configuration that builds it, and C-08 and
+  C-09 say which part exists (the phoned-unlock code and its vectors; leaving the break-glass account alone).
+- `tools/check_model.py` refuses a shipped compose file whose upstream image is not pinned by tag and digest, is named
+  by no component of that tier, or differs from the component's version or digest.
+- The model carries the measured footprint of the edge's pinned Caddy proxy (about 50 MB resident at idle, a 67 MB
+  image, a first amd64 measurement) instead of the 15 MB estimated for a minimal proxy. The edge then needs about
+  282 MB against the switch app-hosting profile's 256 MB: the profile records this as a known gap (issue, settling
+  release, the open decision it waits on, the accepted memory need), and the model check warns on it instead of
+  failing, but fails on a gap that is incomplete, waits on a settled decision, is outgrown, or is no longer needed.
+  The remedy is chosen in 0.3.0 after measuring on the reference hardware.
+- Edge: Warpgate 0.30.2, pinned by its multi-arch index digest (it ends a session itself when the role assignment
+  that admitted it is revoked, so the agent's close is now the second line). Decision 0010 now records that Warpgate
+  accepts OIDC back-channel logout and why the edge does not use it.
+- Docs: the KeyClerk edge interface page maps edge protocol 1.1 to 1.3 to the agent and names the vendored vectors
+  (KeyClerk v0.26.1); decision 0026 records what of the fleet is built and what is still open (#33, #26).
+- CodeQL runs as a workflow (advanced setup) on pull requests, the merge queue, main and weekly, with the same
+  languages and check names as the default setup it replaces, which did not run on the merge queue.
+- CI runs on the merge queue (`merge_group`): the checks a pull request needs, with the mutants it can affect;
+  every mutant still runs on main, nightly and on demand.
+- ROADMAP lists the issues raised during the 0.2.0 work (#52 to #62, #74, #78) and #81 under Later; the agent
+  guide no longer names a stale mutant count.
+
+### Fixed
+- The agent applies the account credential policy to credentials that were there before it: a password,
+  one-time-password seed or client certificate on a managed account is removed on the next tick in enforce mode
+  (reported in shadow mode), however it got there, and also while a failed session close holds the account; a
+  credential list that cannot be read makes the account unreadable for that tick (fail closed). Unmanaged accounts
+  are not touched. Event `relikey.account.credential_removed.v1`.
+- The agent asks the bastion again within the same tick when a read fails transiently (a transport error, a 5xx
+  or a 429): at most three reads, with a short doubling wait bounded by the tick and by shutdown. A short network or
+  bastion hiccup no longer costs a tick; when every read fails, nothing is changed that tick (fail closed).
+- Agent: idle ticks no longer rewrite the status files. `status.json`, `status.html` and `metrics.prom` are written
+  when their content changes and otherwise at a 60 s heartbeat, so `updated` and
+  `relikey_agent_status_updated_seconds` still tell a live agent from a stalled one; edge hardware often boots from
+  flash. A bundle with a new serial but unchanged content is still stored: its serial and signed time are the replay
+  floors (docs/agent.md). Tests and mutants cover both.
+- The issue chooser's private-report link pointed to an owner that is not this project's; it now opens this
+  repository's advisory form, and a test fails on any link to the repository under another owner. The issue
+  templates are issue forms (What, Why, Done when, References) and apply labels that exist.
+
+### Security
+- The SBOM tool's `golang.org/x/crypto`, `x/net` and `x/text` are current, and each Go module's `go` line names
+  Go 1.27.3, the release the code is built with, so dependency scanners no longer report advisories it already
+  fixes. govulncheck finds nothing reachable in the agent or the fleet service, before and after.
 
 ## [0.1.2] - 2026-10-27
 
