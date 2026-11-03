@@ -1,6 +1,9 @@
 # SPDX-License-Identifier: EUPL-1.2
 """Changelog fragments: the checks refuse what would break CHANGELOG.md, and release folds them in Keep a Changelog order."""
 import importlib.util
+import os
+import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -104,3 +107,40 @@ def test_release_refuses_an_unknown_section_already_in_unreleased(tree):
     (tree / "CHANGELOG.md").write_text(HEAD + "### Not yet done\n- Something.\n\n" + OLD)
     with pytest.raises(SystemExit, match="unknown section"):
         changelog.release(tree, "0.2.0", "2026-11-01")
+
+
+def _notes_step():
+    """The run block of release-build.yml's step that writes notes/notes.md."""
+    import yaml
+    wf = yaml.safe_load((ROOT / ".github" / "workflows" / "release-build.yml").read_text(encoding="utf-8"))
+    step = next(s for s in wf["jobs"]["build"]["steps"] if s.get("name", "").startswith("Take the release notes"))
+    return step["run"]
+
+
+@pytest.mark.skipif(os.name == "nt", reason="the workflow step is bash on Linux runners")
+@pytest.mark.parametrize("tag,first,has", [
+    ("v0.3.0-rc.1", "Release candidate for 0.3.0, not a release.", "- A retry."),   # the unreleased fragments
+    ("v0.1.2", "", "- The old fix."),                                                  # the version's own section
+])
+def test_the_release_notes_step_takes_a_candidate_from_the_fragments(tree, tag, first, has):
+    (tree / "tools").mkdir()
+    shutil.copy(ROOT / "tools" / "changelog.py", tree / "tools" / "changelog.py")
+    frag(tree, "19.fixed.md", "- A retry.\n")
+    env = {**os.environ, "GITHUB_REF_NAME": tag, "GITHUB_REPOSITORY": "o/r"}
+    subprocess.run(["bash", "-e", "-c", _notes_step()], cwd=tree, env=env, check=True)
+    notes = (tree / "notes" / "notes.md").read_text(encoding="utf-8")
+    assert notes.startswith(first) and has in notes
+
+
+@pytest.mark.skipif(os.name == "nt", reason="the workflow step is bash on Linux runners")
+def test_the_release_notes_step_refuses_a_version_without_changes(tree):
+    env = {**os.environ, "GITHUB_REF_NAME": "v0.9.0", "GITHUB_REPOSITORY": "o/r"}
+    r = subprocess.run(["bash", "-e", "-c", _notes_step()], cwd=tree, env=env, capture_output=True, text=True)
+    assert r.returncode != 0 and "no changes for 0.9.0" in r.stderr
+
+
+def test_a_candidate_is_published_as_a_pre_release():
+    import yaml
+    wf = yaml.safe_load((ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8"))
+    run = next(s["run"] for s in wf["jobs"]["github-release"]["steps"] if "gh release create" in s.get("run", ""))
+    assert "--prerelease" in run and '*-*' in run

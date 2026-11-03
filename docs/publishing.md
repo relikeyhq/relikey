@@ -47,6 +47,10 @@ Because the build is a reusable workflow, every attestation and signature names 
 `release.yml` then publishes the GitHub release with that section and the image digests as its notes. How to verify
 one: README.md, "Verifying a release".
 
+A release candidate is a tag `vX.Y.Z-rc.N` on a commit of `main`, signed and gated like a release: it runs the
+whole release build, publishes a GitHub pre-release (never the latest release) with the not yet released changes from
+`changelog.d/` as its notes, and needs no release pull request. Use one before a release whose build steps changed.
+
 Tag the merge commit by its full hash, after the change it needs has merged and CI has passed on it on `main`, not
 `origin/main` from a clone that may be behind. A merge that lands soon after cancels the CI run of the one before it;
 re-run that run before tagging, or the release stops at the CI check. Release tags are never moved or deleted (a

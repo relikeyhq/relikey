@@ -44,9 +44,15 @@ jobs:
         run: |
           version="${GITHUB_REF_NAME#v}"
           mkdir notes
-          awk -v v="## [${version}]" 'index($0, v) == 1 {on = 1; next} /^## / {on = 0} on' CHANGELOG.md > notes/notes.md
-          if ! grep -q '[^[:space:]]' notes/notes.md; then
-            echo "CHANGELOG.md has no section for ${version}: add it before tagging" >&2
+          if [[ "$version" == *-* ]]; then
+            # a release candidate (X.Y.Z-rc.N) has no section of its own: the changes not yet released
+            { echo "Release candidate for ${version%%-*}, not a release. Changes since the last release:"; echo
+              python tools/changelog.py show; } > notes/notes.md
+          else
+            awk -v v="## [${version}]" 'index($0, v) == 1 {on = 1; next} /^## / {on = 0} on' CHANGELOG.md > notes/notes.md
+          fi
+          if ! grep -q '^- ' notes/notes.md; then
+            echo "no changes for ${version}: CHANGELOG.md needs its section (a candidate: fragments in changelog.d/)" >&2
             exit 1
           fi
           {
