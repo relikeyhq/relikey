@@ -12,7 +12,6 @@
         "name": "GO-2022-1059",
         "description": "Denial of service via crafted Accept-Language header in golang.org/x/text/language",
         "aliases": [
-          "CVE-2022-32149",
           "GHSA-69ch-w2m2-3vjp"
         ]
       },
@@ -35,9 +34,7 @@
         "@id": "https://pkg.go.dev/vuln/GO-2026-5970",
         "name": "GO-2026-5970",
         "description": "Infinite loop on invalid input in golang.org/x/text",
-        "aliases": [
-          "CVE-2026-56852"
-        ]
+        "aliases": []
       },
       "products": [
         {
@@ -56,9 +53,7 @@
         "@id": "https://pkg.go.dev/vuln/GO-2026-6629",
         "name": "GO-2026-6629",
         "description": "Panic parsing crafted input in x/text/secure/precis in golang.org/x/text",
-        "aliases": [
-          "CVE-2026-56851"
-        ]
+        "aliases": []
       },
       "products": [
         {

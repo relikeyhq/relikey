@@ -333,7 +333,7 @@ def test_the_vex_bytes_do_not_depend_on_report_order():
 
 def test_an_affected_statement_refuses_the_vex_and_says_what_to_do():
     problem = build.vex_refusal(_vex({n: _report() for n in NAMES}))
-    assert "GO-2026-5970 (CVE-2026-56852): affected in " + _purl(NAMES[0]) in problem
+    assert "GO-2026-5970 (-): affected in " + _purl(NAMES[0]) in problem
     assert "GO-2022-1059" not in problem   # not_affected is not a reason to stop
     assert "Next:" in problem and "build.py vuln" in problem and "tag the next version" in problem
 
