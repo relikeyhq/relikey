@@ -1,0 +1,127 @@
+# SPDX-License-Identifier: EUPL-1.2
+# Unit tests for relikey-agent.rules.yaml: promtool test rules deploy/edge/relikey-agent.rules.test.yaml
+rule_files:
+  - relikey-agent.rules.yaml
+evaluation_interval: 1m
+tests:
+  # A live agent rewrites its status every minute: nothing fires. Then it stops at minute 10.
+  - interval: 1m
+    input_series:
+      - series: 'relikey_agent_status_updated_seconds{instance="edge-a"}'
+        values: '0+60x10 600x10'
+      - series: 'relikey_agent_healthy{instance="edge-a"}'
+        values: '1x20'
+      - series: 'relikey_agent_ended{instance="edge-a"}'
+        values: '0x20'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: RelikeyAgentSilent
+        exp_alerts: []
+      - eval_time: 13m
+        alertname: RelikeyAgentSilent
+        exp_alerts: []
+      - eval_time: 14m
+        alertname: RelikeyAgentSilent
+        exp_alerts:
+          - exp_labels: {severity: critical, instance: edge-a}
+            exp_annotations:
+              summary: "ReliKey agent on edge-a stopped writing its status"
+              description: "The status is 4m 0s old; the agent rewrites it at least every 60 s. The agent has stopped, hangs, or cannot write metrics_dir (status.json says why in metrics_dir_error). Leases keep their last applied state until it runs again: check the container, then `relikey-agent status`."
+
+  # Unhealthy for five minutes fires; an edge the desk ended reports RelikeyAgentEnded instead.
+  - interval: 1m
+    input_series:
+      - series: 'relikey_agent_healthy{instance="edge-a"}'
+        values: '1 1 0x10'
+      - series: 'relikey_agent_ended{instance="edge-a"}'
+        values: '0x12'
+      - series: 'relikey_agent_healthy{instance="edge-b"}'
+        values: '0x12'
+      - series: 'relikey_agent_ended{instance="edge-b"}'
+        values: '1x12'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: RelikeyAgentUnhealthy
+        exp_alerts: []
+      - eval_time: 7m
+        alertname: RelikeyAgentUnhealthy
+        exp_alerts:
+          - exp_labels: {severity: critical, instance: edge-a}
+            exp_annotations:
+              summary: "ReliKey agent on edge-a fails its health gate"
+              description: "The canary gate fails: a plan left over tick after tick (Warpgate refuses the changes, or in shadow mode the new version disagrees with the enforcing one), a status too old, or no pull that ever succeeded. `relikey-agent status` names the reason and what fixes it."
+      - eval_time: 7m
+        alertname: RelikeyAgentEnded
+        exp_alerts:
+          - exp_labels: {severity: warning, instance: edge-b}
+            exp_annotations:
+              summary: "The desk ended the ReliKey agent on edge-b"
+              description: "The desk sent this edge its ended notice: it applies nothing more. Expected when an officer retired the edge; otherwise ask the desk's officer why, since a new enrolment is needed to bring it back."
+
+  # The two the alert-event contract names: one refused bundle, one failed action. A steady counter stays quiet,
+  # and a restart (the counter back to 0) is not an increase.
+  - interval: 1m
+    input_series:
+      - series: 'relikey_agent_bundles_refused_total{instance="edge-a"}'
+        values: '2x5 3x20'
+      - series: 'relikey_agent_action_failures_total{instance="edge-a"}'
+        values: '4x5 0x20'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: RelikeyAgentBundleRefused
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: RelikeyAgentBundleRefused
+        exp_alerts:
+          - exp_labels: {severity: critical, instance: edge-a}
+            exp_annotations:
+              summary: "ReliKey agent on edge-a refused a bundle or notice"
+              description: "The verifier refused what the desk sent: a signature that does not verify, a bundle for another edge, an old serial replayed, a signed time that does not fit the edge's clock, or a policy or ceiling outside the pins. The agent keeps the last bundle it accepted. Its log names the check that failed; take it to the desk's officer, since a refused bundle can mean the desk or the path is not what it should be."
+      - eval_time: 25m
+        alertname: RelikeyAgentBundleRefused
+        exp_alerts: []
+      - eval_time: 10m
+        alertname: RelikeyAgentActionFailed
+        exp_alerts: []
+
+  - interval: 1m
+    input_series:
+      - series: 'relikey_agent_action_failures_total{instance="edge-a"}'
+        values: '0x5 1x20'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: RelikeyAgentActionFailed
+        exp_alerts:
+          - exp_labels: {severity: critical, instance: edge-a}
+            exp_annotations:
+              summary: "ReliKey agent on edge-a could not apply a change to Warpgate"
+              description: "A grant or a revoke failed at Warpgate, so Warpgate may not match the leases: an access that should have ended may still be open. The agent retries each tick; the log names the action and Warpgate's answer. Check Warpgate's admin API and the agent's token."
+
+  # Warpgate unreadable: only after ten minutes of errors. Pulls: three failures in fifteen minutes.
+  - interval: 1m
+    input_series:
+      - series: 'relikey_agent_observe_errors_total{instance="edge-a"}'
+        values: '0x2 1+1x30'
+      - series: 'relikey_agent_pulls_failed_total{instance="edge-a"}'
+        values: '0x2 1 2 2x10 3x10'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: RelikeyAgentCannotReadWarpgate
+        exp_alerts: []
+      - eval_time: 14m
+        alertname: RelikeyAgentCannotReadWarpgate
+        exp_alerts:
+          - exp_labels: {severity: warning, instance: edge-a}
+            exp_annotations:
+              summary: "ReliKey agent on edge-a cannot read Warpgate's state"
+              description: "Reading Warpgate failed again and again for 10 minutes. Warpgate exports no metrics of its own, so this is the only sign of trouble there. Check that Warpgate runs and that the agent's token still works."
+      - eval_time: 10m
+        alertname: RelikeyAgentPullsFailing
+        exp_alerts: []
+      - eval_time: 16m
+        alertname: RelikeyAgentPullsFailing
+        exp_alerts:
+          - exp_labels: {severity: warning, instance: edge-a}
+            exp_annotations:
+              summary: "ReliKey agent on edge-a cannot pull from the desk"
+              description: "3 pulls failed in 15 minutes: the desk is unreachable or refuses this edge. Leases still end on time; new leases and early revocations wait. The core sees the same edge go silent. Check the network path to the desk, then the agent's log for the desk's answer."

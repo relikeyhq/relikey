@@ -234,14 +234,31 @@ volumes:
 With node_exporter on the host instead, point `--collector.textfile.directory` at a host directory mounted as
 `metrics_dir`, writable by the agent's user (65532 in the image).
 
-Staleness: a copy that stops changing means the agent stopped writing it. Alert on either clock:
+### Alerting rules
+`deploy/edge/relikey-agent.rules.yaml` holds Prometheus alerting rules for the site, each with a severity and a
+description that says why it fired and what to check next. They read only the stable names above, and promtool unit
+tests beside them (`relikey-agent.rules.test.yaml`) make each one fire.
+
+| Alert | Severity | Fires when |
+|---|---|---|
+| `RelikeyAgentSilent` | critical | the status is more than 180 s old (three heartbeats: a scrape adds up to its interval) |
+| `RelikeyAgentUnhealthy` | critical | the canary gate fails for 5 minutes, unless the desk ended the edge |
+| `RelikeyAgentBundleRefused` | critical | the verifier refused a bundle or notice in the last 15 minutes |
+| `RelikeyAgentActionFailed` | critical | a Warpgate action failed in the last 15 minutes |
+| `RelikeyAgentCannotReadWarpgate` | warning | reading Warpgate fails for 10 minutes |
+| `RelikeyAgentPullsFailing` | warning | three or more pulls failed in 15 minutes |
+| `RelikeyAgentEnded` | warning | the desk ended this edge |
+
+An edge that goes silent and a failed attestation are alerted at the core, by KeyClerk.
+
+Staleness: a copy that stops changing means the agent stopped writing it. `RelikeyAgentSilent` reads the agent's own
+clock in the file; the file's mtime, seen by node_exporter, is the other clock if the site prefers it:
 ```
-time() - relikey_agent_status_updated_seconds > 120                        # the agent's own clock, in the file
-time() - node_textfile_mtime_seconds{file=~".*relikey-agent.prom"} > 120   # the file's mtime, seen by node_exporter
+time() - node_textfile_mtime_seconds{file=~".*relikey-agent.prom"} > 180
 ```
-plus `relikey_agent_healthy == 0` for the health and `node_textfile_scrape_error == 1` for a file the collector
-cannot read. When the agent cannot write the copy, the last one stays in place with its old timestamps, so these
-alerts fire; `metrics_dir_error` in `status.json` says why.
+and `node_textfile_scrape_error == 1` catches a file the collector cannot read. When the agent cannot write the copy,
+the last one stays in place with its old timestamps, so these alerts fire; `metrics_dir_error` in `status.json` says
+why.
 
 ## Canary: shadow mode and the gate
 A new agent version goes to one edge first, next to the version that enforces:
