@@ -6,17 +6,20 @@
                                --no-mutants: none (CI runs them as parallel jobs on main and nightly)
     python build.py mutants    every mutant; --shard I/N runs part I of N (see mutants.py)
     python build.py race       go test -race (needs cgo and a C compiler: Linux amd64/arm64 only)
-    python build.py vuln       govulncheck on the source
+    python build.py vuln       govulncheck on the source of the agent and the fleet service
     python build.py dist       a development build of the three binaries into dist/ (for images and labs)
     python build.py release    the five static binaries, built twice from a clean tagged checkout and compared;
                                dist/ gets the binaries, a CycloneDX SBOM and the build info of each, and SHA256SUMS
     python build.py smoke      after release: each binary is an ELF file for its target, those this host can run
                                report the release's version and commit, and each SBOM describes its binary
+    python build.py vex        after release: one OpenVEX document, dist/relikey.openvex.json, from govulncheck run
+                               on each binary's module for its target, added to SHA256SUMS; refuses if any is affected
 
 The Go toolchain must be exactly the one go.mod names: GOTOOLCHAIN=local ignores the toolchain line, so this script
 checks `go env GOVERSION` itself (GE-9). Developer tools come from tools/go.mod, never from the agent's module; the
 SBOM tool from its own tools/sbom/go.mod, so its dependencies never move the gate tools' versions.
 """
+import datetime
 import hashlib
 import importlib.util
 import json
@@ -117,11 +120,13 @@ def race():
 
 
 def vuln():
+    """govulncheck on each module a released binary is built from (the agent and the fleet service)."""
     toolchain()
-    rc, out = tool("govulncheck", "./...")
-    print(out.splitlines()[-1] if out else "")
-    if rc != 0:
-        sys.exit(out)
+    for module in sorted({b[4] for b in binaries()}):
+        rc, out = tool("govulncheck", "./...", cwd=HERE.parent / module)
+        print(f"{module}: " + (out.splitlines()[-1] if out else ""))
+        if rc != 0:
+            sys.exit(f"{module}:\n{out}")
 
 
 def binaries():
@@ -315,6 +320,143 @@ def smoke():
     print(f"{version}: smoke test passed (the {host} binaries ran; every ELF target, sum and SBOM checked)")
 
 
+# The release's VEX (#30): for each known vulnerability in a module or the standard library a binary is built from,
+# whether that binary calls the vulnerable code, as govulncheck's reachability analysis finds it at release time.
+VEX_FILE = "relikey.openvex.json"
+REPOSITORY = "relikeyhq/relikey"
+
+
+def vuln_tool(tmp: Path) -> Path:
+    """govulncheck from tools/go.mod, built for this host: `go tool` under a target's GOOS and GOARCH would build it
+    for that target and could not run it here."""
+    exe = tmp / ("govulncheck" + (".exe" if os.name == "nt" else ""))
+    r = subprocess.run(["go", "build", f"-modfile={HERE / 'tools' / 'go.mod'}", "-trimpath", "-o", str(exe),
+                        "golang.org/x/vuln/cmd/govulncheck"], cwd=HERE, env=env(), capture_output=True, text=True)
+    if r.returncode != 0:
+        sys.exit(f"build govulncheck:\n{r.stderr}")
+    return exe
+
+
+def govulncheck_version() -> str:
+    """The golang.org/x/vuln version tools/go.mod pins, which the VEX names as its tooling."""
+    found = re.search(r"^\s+golang\.org/x/vuln (v\S+)", (HERE / "tools" / "go.mod").read_text(encoding="utf-8"), re.M)
+    return found.group(1) if found else "unknown"
+
+
+def vex_product(sbom: dict, sha: str) -> dict:
+    """A binary as a VEX product: the package URL its SBOM names it by (write_sboms: metadata.component.purl, with
+    the target's goos and goarch) and its SHA-256, the two keys a scanner joins VEX, SBOM and file on."""
+    purl = sbom.get("metadata", {}).get("component", {}).get("purl", "")
+    return {"@id": purl, "identifiers": {"purl": purl}, "hashes": {"sha-256": sha}}
+
+
+def vex_document(version: str, timestamp: str, products: dict, reports: dict, tooling: str) -> dict:
+    """One OpenVEX document from govulncheck's openvex output for each binary. products maps a binary's name to its
+    product (the package URL its SBOM's metadata component carries, so a scanner joins VEX to SBOM, and the binary's
+    SHA-256); reports maps the name to govulncheck's document for that binary's module and target. The same verdict
+    on the same vulnerability in several binaries is one statement listing them all. Nothing here depends on the host,
+    the clock or the order govulncheck reports in: the bytes follow from the release and the vulnerability data."""
+    merged = {}
+    for name in sorted(reports):
+        for st in reports[name].get("statements") or []:
+            verdict = {k: st[k] for k in ("vulnerability", "status", "justification", "impact_statement") if k in st}
+            entry = merged.setdefault(json.dumps(verdict, sort_keys=True), {**verdict, "products": {}})
+            product = dict(products[name])
+            subs = sorted({s["@id"] for p in st.get("products", []) for s in p.get("subcomponents", [])})
+            if subs:   # the module (or stdlib) at the version that carries the vulnerability
+                product["subcomponents"] = [{"@id": s} for s in subs]
+            entry["products"][product["@id"]] = product
+    statements = []
+    def order(k):
+        return merged[k]["vulnerability"].get("name", ""), merged[k].get("status", ""), k
+    for key in sorted(merged, key=order):
+        e = merged[key]
+        statements.append({"vulnerability": e["vulnerability"],
+                           "products": [e["products"][p] for p in sorted(e["products"])],
+                           **{k: e[k] for k in ("status", "justification", "impact_statement") if k in e}})
+    return {"@context": "https://openvex.dev/ns/v0.2.0",
+            "@id": f"https://github.com/{REPOSITORY}/releases/download/{version}/{VEX_FILE}",
+            "author": "ReliKey release build", "timestamp": timestamp, "version": 1, "tooling": tooling,
+            "statements": statements}
+
+
+def vex_refusal(doc: dict) -> str:
+    """Why this VEX cannot be published ("" if it can): a statement that is not `not_affected` means govulncheck found
+    the vulnerable code called (or a verdict this build does not know), and a release must not ship that."""
+    bad = [f"  {st['vulnerability'].get('name', '?')} ({', '.join(st['vulnerability'].get('aliases', [])) or '-'}):"
+           f" {st.get('status')} in {', '.join(p['@id'] for p in st['products'])}"
+           for st in doc["statements"] if st.get("status") != "not_affected"]
+    if not bad:
+        return ""
+    return ("VEX refused: govulncheck finds vulnerable code called in this release, so its VEX cannot say ReliKey "
+            "is not affected:\n" + "\n".join(bad) + "\nNext: on main, move each module an advisory names to its fixed "
+            "version (the Go toolchain for the standard library; `python agent/build.py vuln` shows the call path and "
+            "the fix), merge with CI green, and tag the next version; this tag stays, release tags never move "
+            "(docs/publishing.md).")
+
+
+def sums_with(text: str, name: str, sha: str) -> str:
+    """SHA256SUMS with NAME's line added or replaced, sorted by file name as `release` writes it."""
+    sums = {ln.split()[-1]: ln.split()[0] for ln in text.splitlines() if len(ln.split()) == 2}
+    sums[name] = sha
+    return "".join(f"{h}  {n}\n" for n, h in sorted(sums.items()))
+
+
+def vex():
+    """After `release` (and `smoke`): the release's VEX in dist/, listed in SHA256SUMS so the provenance attestation
+    and the keyless signatures cover it."""
+    toolchain()
+    top = subprocess.run(["git", "rev-parse", "--show-toplevel"], cwd=HERE, capture_output=True, text=True).stdout.strip()
+    tag = release_tag(top)
+    if not tag:
+        sys.exit("vex describes a release: run it at a vX.Y.Z tag, after `python agent/build.py release` "
+                 "(no tag on HEAD)")
+    version = tag.removeprefix("agent-")
+    # the tagged commit's time, not the clock: building the VEX twice for one release gives the same bytes
+    ct = subprocess.run(["git", "log", "-1", "--format=%ct", "HEAD"], cwd=top, capture_output=True, text=True).stdout
+    timestamp = datetime.datetime.fromtimestamp(int(ct), datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    dist, products, reports = HERE / "dist", {}, {}
+    tmp = tempfile.TemporaryDirectory()
+    govulncheck = vuln_tool(Path(tmp.name))
+    for name, goos, arch, extra, module, _ in binaries():
+        bom, binary = dist / f"{name}.cdx.json", dist / name
+        if not bom.is_file() or not binary.is_file():
+            sys.exit(f"{name}: binary or SBOM missing in agent/dist/; the VEX names each binary as its SBOM does, so "
+                     "run `python agent/build.py release` first")
+        sbom = json.loads(bom.read_text(encoding="utf-8"))
+        found = sbom.get("metadata", {}).get("component", {}).get("version")
+        if found != version:
+            sys.exit(f"{bom.name} describes version {found!r}, HEAD is tagged {tag}: rebuild agent/dist/ with "
+                     "`python agent/build.py release` at this tag")
+        products[name] = vex_product(sbom, hashlib.sha256(binary.read_bytes()).hexdigest())
+        if not products[name]["@id"]:
+            sys.exit(f"{bom.name} has no metadata.component.purl to name {name} by: rebuild agent/dist/ with "
+                     "`python agent/build.py release`")
+        # the binary's own target: what is reachable can differ by GOOS and GOARCH
+        r = subprocess.run([str(govulncheck), "-format", "openvex", "./..."], cwd=HERE.parent / module,
+                           env=env(GOOS=goos, GOARCH=arch, **extra), capture_output=True, text=True)
+        try:
+            reports[name] = json.loads(r.stdout) if r.returncode == 0 else None
+        except json.JSONDecodeError:
+            reports[name] = None
+        if reports[name] is None:
+            sys.exit(f"govulncheck for {name} ({module}, {goos}/{arch}) failed (exit {r.returncode}):\n"
+                     f"{r.stderr.strip()}\nIt fetches the vulnerability database from vuln.go.dev: check the network, "
+                     "then run `python agent/build.py vex` again")
+    tmp.cleanup()
+    tooling = f"govulncheck {govulncheck_version()} (golang.org/x/vuln)"
+    doc = vex_document(version, timestamp, products, reports, tooling)
+    if problem := vex_refusal(doc):
+        sys.exit(problem)
+    out = dist / VEX_FILE
+    out.write_text(json.dumps(doc, indent=2, ensure_ascii=True) + "\n", encoding="utf-8", newline="\n")
+    sums = dist / "SHA256SUMS"
+    sums.write_text(sums_with(sums.read_text(encoding="utf-8") if sums.is_file() else "", VEX_FILE,
+                              hashlib.sha256(out.read_bytes()).hexdigest()), encoding="utf-8", newline="\n")
+    print(f"{version}: {len(doc['statements'])} VEX statements, none affected, for {len(products)} binaries; "
+          f"dist/{VEX_FILE} added to dist/SHA256SUMS")
+
+
 def dist():
     """A development build of the three binaries into dist/ (not a release: no tag needed, not compared)."""
     toolchain()
@@ -326,7 +468,7 @@ def dist():
 
 
 if __name__ == "__main__":
-    cmds = {"check": check, "race": race, "vuln": vuln, "release": release, "smoke": smoke, "dist": dist,
+    cmds = {"check": check, "race": race, "vuln": vuln, "release": release, "smoke": smoke, "vex": vex, "dist": dist,
             "mutants": lambda *a: (toolchain(), mutants(*a))}
     if len(sys.argv) < 2 or sys.argv[1] not in cmds or (len(sys.argv) > 2 and sys.argv[1] not in ("check", "mutants")):
         sys.exit(__doc__)

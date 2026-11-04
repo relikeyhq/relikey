@@ -132,9 +132,9 @@ example is v0.2.1; run the checks from a clone of this repository, the last two 
        gh attestation verify relikey-agent-linux-amd64 --repo relikeyhq/relikey \
            --predicate-type https://cyclonedx.org/bom
 
-5. **The keyless signatures** (from 0.2.1), for readers without the GitHub CLI: `SHA256SUMS` and each binary come with
-   a Sigstore bundle, `FILE.sigstore.json`, made by the release build with no long-lived key. Check the sums' bundle,
-   then the sums as in step 2:
+5. **The keyless signatures** (from 0.2.1), for readers without the GitHub CLI: `SHA256SUMS`, each binary and, after
+   0.2.1, the VEX come with a Sigstore bundle, `FILE.sigstore.json`, made by the release build with no long-lived key.
+   Check the sums' bundle, then the sums as in step 2:
 
        cosign verify-blob SHA256SUMS --bundle SHA256SUMS.sigstore.json \
            --certificate-identity https://github.com/relikeyhq/relikey/.github/workflows/release-build.yml@refs/tags/v0.2.1 \
@@ -149,6 +149,22 @@ example is v0.2.1; run the checks from a clone of this repository, the last two 
            --certificate-oidc-issuer https://token.actions.githubusercontent.com
        gh attestation verify oci://ghcr.io/relikeyhq/relikey-agent@DIGEST --repo relikeyhq/relikey \
            --signer-workflow relikeyhq/relikey/.github/workflows/release-build.yml
+
+7. **The VEX** (after 0.2.1): `relikey.openvex.json`, an OpenVEX document listed in `SHA256SUMS` and attested and signed
+   like a binary (steps 3 and 5). For each known vulnerability in a Go module or the standard library a binary is built
+   from, it states whether that binary is affected, as govulncheck's reachability analysis found it at release time;
+   each product is a binary named by the package URL its SBOM gives it (`metadata.component.purl`) and by its SHA-256,
+   so a scanner that reads both joins them. `not_affected` carries govulncheck's justification
+   (`vulnerable_code_not_in_execute_path`: the module is in the binary but the vulnerable function is never called;
+   `vulnerable_code_not_present`: the vulnerable package is not in it). A release with an `affected` statement is not
+   published. No statements means govulncheck knew of no vulnerability in the binaries' dependencies that day. The
+   document is a snapshot: an advisory published later is answered by a new release, and the VEX of a published
+   release is never changed. To read it:
+
+       gh attestation verify relikey.openvex.json --repo relikeyhq/relikey \
+           --signer-workflow relikeyhq/relikey/.github/workflows/release-build.yml
+       jq -r '.statements[] | [.vulnerability.name, .status, .justification // "", (.products[]."@id")] | @tsv' \
+           relikey.openvex.json
 
 From 0.2.1 a release is also built only from a commit whose CI passed on `main`, and its binaries are smoke-tested
 before anything is attested. The attestation bundles are release files too (`relikey-provenance.intoto.jsonl`,

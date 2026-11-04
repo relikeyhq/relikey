@@ -44,7 +44,8 @@ GE-20, all taken in). Each rule says why.
   **and** `CGO_ENABLED=0 go test -shuffle=on ./...` on amd64, arm64 and armv7 (hardware, or qemu-user as a minimum):
   the shipped program is the static one, and 32-bit has its own bugs.
 - `govulncheck` on the source (reachability) and on the released binary; it says nothing about the policy modules,
-  Warpgate or the image, which are scanned on their own.
+  Warpgate or the image, which are scanned on their own. At release it runs once more on each binary's module and
+  target, and its verdicts ship as the release's OpenVEX document (`build.py vex`, docs/publishing.md).
 - Fuzzing of every parser and verifier with a committed corpus, and **differential fuzzing against the Python
   reference**: the same mutated objects to `keyclerk.edge.unseal` / `verify_bundle` and to the Go verifier; any
   disagreement fails.

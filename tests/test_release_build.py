@@ -273,3 +273,118 @@ def test_every_release_job_has_a_timeout_and_pinned_actions():
             if line.startswith("./"):
                 continue
             assert re.fullmatch(r"[\w./-]+@[0-9a-f]{40}\s+# v\d+\.\d+\.\d+", line), line
+
+
+# The VEX (build.py vex, #30): govulncheck's openvex output per binary, merged into one document whose products are
+# the binaries as their SBOMs name them. The fixtures are govulncheck v1.9.0 output recorded on a throwaway module
+# that requires golang.org/x/text v0.3.7 (one vulnerability called, two not), and on the agent module (none known).
+
+DATA = ROOT / "tests" / "data"
+TS = "2026-11-03T12:00:00Z"
+
+
+def _report(name="govulncheck-openvex.json", status=None):
+    doc = json.loads((DATA / name).read_text(encoding="utf-8"))
+    if status:
+        doc["statements"] = [s for s in doc["statements"] if s["status"] == status]
+    return doc
+
+
+def _purl(name, version="v0.3.0"):
+    module = "agent" if "-agent-" in name else "fleet"
+    arch = name.rsplit("-", 1)[1].removesuffix("v7")
+    return f"pkg:golang/relikey/{module}@{version}?goarch={arch}&goos=linux&type=module#cmd/relikey-{module}"
+
+
+def _products():
+    return {n: build.vex_product({"metadata": {"component": {"purl": _purl(n)}}}, hashlib.sha256(n.encode()).hexdigest())
+            for n in NAMES}
+
+
+def _vex(reports, products=None):
+    return build.vex_document("v0.3.0", TS, products or _products(), reports, "govulncheck v1.9.0 (golang.org/x/vuln)")
+
+
+def test_a_product_is_the_binary_as_its_sbom_names_it():
+    bom = {"metadata": {"component": {"name": "relikey/agent", "version": "v0.3.0", "purl": _purl(NAMES[0]),
+                                      "bom-ref": "pkg:golang/relikey/agent@v0.3.0?type=module#cmd/relikey-agent"}}}
+    assert build.vex_product(bom, "a" * 64) == {"@id": _purl(NAMES[0]), "identifiers": {"purl": _purl(NAMES[0])},
+                                                "hashes": {"sha-256": "a" * 64}}
+    # the purl carries the target, so the three agent binaries are three products, not one
+    assert len({p["@id"] for p in _products().values()}) == len(NAMES)
+
+
+def test_one_verdict_in_several_binaries_is_one_statement_listing_them():
+    doc = _vex({n: _report(status="not_affected") for n in NAMES})
+    assert [s["vulnerability"]["name"] for s in doc["statements"]] == ["GO-2022-1059", "GO-2026-6629"]
+    for st in doc["statements"]:
+        assert st["status"] == "not_affected" and st["justification"].startswith("vulnerable_code_")
+        assert st["impact_statement"]   # govulncheck's own words stay
+        assert [p["@id"] for p in st["products"]] == sorted(_purl(n) for n in NAMES)
+        assert all(p["subcomponents"] == [{"@id": "pkg:golang/golang.org%2Fx%2Ftext@v0.3.7"}] for p in st["products"])
+    assert doc["@context"] == "https://openvex.dev/ns/v0.2.0" and doc["version"] == 1 and doc["timestamp"] == TS
+    assert doc["@id"] == "https://github.com/relikeyhq/relikey/releases/download/v0.3.0/relikey.openvex.json"
+
+
+def test_different_verdicts_per_binary_stay_apart():
+    reports = {n: _report(status="not_affected") for n in NAMES}
+    reports[NAMES[0]] = _report()   # this binary calls GO-2026-5970's code
+    doc = _vex(reports)
+    affected = [s for s in doc["statements"] if s["status"] == "affected"]
+    assert len(affected) == 1 and [p["@id"] for p in affected[0]["products"]] == [_purl(NAMES[0])]
+    assert "justification" not in affected[0]
+
+
+def test_the_vex_bytes_do_not_depend_on_report_order():
+    reports = {n: _report(status="not_affected") for n in NAMES}
+    shuffled = {}
+    for n in reversed(NAMES):
+        r = _report(status="not_affected")
+        r["statements"].reverse()
+        shuffled[n] = r
+    assert json.dumps(_vex(reports)) == json.dumps(_vex(shuffled))
+
+
+def test_an_affected_statement_refuses_the_vex_and_says_what_to_do():
+    problem = build.vex_refusal(_vex({n: _report() for n in NAMES}))
+    assert "GO-2026-5970 (-): affected in " + _purl(NAMES[0]) in problem
+    assert "GO-2022-1059" not in problem   # not_affected is not a reason to stop
+    assert "Next:" in problem and "build.py vuln" in problem and "tag the next version" in problem
+
+
+def test_an_unknown_status_is_refused_too():
+    report = _report(status="not_affected")
+    report["statements"][0]["status"] = "under_investigation"
+    assert "under_investigation" in build.vex_refusal(_vex({NAMES[0]: report}))
+
+
+def test_a_vex_with_no_statements_is_valid():
+    doc = _vex({n: _report("govulncheck-openvex-empty.json") for n in NAMES})
+    assert doc["statements"] == [] and build.vex_refusal(doc) == ""
+
+
+def test_the_vex_is_added_to_the_sums_in_the_release_format():
+    sums = f"{'b' * 64}  relikey-agent-linux-amd64\n{'c' * 64}  relikey-fleet-linux-amd64\n"
+    out = build.sums_with(sums, build.VEX_FILE, "a" * 64)
+    assert out == (f"{'b' * 64}  relikey-agent-linux-amd64\n{'c' * 64}  relikey-fleet-linux-amd64\n"
+                   f"{'a' * 64}  relikey.openvex.json\n")
+    assert build.sums_with(out, build.VEX_FILE, "d" * 64).count("relikey.openvex.json") == 1   # a rerun replaces it
+
+
+def test_the_vex_is_written_after_the_smoke_test_and_before_anything_is_attested_or_signed():
+    steps = _build_jobs()["build"]["steps"]
+    runs = [s.get("run", "") for s in steps]
+    smoke, vex = runs.index("python agent/build.py smoke"), runs.index("python agent/build.py vex")
+    first = next(i for i, s in enumerate(steps) if "attest" in s.get("uses", "") or "cosign" in s.get("uses", ""))
+    assert smoke < vex < first
+    attest = next(s for s in steps if s.get("uses", "").startswith("actions/attest-build-provenance@"))
+    assert attest["with"]["subject-checksums"] == "agent/dist/SHA256SUMS"   # the VEX's line is in it
+
+
+def test_the_vex_is_signed_with_the_binaries_and_named_in_the_notes():
+    steps = _build_jobs()["build"]["steps"]
+    sign = next(s["run"] for s in steps if "cosign sign-blob" in s.get("run", ""))
+    excluded = re.search(r"grep -v '([^']+)'", sign).group(1)
+    assert not re.search(excluded, build.VEX_FILE) and re.search(excluded, "relikey-agent-linux-amd64.cdx.json")
+    notes = next(s["run"] for s in steps if "notes/notes.md" in s.get("run", ""))
+    assert build.VEX_FILE in notes
