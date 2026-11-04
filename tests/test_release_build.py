@@ -159,9 +159,23 @@ def test_the_sbom_drops_what_differs_between_hosts_and_runs():
     out = build.normalise_sbom(json.loads(json.dumps(bom)))
     assert out.endswith("}\n") and out.isascii()
     got = json.loads(out)
-    assert "serialNumber" not in got and "timestamp" not in got["metadata"]
+    assert "timestamp" not in got["metadata"]
     assert got["metadata"]["tools"] == [{"name": "cyclonedx-gomod", "version": "v1.12.0"}]
     assert build.normalise_sbom(json.loads(json.dumps(bom))) == out
+    # the serial number follows from the content, not the tool's random one or the host
+    bom["serialNumber"], bom["metadata"]["tools"][0]["hashes"][0]["content"] = "urn:uuid:2", "y"
+    assert build.normalise_sbom(json.loads(json.dumps(bom))) == out
+    bom["metadata"]["component"]["version"] = "v0.2.1"
+    assert json.loads(build.normalise_sbom(json.loads(json.dumps(bom))))["serialNumber"] != got["serialNumber"]
+
+
+def test_the_sbom_passes_the_check_actions_attest_makes():
+    """actions/attest (src/sbom.ts) takes a CycloneDX SBOM only with bomFormat, serialNumber and specVersion; the
+    serial number must be a urn:uuid (CycloneDX 1.6 schema). The 0.2.0 release stopped on its absence."""
+    bom = {"bomFormat": "CycloneDX", "specVersion": "1.6", "metadata": {"component": {"name": "relikey/agent"}}}
+    got = json.loads(build.normalise_sbom(bom))
+    assert got["bomFormat"] and got["specVersion"]
+    assert re.fullmatch(r"urn:uuid:[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}", got["serialNumber"])
 
 
 def test_the_sbom_tool_is_pinned_in_its_own_module():

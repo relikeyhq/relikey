@@ -58,7 +58,7 @@ ruleset enforces it): a tag whose release build fails stays, and the next versio
 and 0.1.1 did.
 
 ### The VEX
-Each release from 0.3.0 carries one OpenVEX document, `relikey.openvex.json`, written by `python agent/build.py vex`
+Each release after 0.2.1 carries one OpenVEX document, `relikey.openvex.json`, written by `python agent/build.py vex`
 after the smoke test. It runs govulncheck (pinned in `agent/tools/go.mod`) in source mode on each binary's module, for
 that binary's GOOS and GOARCH, against the Go vulnerability database of that moment, and turns its findings into
 statements: for each known vulnerability in a module or the standard library the binary is built from, `not_affected`

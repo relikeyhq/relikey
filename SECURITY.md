@@ -22,7 +22,8 @@ These are targets for a small project, not guarantees; if we need longer we say 
 
 | Version | Supported |
 |---|---|
-| 0.1.x | yes, only the latest 0.1 patch release gets fixes |
+| 0.2.x | yes, only the latest 0.2 patch release gets fixes |
+| 0.1.x | no, upgrade to 0.2 |
 | older | no |
 
 ## Scope

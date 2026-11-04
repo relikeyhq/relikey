@@ -30,6 +30,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import uuid
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -160,12 +161,16 @@ def sbom_tool(tmp: Path) -> Path:
 
 
 def normalise_sbom(bom: dict) -> str:
-    """The SBOM as release bytes: no serial number or timestamp (the tool omits them), and no hashes of the SBOM tool's
-    own executable, which differ by the host that built it; what is left comes from the binary's module data only."""
+    """The SBOM as release bytes: no timestamp, and no hashes of the SBOM tool's own executable, which differ by the
+    host that built it; what is left comes from the binary's module data only. The serial number is a UUIDv5 of that
+    content rather than the tool's random one: actions/attest refuses a CycloneDX SBOM without one, and the same
+    content keeps the same serial."""
     for t in bom.get("metadata", {}).get("tools", []):
         t.pop("hashes", None)
     bom.pop("serialNumber", None)
     bom.get("metadata", {}).pop("timestamp", None)
+    content = json.dumps(bom, sort_keys=True, ensure_ascii=True)
+    bom = {"serialNumber": f"urn:uuid:{uuid.uuid5(uuid.NAMESPACE_URL, 'relikey-sbom:' + content)}", **bom}
     return json.dumps(bom, indent=2, ensure_ascii=True) + "\n"
 
 
