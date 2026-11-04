@@ -13,9 +13,9 @@ import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
-spec = importlib.util.spec_from_file_location("agent_build", ROOT / "agent" / "build.py")
-build = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(build)
+spec = importlib.util.spec_from_file_location("agent_release", ROOT / "agent" / "release.py")
+release = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(release)
 
 
 def _git(repo, *args):
@@ -39,20 +39,20 @@ def _workflow_tag_patterns():
 @pytest.mark.parametrize("tag", ["v0.1.0", "v1.2.3", "agent-v0.0.9"])
 def test_a_release_tag_on_head_is_found(repo, tag):
     _git(repo, "tag", "-a", tag, "-m", tag)
-    assert build.release_tag(repo) == tag
+    assert release.release_tag(repo) == tag
 
 
 @pytest.mark.parametrize("tag", ["nightly", "vnext", "release-1"])
 def test_other_tags_are_not_releases(repo, tag):
     _git(repo, "tag", "-a", tag, "-m", tag)
-    assert build.release_tag(repo) == ""
+    assert release.release_tag(repo) == ""
 
 
 def test_the_tag_the_workflow_runs_on_is_one_build_accepts(repo):
     patterns = _workflow_tag_patterns()
     assert patterns == ["v*"], "release.yml's tag filter changed: check release_tag() still accepts it"
     _git(repo, "tag", "-a", "v0.1.0", "-m", "v0.1.0")
-    assert build.release_tag(repo) == "v0.1.0"
+    assert release.release_tag(repo) == "v0.1.0"
 
 
 # The smoke test (build.py smoke): what it refuses, on a dist/ of stand-in files.
@@ -63,7 +63,7 @@ NAMES = ["relikey-agent-linux-amd64", "relikey-agent-linux-arm64", "relikey-agen
 
 
 def _elf(arch):
-    cls, machine = build.ELF_MACHINE[arch]
+    cls, machine = release.ELF_MACHINE[arch]
     return b"\x7fELF" + bytes([cls, 1, 1, 0]) + bytes(8) + (2).to_bytes(2, "little") + machine.to_bytes(2, "little")
 
 
@@ -74,7 +74,7 @@ def _sbom(version, sha):
 
 def _dist(tmp_path, version="v0.2.0", arch_of=None):
     sums = []
-    for name, _, arch, *_ in build.binaries():
+    for name, _, arch, *_ in release.binaries():
         data = _elf((arch_of or {}).get(name, arch)) + name.encode()
         (tmp_path / name).write_bytes(data)
         bom = (tmp_path / f"{name}.cdx.json")
@@ -92,62 +92,62 @@ def _runs(version="v0.2.0", rev=REV, rc=0):
 
 
 def test_the_release_binaries_are_the_ones_release_yml_attests():
-    assert [b[0] for b in build.binaries()] == NAMES
+    assert [b[0] for b in release.binaries()] == NAMES
     jobs = yaml.safe_load((ROOT / ".github" / "workflows" / "release-build.yml").read_text(encoding="utf-8"))["jobs"]
     assert jobs["sbom-attest"]["strategy"]["matrix"]["binary"] == NAMES
 
 
 def test_a_good_dist_passes_the_smoke_test(tmp_path):
-    assert build.smoke_problems(_dist(tmp_path), "v0.2.0", REV, "amd64", _runs()) == []
+    assert release.smoke_problems(_dist(tmp_path), "v0.2.0", REV, "amd64", _runs()) == []
 
 
 def test_a_binary_that_does_not_run_fails_the_smoke_test(tmp_path):
-    problems = build.smoke_problems(_dist(tmp_path), "v0.2.0", REV, "amd64", _runs(rc=2))
+    problems = release.smoke_problems(_dist(tmp_path), "v0.2.0", REV, "amd64", _runs(rc=2))
     assert [p.split(":")[0] for p in problems] == ["relikey-agent-linux-amd64", "relikey-fleet-linux-amd64"]
     assert all("does not run" in p for p in problems)
 
 
 @pytest.mark.parametrize("version, rev", [("v0.1.2", REV), ("v0.2.0", "f" * 40), ("dev", REV)])
 def test_a_binary_reporting_another_version_or_commit_fails(tmp_path, version, rev):
-    problems = build.smoke_problems(_dist(tmp_path), "v0.2.0", REV, "amd64", _runs(version, rev))
+    problems = release.smoke_problems(_dist(tmp_path), "v0.2.0", REV, "amd64", _runs(version, rev))
     assert len(problems) == 2 and all("reports" in p for p in problems)
 
 
 def test_a_modified_tree_fails_the_version_check():
-    assert build.version_problem(f"relikey-agent v0.2.0 {REV[:12]}+dirty go1.27.3", "relikey-agent", "v0.2.0", REV)
-    assert not build.version_problem(f"relikey-agent v0.2.0 {REV[:12]} go1.27.3\n", "relikey-agent", "v0.2.0", REV)
+    assert release.version_problem(f"relikey-agent v0.2.0 {REV[:12]}+dirty go1.27.3", "relikey-agent", "v0.2.0", REV)
+    assert not release.version_problem(f"relikey-agent v0.2.0 {REV[:12]} go1.27.3\n", "relikey-agent", "v0.2.0", REV)
 
 
 def test_a_binary_for_another_arch_fails_even_if_it_is_not_run(tmp_path):
     dist = _dist(tmp_path, arch_of={"relikey-agent-linux-armv7": "arm64"})
-    problems = build.smoke_problems(dist, "v0.2.0", REV, "amd64", _runs())
+    problems = release.smoke_problems(dist, "v0.2.0", REV, "amd64", _runs())
     assert problems == ["relikey-agent-linux-armv7: not an ELF binary for arm"]
 
 
 def test_a_host_that_runs_nothing_fails_the_smoke_test(tmp_path):
-    problems = build.smoke_problems(_dist(tmp_path), "v0.2.0", REV, None, _runs())
+    problems = release.smoke_problems(_dist(tmp_path), "v0.2.0", REV, None, _runs())
     assert problems == ["no binary ran: the smoke test needs a linux/amd64 or linux/arm64 host"]
 
 
 def test_an_sbom_of_other_bytes_or_another_version_fails(tmp_path):
     dist = _dist(tmp_path)
     (dist / "relikey-fleet-linux-arm64").write_bytes(_elf("arm64") + b"rebuilt")
-    problems = build.smoke_problems(dist, "v0.2.0", REV, "amd64", _runs())
+    problems = release.smoke_problems(dist, "v0.2.0", REV, "amd64", _runs())
     assert any("not as SHA256SUMS lists it" in p for p in problems)
     assert any("SBOM describes other bytes" in p for p in problems)
-    assert build.sbom_problem(_sbom("v0.1.2", "a" * 64), "v0.2.0", "a" * 64)
+    assert release.sbom_problem(_sbom("v0.1.2", "a" * 64), "v0.2.0", "a" * 64)
 
 
 def test_a_missing_sbom_fails(tmp_path):
     dist = _dist(tmp_path)
     (dist / "relikey-agent-linux-arm64.cdx.json").unlink()
-    problems = build.smoke_problems(dist, "v0.2.0", REV, "amd64", _runs())
+    problems = release.smoke_problems(dist, "v0.2.0", REV, "amd64", _runs())
     assert problems == ["relikey-agent-linux-arm64: binary or SBOM missing"]
 
 
 @pytest.mark.parametrize("head", [b"MZ\x90\x00" + bytes(60), b"\x7fELF\x02\x02" + bytes(58), b"\x7fELF"])
 def test_only_little_endian_elf_is_read(head):
-    assert build.elf_target(head) is None
+    assert release.elf_target(head) is None
 
 
 # The SBOM: deterministic bytes from the binary's module data.
@@ -156,33 +156,33 @@ def test_the_sbom_drops_what_differs_between_hosts_and_runs():
     bom = {"bomFormat": "CycloneDX", "serialNumber": "urn:uuid:1", "metadata": {"timestamp": "2026-10-28T00:00:00Z",
            "tools": [{"name": "cyclonedx-gomod", "version": "v1.12.0", "hashes": [{"alg": "SHA-256", "content": "x"}]}],
            "component": {"name": "relikey/agent", "version": "v0.2.0", "description": "caf" + chr(233)}}}
-    out = build.normalise_sbom(json.loads(json.dumps(bom)))
+    out = release.normalise_sbom(json.loads(json.dumps(bom)))
     assert out.endswith("}\n") and out.isascii()
     got = json.loads(out)
     assert "timestamp" not in got["metadata"]
     assert got["metadata"]["tools"] == [{"name": "cyclonedx-gomod", "version": "v1.12.0"}]
-    assert build.normalise_sbom(json.loads(json.dumps(bom))) == out
+    assert release.normalise_sbom(json.loads(json.dumps(bom))) == out
     # the serial number follows from the content, not the tool's random one or the host
     bom["serialNumber"], bom["metadata"]["tools"][0]["hashes"][0]["content"] = "urn:uuid:2", "y"
-    assert build.normalise_sbom(json.loads(json.dumps(bom))) == out
+    assert release.normalise_sbom(json.loads(json.dumps(bom))) == out
     bom["metadata"]["component"]["version"] = "v0.2.1"
-    assert json.loads(build.normalise_sbom(json.loads(json.dumps(bom))))["serialNumber"] != got["serialNumber"]
+    assert json.loads(release.normalise_sbom(json.loads(json.dumps(bom))))["serialNumber"] != got["serialNumber"]
 
 
 def test_the_sbom_passes_the_check_actions_attest_makes():
     """actions/attest (src/sbom.ts) takes a CycloneDX SBOM only with bomFormat, serialNumber and specVersion; the
     serial number must be a urn:uuid (CycloneDX 1.6 schema). The 0.2.0 release stopped on its absence."""
     bom = {"bomFormat": "CycloneDX", "specVersion": "1.6", "metadata": {"component": {"name": "relikey/agent"}}}
-    got = json.loads(build.normalise_sbom(bom))
+    got = json.loads(release.normalise_sbom(bom))
     assert got["bomFormat"] and got["specVersion"]
     assert re.fullmatch(r"urn:uuid:[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}", got["serialNumber"])
 
 
 def test_the_sbom_tool_is_pinned_in_its_own_module():
     mod = (ROOT / "agent" / "tools" / "sbom" / "go.mod").read_text(encoding="utf-8")
-    assert re.search(r"^tool " + re.escape(build.SBOM_TOOL) + "$", mod, re.M)
+    assert re.search(r"^tool " + re.escape(release.SBOM_TOOL) + "$", mod, re.M)
     assert re.search(r"^\s+github\.com/CycloneDX/cyclonedx-gomod v\d+\.\d+\.\d+ ", mod, re.M)
-    assert build.SBOM_TOOL not in (ROOT / "agent" / "tools" / "go.mod").read_text(encoding="utf-8")
+    assert release.SBOM_TOOL not in (ROOT / "agent" / "tools" / "go.mod").read_text(encoding="utf-8")
     cfg = yaml.safe_load((ROOT / ".github" / "dependabot.yml").read_text(encoding="utf-8"))
     gomod = [u for u in cfg["updates"] if u["package-ecosystem"] == "gomod"]
     assert any("/agent/tools/sbom" in u.get("directories", []) for u in gomod)
@@ -297,18 +297,18 @@ def _purl(name, version="v0.3.0"):
 
 
 def _products():
-    return {n: build.vex_product({"metadata": {"component": {"purl": _purl(n)}}}, hashlib.sha256(n.encode()).hexdigest())
+    return {n: release.vex_product({"metadata": {"component": {"purl": _purl(n)}}}, hashlib.sha256(n.encode()).hexdigest())
             for n in NAMES}
 
 
 def _vex(reports, products=None):
-    return build.vex_document("v0.3.0", TS, products or _products(), reports, "govulncheck v1.9.0 (golang.org/x/vuln)")
+    return release.vex_document("v0.3.0", TS, products or _products(), reports, "govulncheck v1.9.0 (golang.org/x/vuln)")
 
 
 def test_a_product_is_the_binary_as_its_sbom_names_it():
     bom = {"metadata": {"component": {"name": "relikey/agent", "version": "v0.3.0", "purl": _purl(NAMES[0]),
                                       "bom-ref": "pkg:golang/relikey/agent@v0.3.0?type=module#cmd/relikey-agent"}}}
-    assert build.vex_product(bom, "a" * 64) == {"@id": _purl(NAMES[0]), "identifiers": {"purl": _purl(NAMES[0])},
+    assert release.vex_product(bom, "a" * 64) == {"@id": _purl(NAMES[0]), "identifiers": {"purl": _purl(NAMES[0])},
                                                 "hashes": {"sha-256": "a" * 64}}
     # the purl carries the target, so the three agent binaries are three products, not one
     assert len({p["@id"] for p in _products().values()}) == len(NAMES)
@@ -346,7 +346,7 @@ def test_the_vex_bytes_do_not_depend_on_report_order():
 
 
 def test_an_affected_statement_refuses_the_vex_and_says_what_to_do():
-    problem = build.vex_refusal(_vex({n: _report() for n in NAMES}))
+    problem = release.vex_refusal(_vex({n: _report() for n in NAMES}))
     assert "GO-2026-5970 (-): affected in " + _purl(NAMES[0]) in problem
     assert "GO-2022-1059" not in problem   # not_affected is not a reason to stop
     assert "Next:" in problem and "build.py vuln" in problem and "tag the next version" in problem
@@ -355,20 +355,20 @@ def test_an_affected_statement_refuses_the_vex_and_says_what_to_do():
 def test_an_unknown_status_is_refused_too():
     report = _report(status="not_affected")
     report["statements"][0]["status"] = "under_investigation"
-    assert "under_investigation" in build.vex_refusal(_vex({NAMES[0]: report}))
+    assert "under_investigation" in release.vex_refusal(_vex({NAMES[0]: report}))
 
 
 def test_a_vex_with_no_statements_is_valid():
     doc = _vex({n: _report("govulncheck-openvex-empty.json") for n in NAMES})
-    assert doc["statements"] == [] and build.vex_refusal(doc) == ""
+    assert doc["statements"] == [] and release.vex_refusal(doc) == ""
 
 
 def test_the_vex_is_added_to_the_sums_in_the_release_format():
     sums = f"{'b' * 64}  relikey-agent-linux-amd64\n{'c' * 64}  relikey-fleet-linux-amd64\n"
-    out = build.sums_with(sums, build.VEX_FILE, "a" * 64)
+    out = release.sums_with(sums, release.VEX_FILE, "a" * 64)
     assert out == (f"{'b' * 64}  relikey-agent-linux-amd64\n{'c' * 64}  relikey-fleet-linux-amd64\n"
                    f"{'a' * 64}  relikey.openvex.json\n")
-    assert build.sums_with(out, build.VEX_FILE, "d" * 64).count("relikey.openvex.json") == 1   # a rerun replaces it
+    assert release.sums_with(out, release.VEX_FILE, "d" * 64).count("relikey.openvex.json") == 1   # a rerun replaces it
 
 
 def test_the_vex_is_written_after_the_smoke_test_and_before_anything_is_attested_or_signed():
@@ -385,6 +385,6 @@ def test_the_vex_is_signed_with_the_binaries_and_named_in_the_notes():
     steps = _build_jobs()["build"]["steps"]
     sign = next(s["run"] for s in steps if "cosign sign-blob" in s.get("run", ""))
     excluded = re.search(r"grep -v '([^']+)'", sign).group(1)
-    assert not re.search(excluded, build.VEX_FILE) and re.search(excluded, "relikey-agent-linux-amd64.cdx.json")
+    assert not re.search(excluded, release.VEX_FILE) and re.search(excluded, "relikey-agent-linux-amd64.cdx.json")
     notes = next(s["run"] for s in steps if "notes/notes.md" in s.get("run", ""))
-    assert build.VEX_FILE in notes
+    assert release.VEX_FILE in notes
