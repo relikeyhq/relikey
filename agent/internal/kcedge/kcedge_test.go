@@ -12,6 +12,7 @@ import (
 	"os"
 	"slices"
 	"testing"
+	"time"
 )
 
 // testdata/edge.json is KeyClerk tests/conformance/edge.json at the tag in testdata/SOURCE, unchanged;
@@ -158,6 +159,19 @@ func TestFloorDivFollowsPython(t *testing.T) {
 	for _, c := range [][3]int64{{7, 2, 3}, {-7, 2, -4}, {7, -2, -4}, {-7, -2, 3}, {-3600, 3600, -1}, {-1, 3600, -1}, {0, 3600, 0}} {
 		if got := floorDiv(c[0], c[1]); got != c[2] {
 			t.Errorf("floorDiv(%d, %d) = %d, want %d", c[0], c[1], got, c[2])
+		}
+	}
+}
+
+func TestLeaseHoursRoundUp(t *testing.T) {
+	from := time.Date(2026, 11, 4, 8, 0, 0, 0, time.UTC)
+	for _, c := range []struct {
+		d    time.Duration
+		want int64
+	}{{0, 1}, {-time.Hour, 1}, {time.Second, 1}, {time.Hour, 1}, {time.Hour + time.Second, 2},
+		{8*time.Hour + 59*time.Minute, 9}, {8 * time.Hour, 8}, {8*time.Hour + 500*time.Millisecond, 8}} {
+		if got := leaseHours(from, from.Add(c.d)); got != c.want {
+			t.Errorf("leaseHours(%v) = %d, want %d", c.d, got, c.want)
 		}
 	}
 }

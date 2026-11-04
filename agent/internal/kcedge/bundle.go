@@ -389,8 +389,7 @@ func (o *opened) evaluate(doc Object, now time.Time, ceilingPolicy CeilingPolicy
 			return nil, refuse(fmt.Sprintf("lease %s: from and until must be UTC times", x.LeaseID))
 		}
 		if ceilingPolicy != nil {
-			// Python: max(1, int(seconds // 3600)); // floors, Go's / truncates.
-			hours := max(1, floorDiv(int64(until.Sub(from)/time.Second), 3600))
+			hours := leaseHours(from, until)
 			roles := x.Roles
 			if roles == nil {
 				roles = []string{}
@@ -429,7 +428,7 @@ func (o *opened) evaluate(doc Object, now time.Time, ceilingPolicy CeilingPolicy
 			// KeyClerk's reference verifier does not run the ceiling on visit leases, though
 			// ceiling.rego has visit rules (an assured edge, a window within the offline
 			// cap). The agent runs them: the officer's ceiling bounds a taken-over desk.
-			hours := max(1, floorDiv(int64(until.Sub(from)/time.Second), 3600))
+			hours := leaseHours(from, until)
 			targets := x.Targets
 			if targets == nil {
 				targets = []string{}
@@ -595,6 +594,12 @@ func strs(v Value) bool {
 		}
 	}
 	return true
+}
+
+// leaseHours is the length the ceiling judges a lease by: whole hours rounded up, at least 1 (KeyClerk 0.27.0's
+// ceiling_hours vectors). Rounding down let a lease run up to 59 minutes past max_lease_hours or max_offline_hours.
+func leaseHours(from, until time.Time) int64 {
+	return max(1, -floorDiv(-int64(until.Sub(from)/time.Second), 3600))
 }
 
 func floorDiv(a, b int64) int64 {
