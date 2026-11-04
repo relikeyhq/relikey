@@ -752,6 +752,26 @@ func TestALeaseOutsideTheCeilingIsNotApplied(t *testing.T) {
 	}
 }
 
+// A role a live lease grants that disappears behind the agent's back (Warpgate's SSO role sync at a login whose roles
+// claim lacks it, warp-tech/warpgate#2785) is reported as drift and counted; enforce mode grants it again.
+func TestARoleRemovedOutsideTheAgentIsReported(t *testing.T) {
+	r := newRig(t, Enforce)
+	r.kc.SetLeases([]fakes.FakeLease{lease("L-1", time.Now().Add(time.Hour))}, nil)
+	r.eventually("ann gets the role", func() bool { _, ok := r.roles("ann")["plc-operator"]; return ok })
+	r.eventually("a tick that sees it", func() bool { return r.status().PlanActions == 0 })
+	if r.status().RemovedOutside != 0 {
+		t.Fatal("a role the agent granted itself was reported as removed outside it")
+	}
+	r.wg.RevokeRole("ann", "plc-operator")
+	r.eventually("the removal is reported", func() bool {
+		st := r.status()
+		return st.RemovedOutside >= 1 && slices.ContainsFunc(st.Drift, func(d string) bool {
+			return strings.Contains(d, "user ann lost role plc-operator before its lease ends")
+		})
+	})
+	r.eventually("and granted again", func() bool { _, ok := r.roles("ann")["plc-operator"]; return ok })
+}
+
 func held(k *fakes.KeyClerk) int  { _, h := k.LongPolls(); return h }
 func pulls(k *fakes.KeyClerk) int { p, _ := k.LongPolls(); return p }
 
