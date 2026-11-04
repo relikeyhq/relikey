@@ -13,6 +13,7 @@ order of work. Decisions behind the larger items are in [docs/decisions](docs/de
   (0.1.2 is the first published release).
 
 ## Done in [0.2.0](https://github.com/relikeyhq/relikey/milestone/1)
+Released as 0.2.1 (the v0.2.0 tag was never released: its release build stopped at the SBOM attestation).
 - A demo that runs ReliKey against fakes in one command, and a docs site built from `docs/` with it as the first
   tutorial ([#40](https://github.com/relikeyhq/relikey/issues/40),
   [#42](https://github.com/relikeyhq/relikey/issues/42)).
@@ -41,9 +42,9 @@ order of work. Decisions behind the larger items are in [docs/decisions](docs/de
 
 ## Next: [0.3.0](https://github.com/relikeyhq/relikey/milestone/2)
 Work that needs a lab installation, hardware or a second component. Done so far:
-- Keyless signatures and SLSA Build L3 ([#28](https://github.com/relikeyhq/relikey/issues/28), done)
-- Signed container images on ghcr.io ([#29](https://github.com/relikeyhq/relikey/issues/29), done)
-- Enrolment-key rotation ([#26](https://github.com/relikeyhq/relikey/issues/26), done)
+- Keyless signatures and SLSA Build L3 ([#28](https://github.com/relikeyhq/relikey/issues/28), released in 0.2.1)
+- Signed container images on ghcr.io ([#29](https://github.com/relikeyhq/relikey/issues/29), released in 0.2.1)
+- Enrolment-key rotation ([#26](https://github.com/relikeyhq/relikey/issues/26), released in 0.2.1)
 
 Open, suggested order:
 1. End-to-end test of enrolment and the officer anchor on a fresh installation ([#23](https://github.com/relikeyhq/relikey/issues/23))
