@@ -40,10 +40,11 @@ Spot 5 is the only non-mechanical one, and even it has a clean Windows equivalen
 plus a small Windows branch. No architectural blocker surfaced.
 
 ## Proposed upstream shape (small, separate PRs, per discussion #2813)
-1. cfg-gate spots 1 to 6 (ACL checks, ctrl_c/service-stop, log forwarding Unix-only for now, the `as_socket` clone, a
-   Windows data path).
+1. cfg-gate spots 1 to 6 (ACL checks, ctrl_c/service-stop, log forwarding refused on Windows for now, the `as_socket`
+   clone, a Windows data path), with a Windows CI job that builds and tests it. This is PR #2862; the maintainer asked
+   for the CI job in this PR. Its job passed on our fork on 2026-11-04.
 2. Run as a Windows service.
-3. A Windows CI job and a release artifact.
+3. A Windows release artifact.
 
 ## Status (2026-10-24): it links and runs
 With the six spots stubbed, `cargo build --release --target x86_64-pc-windows-gnu` produced `warpgate.exe`
@@ -87,5 +88,7 @@ against Linux before raising upstream. Still not done: a full SSH/RDP session to
 a Windows service wrapper, Windows CI, and non-stub implementations of the six spots.
 
 ## Changelog
+- 2026-11-04: the Windows CI job moves into the first PR (#2862, at the maintainer's request); the third is the
+  release artifact only.
 - 2026-10-24: created from the lab-box Windows build investigation.
 - 2026-10-24: functional test added (setup, listeners, admin API auth loop, SSH auth pipeline under Wine).
