@@ -45,17 +45,17 @@ Work that needs a lab installation, hardware or a second component. Done so far:
 - Keyless signatures and SLSA Build L3 ([#28](https://github.com/relikeyhq/relikey/issues/28), released in 0.2.1)
 - Signed container images on ghcr.io ([#29](https://github.com/relikeyhq/relikey/issues/29), released in 0.2.1)
 - Enrolment-key rotation ([#26](https://github.com/relikeyhq/relikey/issues/26), released in 0.2.1)
+- VEX statements with each release ([#30](https://github.com/relikeyhq/relikey/issues/30), on main, in the next release)
 
 Open, suggested order:
 1. End-to-end test of enrolment and the officer anchor on a fresh installation ([#23](https://github.com/relikeyhq/relikey/issues/23))
 2. Model: the edge proxy's footprint, measured against the switch profile ([#62](https://github.com/relikeyhq/relikey/issues/62))
 3. Evidence log: core witness, anchoring, contracts C-12 and C-13 ([#25](https://github.com/relikeyhq/relikey/issues/25))
 4. Open contracts C-02, C-03, C-07, C-08, C-09, C-11 ([#27](https://github.com/relikeyhq/relikey/issues/27))
-5. VEX statements with each release ([#30](https://github.com/relikeyhq/relikey/issues/30))
-6. Operator guides: install, run, troubleshoot ([#43](https://github.com/relikeyhq/relikey/issues/43))
-7. Demo: a single click from the README ([#41](https://github.com/relikeyhq/relikey/issues/41))
-8. The armv7 agent on real hardware ([#24](https://github.com/relikeyhq/relikey/issues/24))
-9. IEC 62443-4-1 self-assessment ([#31](https://github.com/relikeyhq/relikey/issues/31))
+5. Operator guides: install, run, troubleshoot ([#43](https://github.com/relikeyhq/relikey/issues/43))
+6. Demo: a single click from the README ([#41](https://github.com/relikeyhq/relikey/issues/41))
+7. The armv7 agent on real hardware ([#24](https://github.com/relikeyhq/relikey/issues/24))
+8. IEC 62443-4-1 self-assessment ([#31](https://github.com/relikeyhq/relikey/issues/31))
 
 ## Later: [deferred](https://github.com/relikeyhq/relikey/milestone/3)
 Accepted or proposed direction that waits on a partner release, a prototype or a decision:
