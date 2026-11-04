@@ -50,8 +50,8 @@ named in the model but not assembled. Three facts shaped it:
   holds the front can read and change sign-ins and desk traffic in transit. It holds no other secret, and the
   records stay signed end to end: an edge verifies bundles by the desk's key, not by TLS. The front is in scope for
   the full-stack test and a later review. It is not a new abstract model, so there is no red-team gate now.
-- **One proxy technology across the product.** The edge's filtering proxy (0008, `proxy`, still unbuilt until
-  warp-tech/warpgate#2782 lands) can use the same pinned Caddy, so one proxy image is pinned and trusted. 0011 named
+- **One proxy technology across the product.** The edge's filtering proxy (0008, `proxy`, built as the edge's
+  front) can use the same pinned Caddy, so one proxy image is pinned and trusted. 0011 named
   a minimal Go binary for it; when the edge proxy is built, that choice is revisited against this one.
 - **Edges and a local CA.** An edge reaches two core names: the broker's (Warpgate's OIDC issuer, F-04) and the
   edge-facing one (the agent's desk URL and the mirror, F-06, F-18). With install.py's local CA, the agent pins the
@@ -76,3 +76,6 @@ named in the model but not assembled. Three facts shaped it:
 ## Changelog
 - 2026-10-24 Created.
 - 2026-10-24 The podman stand-up recorded; the installer's local CA carries key identifiers.
+- 2026-11-04: the edge's filtering proxy is built (Caddy, deploy/edge/Caddyfile) and permanent; warp-tech/warpgate#2782
+  (a separate admin listener) was closed on 2026-11-03: Warpgate's `control_plane_host` keeps the admin surface off
+  target-bound domains, but not off the user port of the external host, so the filtering proxy is permanent (0008).

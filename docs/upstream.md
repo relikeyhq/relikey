@@ -16,7 +16,7 @@ github.com/vdhome-dev/warpgate (account vdhome-dev).
 | U-05 | Warpgate | armv7 build | Stretch footprint profile | Not raised; small CI change |
 | U-06 | Warpgate | Dynamic RDP credentials from the OpenBao LDAP engine | AD account per lease | Issue #2762 open (not ours) |
 | U-07 | Warpgate | An LDAP listener answering legacy binds | Would fold the facade into the bastion | Not raised; reverses Warpgate's direction - ask first, low priority |
-| U-08 | Warpgate | Separate listener for the admin UI and API | Admin surface off the user port (0008) | Issue #2781; **PR #2782** (all checks green except cargo-deny, which fails on main) |
+| U-08 | Warpgate | Separate listener for the admin UI and API | Admin surface off the user port (0008) | Issue #2781; PR #2782 **closed 2026-11-03**: `control_plane_host` (hostname-based) covers target-bound domains, not the user port; the filtering proxy stays (0008) |
 | U-09 | Warpgate | Per-user target credentials injected into RDP and HTTP targets | The person never sees a lease credential (P-B) | Not raised; builds on #2762 |
 | U-10 | Warpgate | S3 recordings: failed chunks dropped; upload the scratch copy with retry | Evidence on unreliable uplinks (0009) | Issue #2788 **closed, not reproduced**: no parts were uploaded mid-session and a 45 s S3 outage left the recording intact |
 | U-11 | Warpgate | Configurable desktop recording frame rate | Busy RDP at ~5 MB/s on small edges | **PR #2784** (4.5x smaller at 5 fps, measured) |

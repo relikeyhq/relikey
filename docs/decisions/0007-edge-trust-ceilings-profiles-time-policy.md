@@ -43,7 +43,7 @@ privileged horizon before the visit (RT-4). Remote reach for people off site was
 6. **Remote reach (D5).** Off by default: people on the site network reach the bastion directly. A remote-reach plugin
    - a tunnel the edge opens, or a NetBird peer where the organisation already runs NetBird - carries bastion user
    sessions only, never the host and never Warpgate's admin API (which shares the user listener today, RT-5, so a
-   filtering proxy stands in front until Warpgate offers a separate admin listener). Mode and ports are in the ceiling.
+   filtering proxy stands in front; 0008 point 1). Mode and ports are in the ceiling.
 
 ## Corrections to earlier records
 - 0006 level 2 said a pre-staged visit lease with an `sk-ssh-ed25519` key "works with Warpgate as it is today". It does
@@ -59,3 +59,8 @@ privileged horizon before the visit (RT-4). Remote reach for people off site was
 - Further red-team-1 findings are decided in 0008, 0009 and 0012; R-16 (ReliKey on an operator's PC).
 - Residuals: a visit lease cannot be revoked while its edge is cut off; a basic edge protects nothing against someone
   holding it; a core compromise still grants anything inside every ceiling.
+
+## Changelog
+- 2026-11-04: warp-tech/warpgate#2782 (a separate admin listener) was closed on 2026-11-03: Warpgate's
+  `control_plane_host` keeps the admin surface off target-bound domains, but not off the user port of the external host,
+  so the filtering proxy is permanent (0008 point 1).

@@ -103,7 +103,7 @@ components:
     name: Edge filtering proxy
     role: >
       Terminates TLS on the user HTTPS port and forwards everything except Warpgate's admin paths (under both /@warpgate and /_warpgate) to Warpgate on
-      loopback; holds only the TLS certificate (decision 0008). Removed when Warpgate has a separate admin listener (U-08).
+      loopback; holds only the TLS certificate (decision 0008). Permanent: Warpgate declined a separate admin listener (U-08).
       Built as the edge's front: Caddy, as in the core, with its own site file (deploy/edge/Caddyfile; decision 0008
       point 1, 2026-10-25), which also refuses Warpgate's self-service credential routes.
     tier: edge

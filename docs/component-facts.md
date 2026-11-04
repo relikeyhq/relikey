@@ -10,7 +10,7 @@ says how it was checked. A decision that rests on an unchecked or refuted fact i
 | Session approvals over the admin API | confirmed | `warpgate-admin/src/api/session_approvals.rs`: `GET /session-approvals`, `POST .../:id/approve`, `POST .../:id/reject`, a stream; permission `ApproveSessions` |
 | Role assignments with expiry | confirmed | `warpgate-admin/src/api/users.rs`: `expires_at` ("null = permanent"), active = not expired and not revoked, `/users/:id/roles[/:role_id]` |
 | Admin UI and API on the user listener, under both `/@warpgate/admin` and `/_warpgate/admin` | confirmed | `warpgate-protocol-http/src/lib.rs` nests the same endpoints at `/@warpgate` and `/_warpgate` (main, 2026-10-20) |
-| Admin UI and API behind a separate listener | proposed upstream | warp-tech/warpgate#2782 (U-08); internals in docs/warpgate-internals.md |
+| Admin UI and API behind a separate listener | declined upstream | warp-tech/warpgate#2782 (U-08) closed 2026-11-03: `control_plane_host` serves the admin surface only on the external host, not on target-bound domains; it stays on the user port, so the edge's filtering proxy stays (0008) |
 | Cluster peers call each other's admin API on the user HTTP port | confirmed | `warpgate-core/src/cluster.rs` `post_to_peer` -> `/@warpgate/admin/api{route}` over cluster mutual TLS |
 | LDAP as a user source, not a target | confirmed | `warpgate-ldap`, `ldap_servers.rs`, user-LDAP link migrations; issue #35 asks for user sync only |
 | Users can hold an OpenSSH public key credential | confirmed | `warpgate-db-entities/src/PublicKeyCredential.rs` (`openssh_public_key`) |
