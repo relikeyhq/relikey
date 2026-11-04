@@ -108,50 +108,49 @@ edge, nothing needs the core or the cloud to keep it in force until it ends.
 ## Verifying a release
 Check a release before you run it. Each check pins the identity it expects; the key behind the tag is
 `relikey.allowed_signers` in this repository (how releases are made: [docs/publishing.md](docs/publishing.md)). The
-example is v0.1.2; run the checks from a clone of this repository, the last two in an empty directory for the download.
+example is v0.2.1; run the checks from a clone of this repository, the last two in an empty directory for the download.
 
 1. **The tag** is signed by ReliKey's release key. Expect `Good "git" signature for relikey-releases`:
 
-       git fetch origin tag v0.1.2 && git -c gpg.ssh.allowedSignersFile=relikey.allowed_signers tag -v v0.1.2
+       git fetch origin tag v0.2.1 && git -c gpg.ssh.allowedSignersFile=relikey.allowed_signers tag -v v0.2.1
 
 2. **The checksums** match the downloaded files (each line should end in `OK`):
 
-       gh release download v0.1.2 -R relikeyhq/relikey
+       gh release download v0.2.1 -R relikeyhq/relikey
        sha256sum -c SHA256SUMS
 
 3. **The provenance** shows a binary was built by this repository's release workflow. The command exits 0 when the
-   attestation matches and non-zero when it does not (piped or in a script it prints nothing on success). Up to 0.2.0
-   the builder is `release.yml`; from 0.3.0 the build runs in the reusable `release-build.yml` (SLSA Build L3), so
-   name that one:
+   attestation matches and non-zero when it does not (piped or in a script it prints nothing on success). From 0.2.1
+   the build runs in the reusable `release-build.yml` (SLSA Build L3); for 0.1.2 name `release.yml` instead:
 
        gh attestation verify relikey-agent-linux-amd64 --repo relikeyhq/relikey \
-           --signer-workflow relikeyhq/relikey/.github/workflows/release.yml
+           --signer-workflow relikeyhq/relikey/.github/workflows/release-build.yml
 
-4. **The SBOM** (from 0.2.0): each binary `NAME` comes with a CycloneDX SBOM, `NAME.cdx.json`, listed in
+4. **The SBOM** (from 0.2.1): each binary `NAME` comes with a CycloneDX SBOM, `NAME.cdx.json`, listed in
    `SHA256SUMS` and attested with the binary. This checks the SBOM attestation (add `--format json` to see the SBOM):
 
        gh attestation verify relikey-agent-linux-amd64 --repo relikeyhq/relikey \
            --predicate-type https://cyclonedx.org/bom
 
-5. **The keyless signatures** (from 0.3.0), for readers without the GitHub CLI: `SHA256SUMS` and each binary come with
+5. **The keyless signatures** (from 0.2.1), for readers without the GitHub CLI: `SHA256SUMS` and each binary come with
    a Sigstore bundle, `FILE.sigstore.json`, made by the release build with no long-lived key. Check the sums' bundle,
    then the sums as in step 2:
 
        cosign verify-blob SHA256SUMS --bundle SHA256SUMS.sigstore.json \
-           --certificate-identity https://github.com/relikeyhq/relikey/.github/workflows/release-build.yml@refs/tags/v0.3.0 \
+           --certificate-identity https://github.com/relikeyhq/relikey/.github/workflows/release-build.yml@refs/tags/v0.2.1 \
            --certificate-oidc-issuer https://token.actions.githubusercontent.com
 
-6. **The images** (from 0.3.0): `ghcr.io/relikeyhq/relikey-agent` and `ghcr.io/relikeyhq/relikey-fleet`, tagged with the
+6. **The images** (from 0.2.1): `ghcr.io/relikeyhq/relikey-agent` and `ghcr.io/relikeyhq/relikey-fleet`, tagged with the
    version and listed by digest in the release notes. Use the digest, not the tag. Each is signed with keyless cosign by
    the release build and has a provenance attestation in the registry:
 
        cosign verify ghcr.io/relikeyhq/relikey-agent@DIGEST \
-           --certificate-identity https://github.com/relikeyhq/relikey/.github/workflows/release-build.yml@refs/tags/v0.3.0 \
+           --certificate-identity https://github.com/relikeyhq/relikey/.github/workflows/release-build.yml@refs/tags/v0.2.1 \
            --certificate-oidc-issuer https://token.actions.githubusercontent.com
        gh attestation verify oci://ghcr.io/relikeyhq/relikey-agent@DIGEST --repo relikeyhq/relikey \
            --signer-workflow relikeyhq/relikey/.github/workflows/release-build.yml
 
-From 0.2.0 a release is also built only from a commit whose CI passed on `main`, and its binaries are smoke-tested
+From 0.2.1 a release is also built only from a commit whose CI passed on `main`, and its binaries are smoke-tested
 before anything is attested. The attestation bundles are release files too (`relikey-provenance.intoto.jsonl`,
 `NAME.cdx.intoto.jsonl`), so `gh attestation verify --bundle FILE` checks them offline.
 
