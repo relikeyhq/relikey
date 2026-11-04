@@ -547,6 +547,26 @@ func (w *Warpgate) AssignRole(userID, role string, expires *time.Time) {
 	}
 }
 
+// RevokeRole removes a user's role behind the agent's back, as Warpgate's SSO role sync does at a login whose roles
+// claim lacks it (warp-tech/warpgate#2785): kept as inactive, like the API's removal.
+func (w *Warpgate) RevokeRole(username, role string) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	for uid, u := range w.users {
+		if u.Username != username {
+			continue
+		}
+		for rid, n := range w.roles {
+			if _, ok := w.assign[uid][rid]; ok && n == role {
+				if w.revoked[uid] == nil {
+					w.revoked[uid] = map[string]bool{}
+				}
+				w.revoked[uid][rid] = true
+			}
+		}
+	}
+}
+
 // SetFaults changes the fault injection safely while serving.
 func (w *Warpgate) SetFaults(down bool, failRate float64) {
 	w.mu.Lock()

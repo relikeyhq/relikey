@@ -99,6 +99,9 @@ type Agent struct {
 	chain *events.Chain // over Events, continuing from the head in the state directory
 
 	rogue map[string]string // the unmanaged accounts holding governed roles last reported, and their roles
+	// held are the roles each managed user held for a live lease at the end of the last tick (observed, or granted
+	// in it): one missing now while its lease is still live was removed by someone other than the agent.
+	held map[string]map[string]bool
 	// digest is the content digest of the last bundle pulled (kcedge.ContentDigest): an answer with the same content
 	// that came at once means the desk did not hold the long-poll (over its cap, or older than KeyClerk 0026).
 	digest string
@@ -217,6 +220,7 @@ type Status struct {
 	LastFailure    string      `json:"last_failure,omitempty"`
 	ObserveErrors  int64       `json:"observe_errors"`
 	ModuleFailures int64       `json:"module_failures"`
+	RemovedOutside int64       `json:"roles_removed_outside"` // roles a live lease grants, removed by someone else
 	ClockSkewed    bool        `json:"clock_skewed"`
 	Ended          bool        `json:"ended"`
 	// The key exchange group the last handshake to each peer negotiated (X25519MLKEM768 on a hybrid link).
@@ -600,8 +604,10 @@ func (a *Agent) reconcile(ctx context.Context) {
 	a.harden(hctx, observed)
 	hcancel()
 	plan := apply.Compute(desired, observed, a.Provider)
+	plan.Drift = append(plan.Drift, a.removedOutside(desired, observed)...)
 	a.emitRogue(observed)
 	a.st.LiveLeases, a.st.Leases = len(leases), leaseViews(leases)
+	var granted []apply.Action
 	if a.Mode == Enforce {
 		failed := 0
 		if len(plan.Actions) > 0 {
@@ -619,6 +625,7 @@ func (a *Agent) reconcile(ctx context.Context) {
 			}
 			a.Log.Info("applied", "plan", plan.Summary(), "done", res.Done)
 			a.emitApplied(res.Applied)
+			granted = res.Applied
 		}
 		if failed == 0 && rec.Bundle != nil && !rec.Ended {
 			_, serial, _ := kcedge.Issued(*rec.Bundle, a.Pins)
@@ -632,7 +639,77 @@ func (a *Agent) reconcile(ctx context.Context) {
 	} else if len(plan.Actions) > 0 {
 		a.Log.Info("shadow: would apply", "plan", plan.Summary())
 	}
+	held := heldRoles(desired, observed, granted)
+	for name := range observed.Unreadable { // not read this tick: what it held still counts
+		if held[name] == nil && a.held[name] != nil {
+			held[name] = a.held[name]
+		}
+	}
+	a.held = held
 	a.finishTick(&plan, why)
+}
+
+// removedOutside names the roles a managed user held for a live lease at the last tick and no longer holds, though
+// the lease still runs: someone other than the agent removed them, such as Warpgate's SSO role sync at a login whose
+// roles claim lacks the role (warp-tech/warpgate#2785). An account that could not be read this tick is skipped.
+func (a *Agent) removedOutside(d apply.Desired, o *apply.Observed) []string {
+	var out []string
+	for _, name := range slices.Sorted(maps.Keys(a.held)) {
+		du := d.Users[name]
+		if du == nil || o.Unreadable[name] {
+			continue
+		}
+		ou := o.Managed[name]
+		for _, role := range slices.Sorted(maps.Keys(a.held[name])) {
+			end, live := du.Roles[role]
+			if !live || (!d.Now.IsZero() && !end.After(d.Now)) {
+				continue
+			}
+			if ou != nil {
+				if g, ok := ou.Roles[role]; ok && g.Active {
+					continue
+				}
+			}
+			a.st.RemovedOutside++
+			what := "the plan grants it again"
+			if a.Mode != Enforce {
+				what = "not restored in shadow mode"
+			}
+			out = append(out, fmt.Sprintf("user %s lost role %s before its lease ends (%s), not by the agent "+
+				"(an SSO roles claim without role_mappings does this at login): %s", name, role,
+				end.UTC().Format(time.RFC3339), what))
+		}
+	}
+	return out
+}
+
+// heldRoles are the roles each managed user holds for a live lease after this tick: observed active, or granted now.
+func heldRoles(d apply.Desired, o *apply.Observed, granted []apply.Action) map[string]map[string]bool {
+	h := map[string]map[string]bool{}
+	put := func(user, role string) {
+		if du := d.Users[user]; du == nil {
+			return
+		} else if _, live := du.Roles[role]; !live {
+			return
+		}
+		if h[user] == nil {
+			h[user] = map[string]bool{}
+		}
+		h[user][role] = true
+	}
+	for name, ou := range o.Managed {
+		for role, g := range ou.Roles {
+			if g.Active {
+				put(name, role)
+			}
+		}
+	}
+	for _, act := range granted {
+		if act.Kind == apply.AddRole {
+			put(act.Username, act.Role)
+		}
+	}
+	return h
 }
 
 func (a *Agent) finishTick(plan *apply.Plan, why []string) {
