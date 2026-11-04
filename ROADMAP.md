@@ -12,50 +12,50 @@ order of work. Decisions behind the larger items are in [docs/decisions](docs/de
 - Releases: signed tags, binaries built reproducibly twice and compared, SHA256SUMS and build provenance
   (0.1.2 is the first published release).
 
-## Next: [0.2.0](https://github.com/relikeyhq/relikey/milestone/1)
-Finish what 0.1.x started. Suggested order:
-1. Demo: one command that runs ReliKey against fakes ([#40](https://github.com/relikeyhq/relikey/issues/40))
-2. Agent: write state only when it changes ([#11](https://github.com/relikeyhq/relikey/issues/11))
-3. CI: run the mutants a pull request can affect ([#7](https://github.com/relikeyhq/relikey/issues/7))
-4. CI hygiene: job timeouts, CODEOWNERS, a docs check ([#20](https://github.com/relikeyhq/relikey/issues/20))
-5. Release gate and smoke test ([#13](https://github.com/relikeyhq/relikey/issues/13))
-6. README: verifying a release, accurate status ([#8](https://github.com/relikeyhq/relikey/issues/8))
-7. Docs site built from `docs/`, the demo as its first tutorial ([#42](https://github.com/relikeyhq/relikey/issues/42))
-8. Model: re-status C-01, C-04, C-10 ([#12](https://github.com/relikeyhq/relikey/issues/12))
-9. Conformance vectors at KeyClerk 0.26.3 ([#15](https://github.com/relikeyhq/relikey/issues/15))
-10. SECURITY.md: supported versions and response targets ([#16](https://github.com/relikeyhq/relikey/issues/16))
-11. Containerfiles pinned by digest ([#17](https://github.com/relikeyhq/relikey/issues/17))
-12. An SBOM for each binary ([#14](https://github.com/relikeyhq/relikey/issues/14))
-13. Fleet: wire activation and the installer's side of enrolment ([#9](https://github.com/relikeyhq/relikey/issues/9))
-14. Agent: credential policy for existing credentials ([#18](https://github.com/relikeyhq/relikey/issues/18))
-15. Agent: retry a transient bastion read ([#19](https://github.com/relikeyhq/relikey/issues/19))
-16. Agent: sequence numbers and a hash chain for events ([#10](https://github.com/relikeyhq/relikey/issues/10))
-17. Errors say why and what to do next ([#22](https://github.com/relikeyhq/relikey/issues/22))
-18. This file ([#21](https://github.com/relikeyhq/relikey/issues/21))
-19. Changelog entries as fragments, so pull requests stop conflicting ([#52](https://github.com/relikeyhq/relikey/issues/52), done)
-20. Issue chooser: the private-report link names the wrong owner ([#58](https://github.com/relikeyhq/relikey/issues/58))
-21. Installers: run the helper image by digest, as the images are ([#55](https://github.com/relikeyhq/relikey/issues/55))
-22. Model: an audit against the code, and a gate rule for the drift it finds ([#61](https://github.com/relikeyhq/relikey/issues/61))
-23. Model: the edge proxy's footprint, measured against the switch profile ([#62](https://github.com/relikeyhq/relikey/issues/62))
-24. Agent: its metric names are a stable interface ([#53](https://github.com/relikeyhq/relikey/issues/53))
-25. Agent: metrics a site's monitoring can read, without a listener ([#60](https://github.com/relikeyhq/relikey/issues/60))
-26. Agent: the writes left on idle ticks and unchanged pulls ([#54](https://github.com/relikeyhq/relikey/issues/54))
-27. Core installer: write the fleet's enrolment-by-code settings ([#74](https://github.com/relikeyhq/relikey/issues/74))
-28. Edge: Warpgate 0.30.2, and decision 0010 brought up to date ([#78](https://github.com/relikeyhq/relikey/issues/78))
+## Done in [0.2.0](https://github.com/relikeyhq/relikey/milestone/1)
+Released as 0.2.1 (the v0.2.0 tag was never released: its release build stopped at the SBOM attestation).
+- A demo that runs ReliKey against fakes in one command, and a docs site built from `docs/` with it as the first
+  tutorial ([#40](https://github.com/relikeyhq/relikey/issues/40),
+  [#42](https://github.com/relikeyhq/relikey/issues/42)).
+- The agent: state written only when it changes, sequence numbers and a hash chain for its events, the credential
+  policy for existing credentials, a retried bastion read, and metric names that are a stable interface, readable
+  without a listener ([#10](https://github.com/relikeyhq/relikey/issues/10),
+  [#11](https://github.com/relikeyhq/relikey/issues/11), [#18](https://github.com/relikeyhq/relikey/issues/18),
+  [#19](https://github.com/relikeyhq/relikey/issues/19), [#53](https://github.com/relikeyhq/relikey/issues/53),
+  [#54](https://github.com/relikeyhq/relikey/issues/54), [#60](https://github.com/relikeyhq/relikey/issues/60)).
+- The fleet: activation and the installer's side of enrolment by code wired, and the core installer writes its
+  settings ([#9](https://github.com/relikeyhq/relikey/issues/9), [#74](https://github.com/relikeyhq/relikey/issues/74)).
+- The edge on Warpgate 0.30.2 ([#78](https://github.com/relikeyhq/relikey/issues/78)).
+- Releases: only a commit that passed CI is released, binaries smoke-tested, an SBOM for each binary, base images
+  pinned by digest, Scorecard's Go advisories cleared ([#13](https://github.com/relikeyhq/relikey/issues/13),
+  [#14](https://github.com/relikeyhq/relikey/issues/14), [#17](https://github.com/relikeyhq/relikey/issues/17),
+  [#55](https://github.com/relikeyhq/relikey/issues/55), [#92](https://github.com/relikeyhq/relikey/issues/92)).
+- The model re-statused against evidence and audited against the code, conformance vectors at KeyClerk 0.26.3
+  ([#12](https://github.com/relikeyhq/relikey/issues/12), [#15](https://github.com/relikeyhq/relikey/issues/15),
+  [#61](https://github.com/relikeyhq/relikey/issues/61)).
+- Project hygiene: mutants per pull request, job timeouts and CODEOWNERS, changelog fragments, SECURITY.md, errors
+  that say why and what to do next, this file ([#7](https://github.com/relikeyhq/relikey/issues/7),
+  [#8](https://github.com/relikeyhq/relikey/issues/8), [#16](https://github.com/relikeyhq/relikey/issues/16),
+  [#20](https://github.com/relikeyhq/relikey/issues/20), [#21](https://github.com/relikeyhq/relikey/issues/21),
+  [#22](https://github.com/relikeyhq/relikey/issues/22), [#52](https://github.com/relikeyhq/relikey/issues/52),
+  [#58](https://github.com/relikeyhq/relikey/issues/58)).
 
-## Then: [0.3.0](https://github.com/relikeyhq/relikey/milestone/2)
-Work that needs 0.2.0 first, a lab installation, hardware or a second component:
-- End-to-end test of enrolment and the officer anchor on a fresh installation ([#23](https://github.com/relikeyhq/relikey/issues/23))
-- The armv7 agent on real hardware ([#24](https://github.com/relikeyhq/relikey/issues/24))
-- Evidence log: core witness, anchoring, contracts C-12 and C-13 ([#25](https://github.com/relikeyhq/relikey/issues/25))
-- Enrolment-key rotation ([#26](https://github.com/relikeyhq/relikey/issues/26))
-- Open contracts C-02, C-03, C-07, C-08, C-09, C-11 ([#27](https://github.com/relikeyhq/relikey/issues/27))
-- Keyless signatures and SLSA Build L3 ([#28](https://github.com/relikeyhq/relikey/issues/28))
-- Signed container images on ghcr.io ([#29](https://github.com/relikeyhq/relikey/issues/29))
-- VEX statements with each release ([#30](https://github.com/relikeyhq/relikey/issues/30))
-- IEC 62443-4-1 self-assessment ([#31](https://github.com/relikeyhq/relikey/issues/31))
-- Demo: a single click from the README ([#41](https://github.com/relikeyhq/relikey/issues/41))
-- Operator guides: install, run, troubleshoot ([#43](https://github.com/relikeyhq/relikey/issues/43))
+## Next: [0.3.0](https://github.com/relikeyhq/relikey/milestone/2)
+Work that needs a lab installation, hardware or a second component. Done so far:
+- Keyless signatures and SLSA Build L3 ([#28](https://github.com/relikeyhq/relikey/issues/28), released in 0.2.1)
+- Signed container images on ghcr.io ([#29](https://github.com/relikeyhq/relikey/issues/29), released in 0.2.1)
+- Enrolment-key rotation ([#26](https://github.com/relikeyhq/relikey/issues/26), released in 0.2.1)
+
+Open, suggested order:
+1. End-to-end test of enrolment and the officer anchor on a fresh installation ([#23](https://github.com/relikeyhq/relikey/issues/23))
+2. Model: the edge proxy's footprint, measured against the switch profile ([#62](https://github.com/relikeyhq/relikey/issues/62))
+3. Evidence log: core witness, anchoring, contracts C-12 and C-13 ([#25](https://github.com/relikeyhq/relikey/issues/25))
+4. Open contracts C-02, C-03, C-07, C-08, C-09, C-11 ([#27](https://github.com/relikeyhq/relikey/issues/27))
+5. VEX statements with each release ([#30](https://github.com/relikeyhq/relikey/issues/30))
+6. Operator guides: install, run, troubleshoot ([#43](https://github.com/relikeyhq/relikey/issues/43))
+7. Demo: a single click from the README ([#41](https://github.com/relikeyhq/relikey/issues/41))
+8. The armv7 agent on real hardware ([#24](https://github.com/relikeyhq/relikey/issues/24))
+9. IEC 62443-4-1 self-assessment ([#31](https://github.com/relikeyhq/relikey/issues/31))
 
 ## Later: [deferred](https://github.com/relikeyhq/relikey/milestone/3)
 Accepted or proposed direction that waits on a partner release, a prototype or a decision:
