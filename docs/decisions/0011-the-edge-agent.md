@@ -32,7 +32,7 @@ Keycloak configuration; a podman composition of Keycloak, KeyClerk, Warpgate and
 a lease granted in KeyClerk, sign-in through Keycloak, a recorded SSH session through Warpgate, the lease ended, the
 session ended.
 
-Not in slice 1: the LDAP facade and lease credentials (P-B, P-D), the filtering proxy (until #2782), offline levels
+Not in slice 1: the LDAP facade and lease credentials (P-B, P-D), the filtering proxy (0008 point 1), offline levels
 (visit, carried, unlock, break-glass), evidence backfill, hardware profiles and attestation, remote reach.
 
 ## Changelog
@@ -40,3 +40,6 @@ Not in slice 1: the LDAP facade and lease credentials (P-B, P-D), the filtering 
   named, engineering rules linked; the TPM curve question is R-19.
 - 2026-10-23: slice 1 core built (`docs/agent.md`): verifier, ceiling policy (Go port of ceiling.rego until wazero),
   state, trusted time, reconcile, shadow mode (canary), soak harness; red-teamed (AG-1 to AG-22).
+- 2026-11-04: slice 1's list names the filtering proxy by its decision; warp-tech/warpgate#2782 (a separate admin
+  listener) was closed on 2026-11-03: Warpgate's `control_plane_host` keeps the admin surface off target-bound domains,
+  but not off the user port of the external host, so the filtering proxy is permanent (0008).

@@ -12,8 +12,8 @@
    forwards everything except the admin UI and API to Warpgate on loopback. Warpgate mounts its own routes under both
    `/@warpgate` and `/_warpgate` (warpgate-protocol-http/src/lib.rs), so the proxy refuses `/@warpgate/admin*` and
    `/_warpgate/admin*`, matched after percent-decoding and path normalisation; a test sends both forms. It holds only
-   the TLS certificate, never an admin token, and passes WebSockets (web SSH and RDP) and HTTPS targets intact. A separate admin listener is
-   proposed to Warpgate upstream (docs/upstream.md U-08); the proxy goes when it lands.
+   the TLS certificate, never an admin token, and passes WebSockets (web SSH and RDP) and HTTPS targets intact. A separate admin listener was
+   proposed to Warpgate upstream (docs/upstream.md U-08) and declined; the proxy stays.
 2. **P-B path (H2, RT-7).** A person reaches an LDAP-only system through a Warpgate target - its web UI as an HTTPS
    target, a thick client on a jump host behind an RDP target - and types the lease credential; the session is
    recorded and the wrapper rule holds. "The bastion injects the credential" is withdrawn until Warpgate can inject
@@ -37,7 +37,7 @@
      one per person per edge; the core alarms when an edge stops pulling bundles.
 
 ## Consequences
-- New edge component: the filtering proxy (`model/components.yaml`), until U-08.
+- New edge component: the filtering proxy (`model/components.yaml`).
 - The model check now refuses a pattern whose consecutive path steps are not allowed flows (RT-17, part).
 - Upstream items U-08 (separate admin listener) and U-09 (per-user credential injection) are to be proposed; U-08 is
   approved by the operator in principle, its issue text needs the operator's go.
@@ -46,3 +46,9 @@
 ## Changelog
 - 2026-10-25: point 1's filtering proxy is to be built now (decide loop, stack attack E6: the shipped compose
   publishes the admin paths); the agent moves to Warpgate's admin listener if warp-tech/warpgate#2782 lands.
+- 2026-11-04: warp-tech/warpgate#2782 (a separate admin listener) was closed on 2026-11-03: Warpgate's
+  `control_plane_host` keeps the admin surface off target-bound domains, but not off the user port of the external host,
+  so the filtering proxy is permanent. Cluster peers call each other's admin API on the user HTTP port over cluster
+  mutual TLS, so an HA edge's peers must reach each other's Warpgate directly, not through the proxy. The agent keeps
+  calling the admin API with its token on Warpgate's loopback port; a later Warpgate that binds API tokens to a host
+  would need a check there.
