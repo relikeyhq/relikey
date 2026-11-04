@@ -37,7 +37,39 @@ Releases are semver tags, `v0.1.0` first. A ReliKey release is its pins and its 
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-11-04
+
+### Added
+- Enrolment-key rotation (decision 0026 slice 5): with a next key staged in `agent.json`
+  (`next_enrolment_key_file`, `rotation_statement_file`), the agent answers the desk's 401 after KeyClerk's
+  `rotate_edge` by signing the same request with the staged key, and only when the desk takes it swaps the key files
+  (one rename, crash-safe) and signs with the new key from then on; a 401 the staged key does not cure changes nothing.
+  The agent hands the new key to the fleet (`POST /fleet/v1/rotation`, signed by both keys, carrying the desk's
+  statement); the fleet page lists it as pending, and an officer approves it with their passkey after typing 20
+  characters of the new key from the desk's record. Until then reports go on with the old key; after it the fleet
+  refuses the old key and the agent deletes it. A rotation that also changes the edge's officer is refused at start
+  (`docs/agent.md`, "Rotating the enrolment key"; `docs/fleet.md`).
+- The release build runs in a reusable workflow, `release-build.yml`, which the release workflow calls once CI passed
+  on the tagged commit: every attestation and signature names it as the builder, and the calling workflow cannot
+  change the build steps (SLSA Build L3). `SHA256SUMS` and each binary also get a keyless cosign signature, a Sigstore
+  bundle `FILE.sigstore.json` among the release files, checked with `cosign verify-blob` (README.md, "Verifying a
+  release", step 5).
+- Each release publishes the agent and fleet images on ghcr.io (`relikey-agent` for amd64, arm64 and armv7,
+  `relikey-fleet` for amd64 and arm64), built from the release's own binaries by `tools/release_images.py`, with a
+  provenance attestation in the registry and a keyless cosign signature, and lists their digests in the release
+  notes (README.md, "Verifying a release"). Pull requests build both images for every platform without pushing. The
+  images' preparation stage runs on the build platform, so no emulation is needed.
+- A release candidate tag `vX.Y.Z-rc.N` runs the whole release build and publishes a GitHub pre-release,
+  never the latest release, with the changes in `changelog.d/` as its notes (docs/publishing.md).
+
+### Fixed
+- Each binary's SBOM carries a serial number again, a UUIDv5 of its content, so the SBOM attestation step
+  accepts it; the 0.2.0 release build stopped there.
+
 ## [0.2.0] - 2026-11-03
+
+Tagged, never released: the release build stopped at the SBOM attestation (fixed in 0.2.1, which is the first
+release with these changes).
 
 ### Added
 - Fleet enrolment by code, wired end to end (decision 0026 points 15, 24, 32, 33): the edge installer takes the
