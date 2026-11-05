@@ -131,6 +131,10 @@ type KeyClerk struct {
 	Pulls   int
 	Refused int
 	Reports []jsontext.Value
+	// Incidents are the incidents the desk took; IncidentsRefused counts the ones it refused (edge protocol 1.4: a
+	// lease_ended_early for a lease not in the last bundle).
+	Incidents        []map[string]string
+	IncidentsRefused int
 }
 
 // NewKeyClerk has an officer-signed ceiling admitting the given persons and targets.
@@ -350,6 +354,20 @@ func (k *KeyClerk) Handler() http.Handler {
 		writeJSON(rw, 200, map[string]string{"name": "ceiling", "sha256": hex.EncodeToString(sum[:]),
 			"wasm": base64.StdEncoding.EncodeToString(k.Module)})
 	}))
+	mux.HandleFunc("POST /api/v1/edge/incident", guard(func(rw http.ResponseWriter, r *http.Request, body []byte) {
+		var in map[string]string
+		if json.Unmarshal(body, &in) != nil || in["kind"] == "" {
+			writeJSON(rw, 400, map[string]string{"error": "an incident is {kind, system, at, detail, log_sha256, lease_id}"})
+			return
+		}
+		if in["kind"] == "lease_ended_early" && !slices.ContainsFunc(k.Leases, func(l FakeLease) bool { return l.ID == in["lease_id"] }) {
+			k.IncidentsRefused++
+			writeJSON(rw, 409, map[string]string{"error": "lease " + in["lease_id"] + " is not in this edge's last bundle"})
+			return
+		}
+		k.Incidents = append(k.Incidents, in)
+		writeJSON(rw, 200, map[string]string{"incident_id": fmt.Sprintf("I-%d", len(k.Incidents))})
+	}))
 	mux.HandleFunc("GET /api/v1/edge/lease/{id}/email", guard(func(rw http.ResponseWriter, r *http.Request, _ []byte) {
 		k.EmailFetches++
 		nonce := strings.Split(r.Header.Get(kcedge.RequestHeader), ";")[2]
@@ -374,6 +392,13 @@ func (k *KeyClerk) Handler() http.Handler {
 		writeJSON(rw, 200, map[string]bool{"ok": true})
 	}))
 	return mux
+}
+
+// TakenIncidents returns a copy of the incidents the desk took, and how many it refused.
+func (k *KeyClerk) TakenIncidents() ([]map[string]string, int) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	return slices.Clone(k.Incidents), k.IncidentsRefused
 }
 
 // LastReport returns the newest report the edge sent.

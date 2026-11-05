@@ -48,6 +48,8 @@ type Record struct {
 	Held map[string]Assignment `json:"held_leases,omitempty"`
 	// Removals are the confirmed removals not yet delivered in a report, oldest first.
 	Removals []kcedge.Removal `json:"removals,omitempty"`
+	// EndedEarly are lease_ended_early incidents not yet delivered, oldest first.
+	EndedEarly []kcedge.EndedEarly `json:"ended_early,omitempty"`
 	// Where the newest bundle was verified, to bound elapsed time without trusting the
 	// wall clock: the boot it happened in and the boot clock then (decision 0007 point 4).
 	BootID       string `json:"boot_id,omitempty"`

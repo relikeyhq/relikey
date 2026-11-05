@@ -419,6 +419,14 @@ type Removal struct {
 	At      string `json:"at"`
 }
 
+// EndedEarly is a lease whose assignment the bastion took away before the lease's until (edge protocol 1.4, incident
+// lease_ended_early): the lease, the bastion as system, and when, as a time with its zone.
+type EndedEarly struct {
+	LeaseID string `json:"lease_id"`
+	System  string `json:"system"`
+	At      string `json:"at"`
+}
+
 // MaxRemovals is the most removals one report carries.
 const MaxRemovals = 500
 

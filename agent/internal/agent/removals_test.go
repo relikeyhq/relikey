@@ -87,6 +87,47 @@ func TestPendingRemovalsAreBounded(t *testing.T) {
 	}
 }
 
+// A role taken away behind the agent while its lease runs is a lease_ended_early incident for that lease (edge protocol
+// 1.4), sent once and dropped from the state when delivered; the drift line stays.
+func TestARoleRemovedOutsideIsALeaseEndedEarlyIncident(t *testing.T) {
+	r := newRig(t, Enforce)
+	r.kc.SetLeases([]fakes.FakeLease{lease("L-1", time.Now().Add(time.Hour))}, nil)
+	r.eventually("ann gets the role", func() bool { _, ok := r.roles("ann")["plc-operator"]; return ok })
+	r.eventually("a tick that sees it", func() bool { return r.status().PlanActions == 0 })
+	r.wg.RevokeRole("ann", "plc-operator")
+	r.eventually("the incident is taken", func() bool {
+		in, _ := r.kc.TakenIncidents()
+		return len(in) >= 1 && in[0]["kind"] == "lease_ended_early" && in[0]["lease_id"] == "L-1" &&
+			in[0]["system"] == "warpgate" && in[0]["at"] != ""
+	})
+	r.eventually("and leaves the state", func() bool { return len(r.store.Get().EndedEarly) == 0 })
+	if in, refused := r.kc.TakenIncidents(); len(in) != 1 || refused != 0 {
+		t.Fatalf("%d incidents taken, %d refused: want one, none", len(in), refused)
+	}
+}
+
+// An incident the desk refuses (the lease left the last bundle) is dropped, never sent again. It is planted in the
+// store before the agent runs: the agent is the store's only writer.
+func TestARefusedIncidentIsNotSentAgain(t *testing.T) {
+	r := newRigTuned(t, func(a *Agent) {
+		rec := a.Store.Get()
+		rec.EndedEarly = []kcedge.EndedEarly{{LeaseID: "L-gone", System: "warpgate", At: "2026-11-05T09:30:00Z"}}
+		if err := a.Store.Save(rec); err != nil {
+			t.Fatal(err)
+		}
+	})
+	r.kc.SetLeases([]fakes.FakeLease{lease("L-1", time.Now().Add(time.Hour))}, nil)
+	r.eventually("refused and dropped", func() bool {
+		_, refused := r.kc.TakenIncidents()
+		return refused == 1 && len(r.store.Get().EndedEarly) == 0
+	})
+	p0 := pulls(r.kc)
+	r.eventually("three more pulls, each with a report", func() bool { return pulls(r.kc) >= p0+3 })
+	if _, refused := r.kc.TakenIncidents(); refused != 1 {
+		t.Fatalf("refused %d times: sent again", refused)
+	}
+}
+
 // End to end: a lease ends, the agent removes the role, the next report confirms the removal, and once delivered the
 // confirmation leaves the edge's state.
 func TestAnEndedLeaseIsConfirmedInTheReport(t *testing.T) {

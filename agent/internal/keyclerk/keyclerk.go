@@ -222,6 +222,33 @@ type Attestation struct {
 	Mode         string `json:"mode"`
 }
 
+// Incident is a POST /edge/incident body. A lease_ended_early incident (edge protocol 1.4) names the lease, the
+// bastion as system and when the assignment ended; the other kinds carry no lease_id.
+type Incident struct {
+	Kind    string `json:"kind"`
+	System  string `json:"system,omitempty"`
+	At      string `json:"at,omitempty"`
+	Detail  string `json:"detail,omitempty"`
+	LeaseID string `json:"lease_id,omitempty"`
+}
+
+// SendIncident posts an incident. A refusal comes back as a *StatusError: the desk answers 4xx for an incident it will
+// never take (a lease no longer in the edge's last bundle, an end at or after the lease's until).
+func (c *Client) SendIncident(ctx context.Context, in Incident) error {
+	body, err := json.Marshal(in)
+	if err != nil {
+		return err
+	}
+	status, b, err := c.call(ctx, http.MethodPost, "/api/v1/edge/incident", body, 64<<10)
+	if err != nil {
+		return err
+	}
+	if status != http.StatusOK && status != http.StatusCreated {
+		return &StatusError{Status: status, Body: string(b)}
+	}
+	return nil
+}
+
 // SendReport posts a report.
 func (c *Client) SendReport(ctx context.Context, r Report) error {
 	body, err := json.Marshal(r)
