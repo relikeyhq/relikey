@@ -530,6 +530,51 @@
    "policy": "ceiling"
   }
  ],
+ "ceiling_hours": {
+  "cases": [
+   {
+    "expected": {
+     "hours": 8
+    },
+    "from": "2026-10-23T10:00:00Z",
+    "name": "exactly eight hours",
+    "until": "2026-10-23T18:00:00Z"
+   },
+   {
+    "expected": {
+     "hours": 9
+    },
+    "from": "2026-10-23T10:00:00Z",
+    "name": "one second over eight hours",
+    "until": "2026-10-23T18:00:01Z"
+   },
+   {
+    "expected": {
+     "hours": 9
+    },
+    "from": "2026-10-23T10:00:00Z",
+    "name": "eight hours and 59 minutes",
+    "until": "2026-10-23T18:59:00Z"
+   },
+   {
+    "expected": {
+     "hours": 1
+    },
+    "from": "2026-10-23T10:00:00Z",
+    "name": "one minute",
+    "until": "2026-10-23T10:01:00Z"
+   },
+   {
+    "expected": {
+     "hours": 168
+    },
+    "from": "2026-10-23T10:00:00Z",
+    "name": "a week",
+    "until": "2026-10-30T10:00:00Z"
+   }
+  ],
+  "note": "edge protocol 1.4: the hours the ceiling policy judges a lease or visit lease by, from its from (or the moment of the cut) to its until: whole hours rounded up, at least one"
+ },
  "ceilings": {
   "cases": [
    {
@@ -952,6 +997,280 @@
   "edge": "59606fcf1f44cefa6911003039587adb24dde2e99c014c336a8842e6f108f077"
  },
  "note": "evaluate each input against the module named; the result must equal expected (sets as sorted lists)",
+ "reports": {
+  "cases": [
+   {
+    "body": {
+     "applied_serial": 7,
+     "attestation": {
+      "profile": "basic"
+     },
+     "drift": []
+    },
+    "expected": {
+     "bastion": null,
+     "ok": true
+    },
+    "name": "a report of version 1.3",
+    "now": "2026-11-04T12:00:00Z"
+   },
+   {
+    "body": {
+     "applied_serial": 7,
+     "attestation": {
+      "profile": "basic"
+     },
+     "drift": [],
+     "records_head": {
+      "head": "abababababababababababababababababababababababababababababababab",
+      "revision": 12,
+      "size": 40
+     }
+    },
+    "expected": {
+     "bastion": null,
+     "ok": true
+    },
+    "name": "the records head echoed",
+    "now": "2026-11-04T12:00:00Z"
+   },
+   {
+    "body": {
+     "applied_serial": 7,
+     "attestation": {
+      "profile": "basic"
+     },
+     "drift": [],
+     "records_head": {
+      "head": "abababababababababababababababababababababababababababababababab",
+      "revision": 12
+     }
+    },
+    "expected": {
+     "bastion": null,
+     "ok": true
+    },
+    "name": "a records head of a desk without the log",
+    "now": "2026-11-04T12:00:00Z"
+   },
+   {
+    "body": {
+     "applied_serial": 7,
+     "attestation": {
+      "profile": "basic"
+     },
+     "drift": [],
+     "records_head": {
+      "head": "abababababababababababababababababababababababababababababababab"
+     }
+    },
+    "expected": {
+     "bastion": null,
+     "ok": false
+    },
+    "name": "a records head without its revision",
+    "now": "2026-11-04T12:00:00Z"
+   },
+   {
+    "body": {
+     "applied_serial": 7,
+     "attestation": {
+      "profile": "basic"
+     },
+     "drift": [],
+     "removals": [
+      {
+       "at": "2026-11-04T09:30:00+01:00",
+       "lease_id": "L-example-0001",
+       "system": "bastion-a"
+      }
+     ]
+    },
+    "expected": {
+     "bastion": null,
+     "ok": true
+    },
+    "name": "a removal confirmed",
+    "now": "2026-11-04T12:00:00Z"
+   },
+   {
+    "body": {
+     "applied_serial": 7,
+     "attestation": {
+      "profile": "basic"
+     },
+     "drift": [],
+     "removals": [
+      {
+       "at": "2026-11-04T09:30:00",
+       "lease_id": "L-example-0001",
+       "system": "bastion-a"
+      }
+     ]
+    },
+    "expected": {
+     "bastion": null,
+     "ok": false
+    },
+    "name": "a removal without a zone",
+    "now": "2026-11-04T12:00:00Z"
+   },
+   {
+    "body": {
+     "applied_serial": 7,
+     "attestation": {
+      "profile": "basic"
+     },
+     "drift": [],
+     "removals": [
+      {
+       "at": "2026-11-04T13:00:00Z",
+       "lease_id": "L-example-0001",
+       "system": "bastion-a"
+      }
+     ]
+    },
+    "expected": {
+     "bastion": null,
+     "ok": false
+    },
+    "name": "a removal after now",
+    "now": "2026-11-04T12:00:00Z"
+   },
+   {
+    "body": {
+     "applied_serial": 7,
+     "attestation": {
+      "profile": "basic"
+     },
+     "drift": [],
+     "removals": [
+      {
+       "at": "2026-11-04T09:30:00+01:00",
+       "lease_id": "L-example-0001"
+      }
+     ]
+    },
+    "expected": {
+     "bastion": null,
+     "ok": false
+    },
+    "name": "a removal without its bastion",
+    "now": "2026-11-04T12:00:00Z"
+   },
+   {
+    "body": {
+     "applied_serial": 7,
+     "attestation": {
+      "profile": "basic"
+     },
+     "bastion": {
+      "adapter": [
+       "reads_hardening"
+      ],
+      "capabilities": [
+       "expires_grants",
+       "records_sessions"
+      ],
+      "product": "warpgate",
+      "version": "0.30.1"
+     },
+     "drift": []
+    },
+    "expected": {
+     "bastion": {
+      "adapter": [
+       "reads_hardening"
+      ],
+      "capabilities": [
+       "expires_grants",
+       "records_sessions"
+      ],
+      "product": "warpgate",
+      "unknown": [],
+      "version": "0.30.1"
+     },
+     "ok": true
+    },
+    "name": "a bastion declared",
+    "now": "2026-11-04T12:00:00Z"
+   },
+   {
+    "body": {
+     "applied_serial": 7,
+     "attestation": {
+      "profile": "basic"
+     },
+     "bastion": {
+      "adapter": [
+       "reads_hardening"
+      ],
+      "capabilities": [
+       "records_sessions",
+       "a_later_token"
+      ],
+      "product": "warpgate",
+      "version": "0.30.1"
+     },
+     "drift": []
+    },
+    "expected": {
+     "bastion": {
+      "adapter": [
+       "reads_hardening"
+      ],
+      "capabilities": [
+       "records_sessions"
+      ],
+      "product": "warpgate",
+      "unknown": [
+       "a_later_token"
+      ],
+      "version": "0.30.1"
+     },
+     "ok": true
+    },
+    "name": "a token this version does not know",
+    "now": "2026-11-04T12:00:00Z"
+   },
+   {
+    "body": {
+     "applied_serial": 7,
+     "attestation": {
+      "profile": "basic"
+     },
+     "bastion": {
+      "product": "warpgate",
+      "version": "0.30.1"
+     },
+     "drift": []
+    },
+    "expected": {
+     "bastion": null,
+     "ok": false
+    },
+    "name": "a bastion without capabilities",
+    "now": "2026-11-04T12:00:00Z"
+   },
+   {
+    "body": {
+     "applied_serial": 7,
+     "attestation": {
+      "profile": "basic"
+     },
+     "drift": [],
+     "note": "x"
+    },
+    "expected": {
+     "bastion": null,
+     "ok": false
+    },
+    "name": "an unknown report member",
+    "now": "2026-11-04T12:00:00Z"
+   }
+  ],
+  "note": "edge protocol 1.4: whether the desk accepts a report body (section 7) at the moment now, and the bastion declaration it keeps: tokens it knows as capabilities and adapter, the rest as unknown, never refused"
+ },
  "requests": {
   "cases": [
    {
@@ -1970,6 +2289,116 @@
      "key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
      "key_id": "34750f98bd59fcfc",
      "signature": "a9446cc6e0fa8f9b802c75f61bb5c785c46e1580dfc852769f4bcfcdeab78b572b975cfd0c198be62b90a491a625ff5a0d7d3a8675c0d6bb6ac4ec2dfd18850f"
+    },
+    "state": {
+     "serial": 6
+    }
+   },
+   {
+    "expected": {
+     "governed_roles": null,
+     "leases": [
+      "L-1"
+     ],
+     "ok": true,
+     "state": {
+      "ceiling_serial": 2,
+      "newest": "2026-10-23T12:00:00Z",
+      "serial": 7
+     },
+     "visit_leases": []
+    },
+    "name": "a bundle with its records head (1.4)",
+    "now": "2026-10-23T13:00:00Z",
+    "pins": {
+     "bundle_key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+     "edge": "edge-a",
+     "officer_key": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
+     "release_key": null
+    },
+    "sealed": {
+     "bytes": "eyJjZWlsaW5nIjp7ImJ5dGVzIjoiZXlKamJHRnpjMlZ6SWpwYklteHZkeUlzSW1Wc1pYWmhkR1ZrSWl3aWNISnBkbWxzWldkbFpDSmRMQ0psWkdkbElqb2laV1JuWlMxaElpd2labTl5YldGMElqb2lhMk10WldSblpTMWpaV2xzYVc1bkxYWXlJaXdpYTJWNVgybGtJam9pTm1Fek9EQXpaRFZtTURVNU9UQXlZU0lzSW0xaGVGOXNaV0Z6WlY5b2IzVnljeUk2TnpJd0xDSnRZWGhmYjJabWJHbHVaVjlvYjNWeWN5STZNVElzSW5CbGNuTnZibk1pT2xzaWFXUndPamRqTVdZdFlXNXVJbDBzSW5CdmNuUnpJanBiTWpKZExDSndjbTltYVd4bElqb2lZWE56ZFhKbFpDSXNJbkpsYlc5MFpWOXlaV0ZqYUNJNkltOW1aaUlzSW5KdmJHVnpJanBiWFN3aWMyVnlhV0ZzSWpveUxDSnphV2R1WldSZllYUWlPaUl5TURJMkxURXdMVEl6VkRFd09qQXdPakF3V2lJc0luUmhjbWRsZEhNaU9sc2ljR3hqTFhOemFDSmRmUT09Iiwia2V5IjoiODEzOTc3MGVhODdkMTc1ZjU2YTM1NDY2YzM0YzdlY2NjYjhkOGE5MWI0ZWUzN2EyNWRmNjBmNWI4ZmM5YjM5NCIsImtleV9pZCI6IjZhMzgwM2Q1ZjA1OTkwMmEiLCJzaWduYXR1cmUiOiI2OTk5ZmUwOWMzMzJhZTI0MGU2MWUwZjQzMjExOTUxMmNlNGM4Y2Q0ODQ0N2JhYzc4YzEzOTU4YTI3M2Q2ODA4NDEwYzcyYmY2MjRhMWY0NGRjMmVjOWJhNzNkYzk5MzY2ZDcwMzI4NDk1NjRkMjA2Yzk0Mjk4MDJkZTRmM2QwYSJ9LCJlZGdlIjoiZWRnZS1hIiwiZm9ybWF0Ijoia2MtZWRnZS1idW5kbGUtdjMiLCJob3Jpem9ucyI6eyJlbGV2YXRlZCI6MjQsImxvdyI6MTY4LCJwcml2aWxlZ2VkIjoxfSwiaXNzdWVkIjoiMjAyNi0xMC0yM1QxMjowMDowMFoiLCJrZXlfaWQiOiIzNDc1MGY5OGJkNTlmY2ZjIiwibGVhc2VzIjpbeyJjbGFzcyI6ImxvdyIsImZyb20iOiIyMDI2LTEwLTIzVDExOjAwOjAwWiIsImxlYXNlX2lkIjoiTC0xIiwicGVyc29uIjoiaWRwOjdjMWYtYW5uIiwicm9sZSI6Im9wZXJhdG9yIiwicm9sZXMiOltdLCJ0YXJnZXQiOiJwbGMtc3NoIiwidW50aWwiOiIyMDI2LTExLTIzVDExOjAwOjAwWiIsInVzZXJuYW1lIjoiYW5uIn1dLCJwb2xpY3kiOnsiZW50cnlwb2ludHMiOltdLCJtb2R1bGVzIjp7fSwicmVsZWFzZSI6bnVsbH0sInJlY29yZHNfaGVhZCI6eyJoZWFkIjoiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYmFiYWJhYiIsInJldmlzaW9uIjoxMiwic2l6ZSI6NDB9LCJyZXZva2VkIjpbXSwic2VyaWFsIjo3LCJ2aXNpdF9sZWFzZXMiOltdfQ==",
+     "key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+     "key_id": "34750f98bd59fcfc",
+     "signature": "df596735c458ac77d1d11afa29be36819811d8897252e6ec5cd7237110717a74dbf48f7849048bc17f80e33225440cb18b83282f718df2b8a67db38405ee6d00"
+    },
+    "state": {
+     "serial": 6
+    }
+   },
+   {
+    "expected": {
+     "governed_roles": null,
+     "leases": [],
+     "ok": false,
+     "state": null,
+     "visit_leases": []
+    },
+    "name": "a records head without its head (1.4)",
+    "now": "2026-10-23T13:00:00Z",
+    "pins": {
+     "bundle_key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+     "edge": "edge-a",
+     "officer_key": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
+     "release_key": null
+    },
+    "sealed": {
+     "bytes": "eyJjZWlsaW5nIjp7ImJ5dGVzIjoiZXlKamJHRnpjMlZ6SWpwYklteHZkeUlzSW1Wc1pYWmhkR1ZrSWl3aWNISnBkbWxzWldkbFpDSmRMQ0psWkdkbElqb2laV1JuWlMxaElpd2labTl5YldGMElqb2lhMk10WldSblpTMWpaV2xzYVc1bkxYWXlJaXdpYTJWNVgybGtJam9pTm1Fek9EQXpaRFZtTURVNU9UQXlZU0lzSW0xaGVGOXNaV0Z6WlY5b2IzVnljeUk2TnpJd0xDSnRZWGhmYjJabWJHbHVaVjlvYjNWeWN5STZNVElzSW5CbGNuTnZibk1pT2xzaWFXUndPamRqTVdZdFlXNXVJbDBzSW5CdmNuUnpJanBiTWpKZExDSndjbTltYVd4bElqb2lZWE56ZFhKbFpDSXNJbkpsYlc5MFpWOXlaV0ZqYUNJNkltOW1aaUlzSW5KdmJHVnpJanBiWFN3aWMyVnlhV0ZzSWpveUxDSnphV2R1WldSZllYUWlPaUl5TURJMkxURXdMVEl6VkRFd09qQXdPakF3V2lJc0luUmhjbWRsZEhNaU9sc2ljR3hqTFhOemFDSmRmUT09Iiwia2V5IjoiODEzOTc3MGVhODdkMTc1ZjU2YTM1NDY2YzM0YzdlY2NjYjhkOGE5MWI0ZWUzN2EyNWRmNjBmNWI4ZmM5YjM5NCIsImtleV9pZCI6IjZhMzgwM2Q1ZjA1OTkwMmEiLCJzaWduYXR1cmUiOiI2OTk5ZmUwOWMzMzJhZTI0MGU2MWUwZjQzMjExOTUxMmNlNGM4Y2Q0ODQ0N2JhYzc4YzEzOTU4YTI3M2Q2ODA4NDEwYzcyYmY2MjRhMWY0NGRjMmVjOWJhNzNkYzk5MzY2ZDcwMzI4NDk1NjRkMjA2Yzk0Mjk4MDJkZTRmM2QwYSJ9LCJlZGdlIjoiZWRnZS1hIiwiZm9ybWF0Ijoia2MtZWRnZS1idW5kbGUtdjMiLCJob3Jpem9ucyI6eyJlbGV2YXRlZCI6MjQsImxvdyI6MTY4LCJwcml2aWxlZ2VkIjoxfSwiaXNzdWVkIjoiMjAyNi0xMC0yM1QxMjowMDowMFoiLCJrZXlfaWQiOiIzNDc1MGY5OGJkNTlmY2ZjIiwibGVhc2VzIjpbeyJjbGFzcyI6ImxvdyIsImZyb20iOiIyMDI2LTEwLTIzVDExOjAwOjAwWiIsImxlYXNlX2lkIjoiTC0xIiwicGVyc29uIjoiaWRwOjdjMWYtYW5uIiwicm9sZSI6Im9wZXJhdG9yIiwicm9sZXMiOltdLCJ0YXJnZXQiOiJwbGMtc3NoIiwidW50aWwiOiIyMDI2LTExLTIzVDExOjAwOjAwWiIsInVzZXJuYW1lIjoiYW5uIn1dLCJwb2xpY3kiOnsiZW50cnlwb2ludHMiOltdLCJtb2R1bGVzIjp7fSwicmVsZWFzZSI6bnVsbH0sInJlY29yZHNfaGVhZCI6eyJyZXZpc2lvbiI6MTJ9LCJyZXZva2VkIjpbXSwic2VyaWFsIjo3LCJ2aXNpdF9sZWFzZXMiOltdfQ==",
+     "key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+     "key_id": "34750f98bd59fcfc",
+     "signature": "8fccc62e031aedcaee872b87fa0ee0860388be1de396f4675689752109f2e75c684923ef1e566c09fafa75c883c27a5876e3048ceff5684fddb605d92582360c"
+    },
+    "state": {
+     "serial": 6
+    }
+   },
+   {
+    "expected": {
+     "governed_roles": null,
+     "leases": [],
+     "ok": false,
+     "state": null,
+     "visit_leases": []
+    },
+    "name": "a records head in upper-case hex (1.4)",
+    "now": "2026-10-23T13:00:00Z",
+    "pins": {
+     "bundle_key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+     "edge": "edge-a",
+     "officer_key": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
+     "release_key": null
+    },
+    "sealed": {
+     "bytes": "eyJjZWlsaW5nIjp7ImJ5dGVzIjoiZXlKamJHRnpjMlZ6SWpwYklteHZkeUlzSW1Wc1pYWmhkR1ZrSWl3aWNISnBkbWxzWldkbFpDSmRMQ0psWkdkbElqb2laV1JuWlMxaElpd2labTl5YldGMElqb2lhMk10WldSblpTMWpaV2xzYVc1bkxYWXlJaXdpYTJWNVgybGtJam9pTm1Fek9EQXpaRFZtTURVNU9UQXlZU0lzSW0xaGVGOXNaV0Z6WlY5b2IzVnljeUk2TnpJd0xDSnRZWGhmYjJabWJHbHVaVjlvYjNWeWN5STZNVElzSW5CbGNuTnZibk1pT2xzaWFXUndPamRqTVdZdFlXNXVJbDBzSW5CdmNuUnpJanBiTWpKZExDSndjbTltYVd4bElqb2lZWE56ZFhKbFpDSXNJbkpsYlc5MFpWOXlaV0ZqYUNJNkltOW1aaUlzSW5KdmJHVnpJanBiWFN3aWMyVnlhV0ZzSWpveUxDSnphV2R1WldSZllYUWlPaUl5TURJMkxURXdMVEl6VkRFd09qQXdPakF3V2lJc0luUmhjbWRsZEhNaU9sc2ljR3hqTFhOemFDSmRmUT09Iiwia2V5IjoiODEzOTc3MGVhODdkMTc1ZjU2YTM1NDY2YzM0YzdlY2NjYjhkOGE5MWI0ZWUzN2EyNWRmNjBmNWI4ZmM5YjM5NCIsImtleV9pZCI6IjZhMzgwM2Q1ZjA1OTkwMmEiLCJzaWduYXR1cmUiOiI2OTk5ZmUwOWMzMzJhZTI0MGU2MWUwZjQzMjExOTUxMmNlNGM4Y2Q0ODQ0N2JhYzc4YzEzOTU4YTI3M2Q2ODA4NDEwYzcyYmY2MjRhMWY0NGRjMmVjOWJhNzNkYzk5MzY2ZDcwMzI4NDk1NjRkMjA2Yzk0Mjk4MDJkZTRmM2QwYSJ9LCJlZGdlIjoiZWRnZS1hIiwiZm9ybWF0Ijoia2MtZWRnZS1idW5kbGUtdjMiLCJob3Jpem9ucyI6eyJlbGV2YXRlZCI6MjQsImxvdyI6MTY4LCJwcml2aWxlZ2VkIjoxfSwiaXNzdWVkIjoiMjAyNi0xMC0yM1QxMjowMDowMFoiLCJrZXlfaWQiOiIzNDc1MGY5OGJkNTlmY2ZjIiwibGVhc2VzIjpbeyJjbGFzcyI6ImxvdyIsImZyb20iOiIyMDI2LTEwLTIzVDExOjAwOjAwWiIsImxlYXNlX2lkIjoiTC0xIiwicGVyc29uIjoiaWRwOjdjMWYtYW5uIiwicm9sZSI6Im9wZXJhdG9yIiwicm9sZXMiOltdLCJ0YXJnZXQiOiJwbGMtc3NoIiwidW50aWwiOiIyMDI2LTExLTIzVDExOjAwOjAwWiIsInVzZXJuYW1lIjoiYW5uIn1dLCJwb2xpY3kiOnsiZW50cnlwb2ludHMiOltdLCJtb2R1bGVzIjp7fSwicmVsZWFzZSI6bnVsbH0sInJlY29yZHNfaGVhZCI6eyJoZWFkIjoiQUJBQkFCQUJBQkFCQUJBQkFCQUJBQkFCQUJBQkFCQUJBQkFCQUJBQkFCQUJBQkFCQUJBQkFCQUJBQkFCQUJBQiIsInJldmlzaW9uIjoxMn0sInJldm9rZWQiOltdLCJzZXJpYWwiOjcsInZpc2l0X2xlYXNlcyI6W119",
+     "key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+     "key_id": "34750f98bd59fcfc",
+     "signature": "e1092043b153e9e0b88055e64e9a982eb9ac794079f640e124b8f5c03e22c93163faa6455779e26b45cb15f8361cdbb134518d7247305e77bc0da7310156540e"
+    },
+    "state": {
+     "serial": 6
+    }
+   },
+   {
+    "expected": {
+     "governed_roles": null,
+     "leases": [],
+     "ok": false,
+     "state": null,
+     "visit_leases": []
+    },
+    "name": "a null records head (1.4)",
+    "now": "2026-10-23T13:00:00Z",
+    "pins": {
+     "bundle_key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+     "edge": "edge-a",
+     "officer_key": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
+     "release_key": null
+    },
+    "sealed": {
+     "bytes": "eyJjZWlsaW5nIjp7ImJ5dGVzIjoiZXlKamJHRnpjMlZ6SWpwYklteHZkeUlzSW1Wc1pYWmhkR1ZrSWl3aWNISnBkbWxzWldkbFpDSmRMQ0psWkdkbElqb2laV1JuWlMxaElpd2labTl5YldGMElqb2lhMk10WldSblpTMWpaV2xzYVc1bkxYWXlJaXdpYTJWNVgybGtJam9pTm1Fek9EQXpaRFZtTURVNU9UQXlZU0lzSW0xaGVGOXNaV0Z6WlY5b2IzVnljeUk2TnpJd0xDSnRZWGhmYjJabWJHbHVaVjlvYjNWeWN5STZNVElzSW5CbGNuTnZibk1pT2xzaWFXUndPamRqTVdZdFlXNXVJbDBzSW5CdmNuUnpJanBiTWpKZExDSndjbTltYVd4bElqb2lZWE56ZFhKbFpDSXNJbkpsYlc5MFpWOXlaV0ZqYUNJNkltOW1aaUlzSW5KdmJHVnpJanBiWFN3aWMyVnlhV0ZzSWpveUxDSnphV2R1WldSZllYUWlPaUl5TURJMkxURXdMVEl6VkRFd09qQXdPakF3V2lJc0luUmhjbWRsZEhNaU9sc2ljR3hqTFhOemFDSmRmUT09Iiwia2V5IjoiODEzOTc3MGVhODdkMTc1ZjU2YTM1NDY2YzM0YzdlY2NjYjhkOGE5MWI0ZWUzN2EyNWRmNjBmNWI4ZmM5YjM5NCIsImtleV9pZCI6IjZhMzgwM2Q1ZjA1OTkwMmEiLCJzaWduYXR1cmUiOiI2OTk5ZmUwOWMzMzJhZTI0MGU2MWUwZjQzMjExOTUxMmNlNGM4Y2Q0ODQ0N2JhYzc4YzEzOTU4YTI3M2Q2ODA4NDEwYzcyYmY2MjRhMWY0NGRjMmVjOWJhNzNkYzk5MzY2ZDcwMzI4NDk1NjRkMjA2Yzk0Mjk4MDJkZTRmM2QwYSJ9LCJlZGdlIjoiZWRnZS1hIiwiZm9ybWF0Ijoia2MtZWRnZS1idW5kbGUtdjMiLCJob3Jpem9ucyI6eyJlbGV2YXRlZCI6MjQsImxvdyI6MTY4LCJwcml2aWxlZ2VkIjoxfSwiaXNzdWVkIjoiMjAyNi0xMC0yM1QxMjowMDowMFoiLCJrZXlfaWQiOiIzNDc1MGY5OGJkNTlmY2ZjIiwibGVhc2VzIjpbeyJjbGFzcyI6ImxvdyIsImZyb20iOiIyMDI2LTEwLTIzVDExOjAwOjAwWiIsImxlYXNlX2lkIjoiTC0xIiwicGVyc29uIjoiaWRwOjdjMWYtYW5uIiwicm9sZSI6Im9wZXJhdG9yIiwicm9sZXMiOltdLCJ0YXJnZXQiOiJwbGMtc3NoIiwidW50aWwiOiIyMDI2LTExLTIzVDExOjAwOjAwWiIsInVzZXJuYW1lIjoiYW5uIn1dLCJwb2xpY3kiOnsiZW50cnlwb2ludHMiOltdLCJtb2R1bGVzIjp7fSwicmVsZWFzZSI6bnVsbH0sInJlY29yZHNfaGVhZCI6bnVsbCwicmV2b2tlZCI6W10sInNlcmlhbCI6NywidmlzaXRfbGVhc2VzIjpbXX0=",
+     "key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+     "key_id": "34750f98bd59fcfc",
+     "signature": "432015024ba1df6148540794818dc83adabf0ea9e7a643502b85ebf48c8ee88c30aa8ddad5eaaa53c7495f9f74d4f57208a0ca5e88472c3b2277e5c5399a630a"
     },
     "state": {
      "serial": 6
