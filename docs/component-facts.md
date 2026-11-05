@@ -3,6 +3,11 @@
 What the model and the decisions assume about each component, checked against the source on 2026-10-23. Each fact
 says how it was checked. A decision that rests on an unchecked or refuted fact is not accepted.
 
+The Warpgate facts below were read at v0.30.0. The edge now pins 0.30.4 (`deploy/edge/compose.yaml`): the agent's
+adapter is checked against every pinned version by a live test (`tools/warpgate_live.py`, on 0.30.2 and 0.30.4), and
+the TLS and SSH libraries per version are in `model/crypto.yaml`; a fact here that a later version changes is
+re-checked before the pin moves.
+
 ## Warpgate (v0.30.0, Apache-2.0)
 | Fact | Result | How checked |
 |---|---|---|

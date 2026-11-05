@@ -46,25 +46,29 @@ Edge protocol 1.4 end to end, and the lab and desk work that needs no new hardwa
 - Signed container images on ghcr.io ([#29](https://github.com/relikeyhq/relikey/issues/29), released in 0.2.1)
 - Enrolment-key rotation ([#26](https://github.com/relikeyhq/relikey/issues/26), released in 0.2.1)
 - VEX statements with each release ([#30](https://github.com/relikeyhq/relikey/issues/30), on main, in the next release)
-- Edge protocol 1.4 in the agent: conformance vectors at KeyClerk 0.27.0, the records head echoed and removals
-  confirmed in the report ([#113](https://github.com/relikeyhq/relikey/pull/113),
-  [#114](https://github.com/relikeyhq/relikey/pull/114), [#115](https://github.com/relikeyhq/relikey/pull/115))
+- Edge protocol 1.4 in the agent: conformance vectors at KeyClerk 0.27.0, the records head echoed, removals confirmed,
+  `lease_ended_early` incidents and the bastion's declaration in the report ([#116](https://github.com/relikeyhq/relikey/issues/116))
+- The edge on Warpgate 0.30.4, with a live test of the agent's adapter against the real API ([#117](https://github.com/relikeyhq/relikey/issues/117))
+- The core on KeyClerk 0.27.0, approvals on a passkey sign-in ([#118](https://github.com/relikeyhq/relikey/issues/118))
+- Enforce mode refuses a time namespace that offsets its clocks ([#123](https://github.com/relikeyhq/relikey/issues/123))
+- Each start of the agent is an event, so an idle edge's chain can be checked across a restart ([#129](https://github.com/relikeyhq/relikey/pull/129))
+- The demo as a signed image that runs offline, beside the Codespaces route ([#41](https://github.com/relikeyhq/relikey/issues/41))
 
 Open, suggested order:
-1. Edge on Warpgate 0.30.4, three security advisories ([#117](https://github.com/relikeyhq/relikey/issues/117))
-2. Edge protocol 1.4, the rest of the agent's side: the bastion declaration and `lease_ended_early` ([#116](https://github.com/relikeyhq/relikey/issues/116))
-3. Core on KeyClerk 0.27.0 ([#118](https://github.com/relikeyhq/relikey/issues/118))
-4. End-to-end test of enrolment and the officer anchor on a fresh installation ([#23](https://github.com/relikeyhq/relikey/issues/23))
-5. Model: the edge proxy's footprint, measured against the switch profile ([#62](https://github.com/relikeyhq/relikey/issues/62))
-6. Operator guides: install, run, troubleshoot ([#43](https://github.com/relikeyhq/relikey/issues/43))
-7. Demo: a single click from the README ([#41](https://github.com/relikeyhq/relikey/issues/41))
+1. End-to-end test of enrolment by code and the officer anchor on a fresh installation ([#23](https://github.com/relikeyhq/relikey/issues/23))
+2. Model: the edge proxy's footprint, measured against the switch profile ([#62](https://github.com/relikeyhq/relikey/issues/62))
+3. Operator guides: install, run, troubleshoot ([#43](https://github.com/relikeyhq/relikey/issues/43))
 
 ## Then: [0.4.0](https://github.com/relikeyhq/relikey/milestone/4), due 2026-12-17
-The larger and hardware-bound items, suggested order:
-1. Evidence log: core witness, anchoring, contracts C-12 and C-13 ([#25](https://github.com/relikeyhq/relikey/issues/25))
-2. Open contracts C-02, C-03, C-07, C-08, C-09, C-11 ([#27](https://github.com/relikeyhq/relikey/issues/27))
-3. The armv7 agent on real hardware ([#24](https://github.com/relikeyhq/relikey/issues/24))
-4. IEC 62443-4-1 self-assessment ([#31](https://github.com/relikeyhq/relikey/issues/31))
+The larger and hardware-bound items, and edge protocol 1.5 with KeyClerk 0.28.0, suggested order:
+1. Two-node edge: active/standby with a witness, and the activation report ([#127](https://github.com/relikeyhq/relikey/issues/127))
+2. The trusted time ratchets, so a frozen boot clock and a wall set back cannot stretch a lease ([#125](https://github.com/relikeyhq/relikey/issues/125));
+   ships with edge protocol 1.5, which KeyClerk releases with 0.28.0 once a two-node edge passes its soak
+3. Evidence log: core witness, anchoring, contracts C-12 and C-13 ([#25](https://github.com/relikeyhq/relikey/issues/25))
+4. Open contracts C-02, C-03, C-07, C-08, C-09, C-11 ([#27](https://github.com/relikeyhq/relikey/issues/27))
+5. Carried visit leases on an assured edge ([#128](https://github.com/relikeyhq/relikey/issues/128))
+6. The armv7 agent on real hardware ([#24](https://github.com/relikeyhq/relikey/issues/24))
+7. IEC 62443-4-1 self-assessment ([#31](https://github.com/relikeyhq/relikey/issues/31))
 
 ## Later: [deferred](https://github.com/relikeyhq/relikey/milestone/3)
 Accepted or proposed direction that waits on a partner release, a prototype or a decision; each gets a date when
