@@ -2,7 +2,7 @@
 
 **Source of truth:** `docs/keyclerk-edge-interface.md` in the KeyClerk repository (github.com/keyclerk/keyclerk) and
 the edge protocol specification (github.com/keyclerk/edge-protocol). The agent's vectors come from KeyClerk v0.27.0
-(`agent/internal/kcedge/testdata/SOURCE`, regenerated with `regen.py`); the core image pins KeyClerk 0.26.3. The
+(`agent/internal/kcedge/testdata/SOURCE`, regenerated with `regen.py`); the core image pins KeyClerk 0.27.0. The
 section below maps edge protocol 1.1 to 1.3; the rest of this page records the port at v0.23.0 (commit bd6620f),
 with KeyClerk decision 0014 and amendments 0014a to 0014d. v0.21.2 and v0.22.0 fixed the
 Go port's findings KC-1 to KC-3 and KC-5 to KC-11 (`a review record kept with the maintainer`); v0.23.0

@@ -373,6 +373,7 @@ availability:
       obligations: []
 approvals:
   proofs: required          # contract C-05: an approval is the approver's own fresh broker sign-in (KeyClerk 0006)
+  acr: passkey              # the proof's sign-in level: a passkey (realm.py passkey_level; KeyClerk 0.27.0, its 0030 p5)
 reconcile:
   max_removals_per_run: 50
   max_removal_share: 0.25

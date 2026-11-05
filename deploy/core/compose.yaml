@@ -14,7 +14,7 @@ x-hardened: &hardened
 
 x-clerk: &clerk
   <<: *hardened
-  image: localhost/keyclerk:0.26.3              # install.py: git archive v0.26.3 | build (KeyClerk's own Containerfile)
+  image: localhost/keyclerk:0.27.0              # install.py: git archive v0.27.0 | build (KeyClerk's own Containerfile)
   pull_policy: never                            # built here, never fetched from a registry by that name
   network_mode: service:front
   read_only: true
@@ -146,6 +146,8 @@ services:
               "--client", "keyclerk-writer", "--secret-file", "/run/secrets/writer",
               "--reader-client", "keyclerk-reader", "--reader-secret-file", "/run/secrets/reader",
               "--state", "/var/lib/keyclerk", "--interval", "60", "--apply",
+              # KeyClerk 0.27.0: the broker's high-water mark is signed with the reconciler's own key
+              "--mark-key", "/run/secrets/mark",
               # approvals.proofs is required (C-05): the reconciler verifies each approval's ID token itself and
               # refuses every run without these (the broker's keys come from --keycloak above)
               "--approval-issuer", "${BROKER_URL}/realms/${REALM}", "--approval-audience", "keyclerk-desk"]
@@ -154,6 +156,7 @@ services:
       - ../secrets/records.pub:/etc/keyclerk/records.pub:ro
       - ../secrets/keyclerk-writer.secret:/run/secrets/writer:ro
       - ../secrets/keyclerk-reader.secret:/run/secrets/reader:ro
+      - ../secrets/mark.key:/run/secrets/mark:ro
       - desk:/srv/desk:ro
       - reconcile:/var/lib/keyclerk
     depends_on: [desk]

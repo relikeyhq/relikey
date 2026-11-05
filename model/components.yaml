@@ -60,7 +60,7 @@ components:
     role: Governance engine. Decides who may reach what, until when, with whose second key; issues signed lease bundles.
     tier: core
     image: localhost/keyclerk        # built by install.py from the signed source tag (no registry image is published)
-    version: "0.26.3"               # 0.26.3 (cfc5793 on GitHub, signed tag): the 2026-10-26 review's fixes, the emSign CAs distrusted; edge protocol 1.3
+    version: "0.27.0"               # 0.27.0 (f8dd982 on GitHub, signed tag): backup and restore with a drill, signed snapshots, SIEM and SOAR; edge protocol 1.4
     digest: null
     licence: EUPL-1.2               # relicensed from Apache-2.0 (KeyClerk going public, P2, 2026-10-24)
     zone: appliance

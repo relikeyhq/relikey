@@ -124,6 +124,10 @@ def ensure_client(rep: dict) -> str:
     # S256 on every client, service accounts too: on a re-run the pkce-enforcer policy is already on and Keycloak
     # checks it before the conflict, so a client without it is refused (400) instead of found (409) (full-stack run 2)
     rep = {**rep, "attributes": {"pkce.code.challenge.method": "S256", **rep.get("attributes", {})}}
+    if rep.get("standardFlowEnabled"):
+        # a sign-in that asks for no level would skip the passkey branch (its level condition) and reach the
+        # first-sign-in password branch: every client people sign in through asks for the passkey level
+        rep["attributes"].setdefault("default.acr.values", PASSKEY_LEVEL)
     if req("POST", f"{R}/clients", rep, ok=(201, 409))[0] == 409:
         cid = client_id(rep["clientId"])
         req("PUT", f"{R}/clients/{cid}", {**req("GET", f"{R}/clients/{cid}")[1], **rep})
@@ -247,6 +251,39 @@ def client_policies() -> None:
     req("PUT", f"{R}/client-policies/policies", {"policies": [{
         "name": "relikey-all-clients", "description": "every client of the realm", "enabled": True,
         "conditions": [{"condition": "any-client", "configuration": {}}], "profiles": ["relikey-secure"]}]})
+
+
+# The sign-in level a passkey reaches: the acr claim KeyClerk's approvals.acr requires (keyclerk.yaml; KeyClerk 0.27.0,
+# its decision 0030 point 5). Only the passkey branch reaches it; the first sign-in's temporary password never does.
+PASSKEY_LEVEL = "passkey"
+
+
+def passkey_level_name() -> None:
+    """The realm maps PASSKEY_LEVEL to level 1. Before any client names it as its default level: Keycloak refuses a
+    default level its realm does not map (lab run 12)."""
+    attrs = req("GET", R)[1].get("attributes") or {}
+    want = json.dumps({PASSKEY_LEVEL: 1})
+    if attrs.get("acr.loa.map") != want:
+        req("PUT", R, {"attributes": {**attrs, "acr.loa.map": want}})
+
+
+def passkey_level() -> None:
+    """Names the passkey sign-in as a level of authentication: the realm maps PASSKEY_LEVEL to level 1, and the passkey
+    branch of the browser flow carries the level 1 condition, so a token's acr is PASSKEY_LEVEL only after a passkey
+    sign-in. Clients ask for it by default (ensure_client). Idempotent: an existing realm is brought to it."""
+    from urllib.parse import quote
+    passkey_level_name()
+    pk = f"{R}/authentication/flows/{quote('relikey-passkey')}/executions"
+    if not any(e.get("providerId") == "conditional-level-of-authentication" for e in req("GET", pk)[1] or []):
+        req("POST", pk + "/execution", {"provider": "conditional-level-of-authentication"})
+    for e in req("GET", pk)[1] or []:
+        if e.get("providerId") != "conditional-level-of-authentication":
+            continue
+        if e.get("requirement") != "REQUIRED":
+            req("PUT", pk, {**e, "requirement": "REQUIRED"})
+        if not e.get("authenticationConfig"):
+            req("POST", f"{R}/authentication/executions/{e['id']}/config",
+                {"alias": "relikey-level-passkey", "config": {"loa-condition-level": "1", "loa-max-age": "36000"}})
 
 
 def passkey_flow() -> None:
@@ -525,18 +562,21 @@ def main() -> int:
     if len(sys.argv) == 2 and sys.argv[1] == "passkey":    # bring an existing realm to passkey-only sign-in
         wait_for_broker()
         passkey_flow()
-        print(f"realm {REALM}: passkey-only browser flow bound")
+        passkey_level()
+        print(f"realm {REALM}: passkey-only browser flow bound, its level named {PASSKEY_LEVEL}")
         return 0
     if len(sys.argv) != 2:
         raise SystemExit(__doc__)
     wait_for_broker()
     realm()
+    passkey_level_name()                          # before the clients that ask for it
     service_clients()
     writer_permissions()
     desk_client()
     setup_client()
     client_policies()
     passkey_flow()
+    passkey_level()
     vendor_flows()                                # realm-wide; adding a vendor later needs no login-flow rights
     people(Path(sys.argv[1]))
     check_scim()
