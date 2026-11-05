@@ -411,6 +411,17 @@ func Issued(s Sealed, pins Pins) (time.Time, int64, error) {
 	return o.issued, *o.b.Serial, nil
 }
 
+// Removal confirms that the bastion's assignment of a lease was removed (edge protocol 1.4, section 7.1): the lease, the
+// bastion as system, and when, as a time with its zone. The desk keeps the first confirmation of each lease.
+type Removal struct {
+	LeaseID string `json:"lease_id"`
+	System  string `json:"system"`
+	At      string `json:"at"`
+}
+
+// MaxRemovals is the most removals one report carries.
+const MaxRemovals = 500
+
 // RecordsHead is the bundle's records_head (edge protocol 1.4) in canonical bytes, for the report to echo as the edge
 // applied it; nil when the bundle carries none.
 func RecordsHead(s Sealed, pins Pins) (jsontext.Value, error) {

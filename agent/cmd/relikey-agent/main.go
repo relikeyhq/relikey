@@ -358,7 +358,7 @@ func run(args []string, once bool) error {
 	}
 	a := &agent.Agent{
 		Pins:     kcedge.Pins{Edge: c.Edge, BundleKey: c.Pins.BundleKey, OfficerKey: c.Pins.OfficerKey, ReleaseKey: c.Pins.ReleaseKey},
-		Provider: c.Bastion.SSOProvider, Mode: c.Mode, Version: versionString(), Release: releaseString(), Store: store, Clock: clk, Log: log,
+		Provider: c.Bastion.SSOProvider, System: c.Bastion.Kind, Mode: c.Mode, Version: versionString(), Release: releaseString(), Store: store, Clock: clk, Log: log,
 		// The composition root is the one place that names products: the clerk speaks the edge protocol (KeyClerk is the
 		// reference clerk), the bastion is the Warpgate adapter (bastion.kind checked above).
 		Clerk: &keyclerk.Client{Base: strings.TrimRight(c.Clerk.URL, "/"), Edge: c.Edge,

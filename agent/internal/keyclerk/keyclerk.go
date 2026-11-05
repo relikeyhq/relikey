@@ -211,6 +211,8 @@ type Report struct {
 	Drift         []string    `json:"drift"`
 	// RecordsHead echoes the applied bundle's records_head (edge protocol 1.4, section 7.1); left out when it had none.
 	RecordsHead jsontext.Value `json:"records_head,omitempty"`
+	// Removals confirm that leases' assignments were removed (edge protocol 1.4), at most kcedge.MaxRemovals.
+	Removals []kcedge.Removal `json:"removals,omitempty"`
 }
 
 // Attestation is claimed until quotes are verified (KeyClerk 0016).

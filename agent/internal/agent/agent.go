@@ -51,8 +51,10 @@ const (
 type Agent struct {
 	Pins     kcedge.Pins
 	Provider string // the SSO provider name in Warpgate (decision 0010)
-	Mode     Mode
-	Version  string
+	// System names the bastion in removal confirmations (edge protocol 1.4): its adapter kind, "warpgate" by default.
+	System  string
+	Mode    Mode
+	Version string
 	// Release is the bare version the fleet report carries ("v0.27.0", "dev-26734a855cd6"); Version is the display
 	// string with the program, commit and Go (full-stack run 5: the display string failed the report's format).
 	Release string
@@ -251,6 +253,9 @@ func (a *Agent) defaults() {
 	}
 	if a.Grace <= 0 {
 		a.Grace = 5 * time.Second
+	}
+	if a.System == "" {
+		a.System = "warpgate"
 	}
 	if a.StatusEvery <= 0 {
 		a.StatusEvery = 1
@@ -647,6 +652,11 @@ func (a *Agent) reconcile(ctx context.Context) {
 		}
 	}
 	a.held = held
+	if r, changed := confirmRemovals(a.Store.Get(), l, held, observed, now, a.System); changed {
+		if err := a.Store.Save(r); err != nil {
+			a.Log.Error("cannot record the removals", "err", err)
+		}
+	}
 	a.finishTick(&plan, why)
 }
 
@@ -814,10 +824,24 @@ func (a *Agent) report(ctx context.Context, rec state.Record) {
 	}
 	rctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
+	removals := rec.Removals[:min(len(rec.Removals), kcedge.MaxRemovals)]
 	err := a.Clerk.SendReport(rctx, keyclerk.Report{AppliedSerial: rec.AppliedSerial, RecordsHead: rec.AppliedHead, Drift: drift,
+		Removals:    removals,
 		Attestation: keyclerk.Attestation{Profile: kcedge.AttestedProfile, AgentVersion: a.Version, Mode: string(a.Mode)}})
-	if err != nil && !errors.Is(err, context.Canceled) {
-		a.Log.Warn("report not delivered; sent again after the next pull", "err", err)
+	if err != nil {
+		if !errors.Is(err, context.Canceled) {
+			a.Log.Warn("report not delivered; sent again after the next pull", "err", err)
+		}
+		return
+	}
+	if len(removals) > 0 { // delivered: drop them, unless the record moved on meanwhile (sent again then; the desk keeps the first)
+		cur := a.Store.Get()
+		if len(cur.Removals) >= len(removals) && slices.Equal(cur.Removals[:len(removals)], removals) {
+			cur.Removals = slices.Clone(cur.Removals[len(removals):])
+			if err := a.Store.Save(cur); err != nil {
+				a.Log.Error("cannot record the delivered removals", "err", err)
+			}
+		}
 	}
 }
 

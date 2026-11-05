@@ -56,6 +56,7 @@ Fix to note: ending an edge, a person key or a visit lease was refused in 0.17.0
 about ending records must use 0.19.0 or later.
 
 ## Changelog
+- 2026-11-05: the report confirms removals (`removals`, the leaver proof), observed on the bastion.
 - 2026-11-05: the report echoes the applied bundle's `records_head` (edge protocol 1.4, section 7.1).
 - 2026-11-05: vectors at KeyClerk v0.27.0 (edge protocol 1.4): the verifier refuses a malformed or null
   `records_head`; the ceiling_hours cases run against the agent's rounding.

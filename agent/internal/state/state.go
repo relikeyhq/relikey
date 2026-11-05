@@ -43,6 +43,11 @@ type Record struct {
 	// when that bundle carried none.
 	AppliedHead jsontext.Value `json:"applied_records_head,omitempty"`
 	Bundle      *kcedge.Sealed `json:"bundle,omitempty"`
+	// Held are the leases whose role the bastion was seen holding, by lease id: when such a lease is no longer live
+	// and the role is seen gone, the removal is confirmed (edge protocol 1.4, the leaver proof).
+	Held map[string]Assignment `json:"held_leases,omitempty"`
+	// Removals are the confirmed removals not yet delivered in a report, oldest first.
+	Removals []kcedge.Removal `json:"removals,omitempty"`
 	// Where the newest bundle was verified, to bound elapsed time without trusting the
 	// wall clock: the boot it happened in and the boot clock then (decision 0007 point 4).
 	BootID       string `json:"boot_id,omitempty"`
@@ -50,6 +55,12 @@ type Record struct {
 	WallAtVerify string `json:"wall_at_verify,omitempty"`
 	// Ended is set when the desk sent a valid ended notice: nothing is live again.
 	Ended bool `json:"ended,omitempty"`
+}
+
+// Assignment is what a lease got on the bastion: a role on an account.
+type Assignment struct {
+	User string `json:"user"`
+	Role string `json:"role"`
 }
 
 type slot struct {

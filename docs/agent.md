@@ -31,6 +31,12 @@ for linux amd64, arm64, armv7). How it is written and built: `docs/go-engineerin
 - **Reports**: after each pull, `POST /api/v1/edge/report` with the applied serial, the drift and the agent version,
   and the applied bundle's `records_head` when it carried one (edge protocol 1.4: the edge as a weak witness of the
   records), echoed byte for byte.
+  From edge protocol 1.4 it also confirms removals, the leaver proof: a lease whose role the bastion was seen holding
+  is remembered (`held_leases` in the state); once the lease is no longer live and the account, read that tick, no
+  longer holds the role (removed by the agent, expired by the bastion, or the account gone), the report carries
+  `{lease_id, system, at}` with `system` the adapter kind and `at` the trusted time of that tick. A role another live
+  lease still grants stays, so that confirmation waits. Confirmations survive a restart and leave the state once a
+  report delivered them; at most 500 go per report and 5000 are kept while the desk cannot be reached.
 - **Writes to disk**: edge hardware often boots from flash, so an idle tick writes nothing. The state slots are
   written only when the record changes. The status files (`status.json`, `status.html`, `metrics.prom`) are written
   when their content changes (the time, the tick and pull counts and the runtime gauges aside), and otherwise at a
