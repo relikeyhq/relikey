@@ -90,8 +90,8 @@ components:
     role: Protocol bastion for SSH, RDP, VNC, databases, Kubernetes and HTTPS targets; records every session.
     tier: edge
     image: ghcr.io/warp-tech/warpgate
-    version: "0.30.2"
-    digest: sha256:a18f98d586f5604a0e977504165bdefc15b6e847911f505e1a62f4775378e1c4
+    version: "0.30.4"
+    digest: sha256:c81537790bd316686ba5eb89f674cbfe3b35da16bde35f58d0577bed3372bdda
     licence: Apache-2.0
     zone: appliance
     plane: control

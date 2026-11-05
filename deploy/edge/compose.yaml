@@ -6,7 +6,7 @@ name: relikey-edge
 
 services:
   warpgate:
-    image: ghcr.io/warp-tech/warpgate:0.30.2@sha256:a18f98d586f5604a0e977504165bdefc15b6e847911f505e1a62f4775378e1c4
+    image: ghcr.io/warp-tech/warpgate:0.30.4@sha256:c81537790bd316686ba5eb89f674cbfe3b35da16bde35f58d0577bed3372bdda
     command: ["--config", "/data/warpgate.yaml", "run", "--enable-admin-token"]
     env_file: [../secrets/warpgate.env]          # WARPGATE_ADMIN_TOKEN, read by the agent through token_file too
     ports:
