@@ -85,6 +85,16 @@ jobs:
       - run: |
           docker buildx create --use --driver docker-container
           python3 tools/release_images.py build
+      - name: The demo image (deploy/demo, #41) builds, answers on loopback and stops on docker stop
+        run: |
+          docker build -f deploy/demo/Dockerfile.demo -t relikey-demo:ci .
+          docker run -d --name demo -p 127.0.0.1:8080:8080 relikey-demo:ci
+          for _ in $(seq 1 30); do curl -fsS -o /dev/null http://127.0.0.1:8080/ && break; sleep 1; done
+          curl -fsS -o /dev/null http://127.0.0.1:8080/
+          sleep 25
+          docker logs demo | grep -q '"key":"done"' || { docker logs demo; exit 1; }
+          docker stop -t 10 demo
+          test "$(docker inspect demo --format '{{.State.ExitCode}}')" = 0
 
   agent-mutants:
     name: Edge agent mutants (shard ${{ matrix.shard }}/4)

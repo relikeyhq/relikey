@@ -10,12 +10,12 @@ import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-IMAGE_FILES = sorted((ROOT / "deploy").glob("*/Dockerfile.*"))
+IMAGE_FILES = sorted(p for p in (ROOT / "deploy").glob("*/Dockerfile.*") if not p.name.endswith(".dockerignore"))
 FROM = re.compile(r"^FROM\s+(?:--platform=\S+\s+)?(?!scratch\b)(\S+)", re.M | re.I)
 
 
 def test_image_files_exist():
-    assert [p.parent.name for p in IMAGE_FILES] == ["core", "edge"]
+    assert [p.parent.name for p in IMAGE_FILES] == ["core", "demo", "edge"]
 
 
 @pytest.mark.parametrize("path", IMAGE_FILES, ids=lambda p: p.parent.name)
