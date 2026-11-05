@@ -3,6 +3,8 @@
 package clock
 
 import (
+	"errors"
+	"io/fs"
 	"os"
 	"strings"
 	"time"
@@ -27,4 +29,17 @@ func (System) BootID() string {
 		return ""
 	}
 	return strings.TrimSpace(string(b))
+}
+
+// TimeNamespaceOffset names the clocks this process's time namespace offsets ("" when none, or on a kernel without
+// time namespaces).
+func TimeNamespaceOffset() (string, error) {
+	b, err := os.ReadFile("/proc/self/timens_offsets")
+	if errors.Is(err, fs.ErrNotExist) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return NamespaceOffsets(string(b))
 }

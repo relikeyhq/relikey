@@ -356,6 +356,18 @@ func run(args []string, once bool) error {
 		return errors.New("enforce mode needs the kernel's boot id (/proc/sys/kernel/random/boot_id): " +
 			"run on Linux with /proc mounted, or use shadow mode")
 	}
+	if c.Mode == agent.Enforce && !c.Lab {
+		// The boot clock bounds elapsed time; in a time namespace it can be offset and the agent cannot tell (#123).
+		switch off, err := clock.TimeNamespaceOffset(); {
+		case err != nil:
+			return fmt.Errorf("enforce mode needs to read its time namespace (/proc/self/timens_offsets): %w; "+
+				"run outside a time namespace with /proc mounted, or use shadow mode", err)
+		case off != "":
+			return fmt.Errorf("enforce mode refuses a time namespace that offsets its clocks (%s): the boot clock that "+
+				"bounds a lease's time would be off. Run the agent without a time namespace (no --timens offsets in the "+
+				"container runtime), or use shadow mode", off)
+		}
+	}
 	a := &agent.Agent{
 		Pins:     kcedge.Pins{Edge: c.Edge, BundleKey: c.Pins.BundleKey, OfficerKey: c.Pins.OfficerKey, ReleaseKey: c.Pins.ReleaseKey},
 		Provider: c.Bastion.SSOProvider, System: c.Bastion.Kind, Mode: c.Mode, Version: versionString(), Release: releaseString(), Store: store, Clock: clk, Log: log,
