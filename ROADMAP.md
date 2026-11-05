@@ -40,25 +40,35 @@ Released as 0.2.1 (the v0.2.0 tag was never released: its release build stopped 
   [#22](https://github.com/relikeyhq/relikey/issues/22), [#52](https://github.com/relikeyhq/relikey/issues/52),
   [#58](https://github.com/relikeyhq/relikey/issues/58)).
 
-## Next: [0.3.0](https://github.com/relikeyhq/relikey/milestone/2)
-Work that needs a lab installation, hardware or a second component. Done so far:
+## Next: [0.3.0](https://github.com/relikeyhq/relikey/milestone/2), due 2026-11-19
+Edge protocol 1.4 end to end, and the lab and desk work that needs no new hardware. Done so far:
 - Keyless signatures and SLSA Build L3 ([#28](https://github.com/relikeyhq/relikey/issues/28), released in 0.2.1)
 - Signed container images on ghcr.io ([#29](https://github.com/relikeyhq/relikey/issues/29), released in 0.2.1)
 - Enrolment-key rotation ([#26](https://github.com/relikeyhq/relikey/issues/26), released in 0.2.1)
 - VEX statements with each release ([#30](https://github.com/relikeyhq/relikey/issues/30), on main, in the next release)
+- Edge protocol 1.4 in the agent: conformance vectors at KeyClerk 0.27.0, the records head echoed and removals
+  confirmed in the report ([#113](https://github.com/relikeyhq/relikey/pull/113),
+  [#114](https://github.com/relikeyhq/relikey/pull/114), [#115](https://github.com/relikeyhq/relikey/pull/115))
 
 Open, suggested order:
-1. End-to-end test of enrolment and the officer anchor on a fresh installation ([#23](https://github.com/relikeyhq/relikey/issues/23))
-2. Model: the edge proxy's footprint, measured against the switch profile ([#62](https://github.com/relikeyhq/relikey/issues/62))
-3. Evidence log: core witness, anchoring, contracts C-12 and C-13 ([#25](https://github.com/relikeyhq/relikey/issues/25))
-4. Open contracts C-02, C-03, C-07, C-08, C-09, C-11 ([#27](https://github.com/relikeyhq/relikey/issues/27))
-5. Operator guides: install, run, troubleshoot ([#43](https://github.com/relikeyhq/relikey/issues/43))
-6. Demo: a single click from the README ([#41](https://github.com/relikeyhq/relikey/issues/41))
-7. The armv7 agent on real hardware ([#24](https://github.com/relikeyhq/relikey/issues/24))
-8. IEC 62443-4-1 self-assessment ([#31](https://github.com/relikeyhq/relikey/issues/31))
+1. Edge on Warpgate 0.30.4, three security advisories ([#117](https://github.com/relikeyhq/relikey/issues/117))
+2. Edge protocol 1.4, the rest of the agent's side: the bastion declaration and `lease_ended_early` ([#116](https://github.com/relikeyhq/relikey/issues/116))
+3. Core on KeyClerk 0.27.0 ([#118](https://github.com/relikeyhq/relikey/issues/118))
+4. End-to-end test of enrolment and the officer anchor on a fresh installation ([#23](https://github.com/relikeyhq/relikey/issues/23))
+5. Model: the edge proxy's footprint, measured against the switch profile ([#62](https://github.com/relikeyhq/relikey/issues/62))
+6. Operator guides: install, run, troubleshoot ([#43](https://github.com/relikeyhq/relikey/issues/43))
+7. Demo: a single click from the README ([#41](https://github.com/relikeyhq/relikey/issues/41))
+
+## Then: [0.4.0](https://github.com/relikeyhq/relikey/milestone/4), due 2026-12-17
+The larger and hardware-bound items, suggested order:
+1. Evidence log: core witness, anchoring, contracts C-12 and C-13 ([#25](https://github.com/relikeyhq/relikey/issues/25))
+2. Open contracts C-02, C-03, C-07, C-08, C-09, C-11 ([#27](https://github.com/relikeyhq/relikey/issues/27))
+3. The armv7 agent on real hardware ([#24](https://github.com/relikeyhq/relikey/issues/24))
+4. IEC 62443-4-1 self-assessment ([#31](https://github.com/relikeyhq/relikey/issues/31))
 
 ## Later: [deferred](https://github.com/relikeyhq/relikey/milestone/3)
-Accepted or proposed direction that waits on a partner release, a prototype or a decision:
+Accepted or proposed direction that waits on a partner release, a prototype or a decision; each gets a date when
+its dependency lands:
 - OCSF log events from the agent ([#32](https://github.com/relikeyhq/relikey/issues/32))
 - Fleet: signed release manifest, relay and staged rollout ([#33](https://github.com/relikeyhq/relikey/issues/33))
 - Sign-in gateway part A: LDAP facade and local login ([#34](https://github.com/relikeyhq/relikey/issues/34))
