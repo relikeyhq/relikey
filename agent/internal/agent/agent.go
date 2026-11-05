@@ -282,6 +282,7 @@ func (a *Agent) Run(ctx context.Context) error {
 		a.chain = events.NewChain(a.Events, a.Store.Chain(), a.Store.SaveChain)
 	}
 	a.Log.Info("agent started", "edge", a.Pins.Edge, "mode", a.Mode, "version", a.Version)
+	a.emitStarted()
 	a.reconcile(ctx)
 	a.pull(ctx)
 	tick := time.NewTicker(a.Tick)

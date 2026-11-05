@@ -698,6 +698,30 @@ func TestARestartReappliesFromTheStoredBundle(t *testing.T) {
 
 // The events chain across a restart (decision 0025 point 2): the sequence goes on, the new run opens a new epoch,
 // status.json reports the head, and a record removed or altered breaks the chain.
+// Each start is an event, the first record of its epoch, so an idle edge's chain has a record after every restart to
+// verify across (full-stack run 12: an idle agent emitted nothing after its restart, and the walk could not check it).
+func TestEachStartIsAnEvent(t *testing.T) {
+	r := newRig(t, Enforce)
+	r.eventually("the first start is an event", func() bool {
+		return slices.Equal(r.seen("edge:edge-a/agent"), []string{"relikey.agent.started.v1"})
+	})
+	r.halt()
+	r.start() // no lease, no change: nothing else happens after this restart
+	r.eventually("the restart is an event", func() bool {
+		return slices.Equal(r.seen("edge:edge-a/agent"), []string{"relikey.agent.started.v1", "relikey.agent.started.v1"})
+	})
+	r.mu.Lock()
+	lines := slices.Clone(r.lines)
+	r.mu.Unlock()
+	head, restarts, err := events.Verify(lines, &events.Head{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(restarts) != 2 || head.Epoch != 2 {
+		t.Fatalf("restarts %v, epoch %d: want the chain verified across one restart", restarts, head.Epoch)
+	}
+}
+
 func TestTheEventsChainAcrossARestart(t *testing.T) {
 	r := newRig(t, Enforce)
 	r.kc.SetLeases([]fakes.FakeLease{lease("L-1", time.Now().Add(time.Hour))}, nil)
