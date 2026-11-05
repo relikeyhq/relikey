@@ -1,7 +1,7 @@
 # The KeyClerk edge interface
 
 **Source of truth:** `docs/keyclerk-edge-interface.md` in the KeyClerk repository (github.com/keyclerk/keyclerk) and
-the edge protocol specification (github.com/keyclerk/edge-protocol). The agent's vectors come from KeyClerk v0.26.1
+the edge protocol specification (github.com/keyclerk/edge-protocol). The agent's vectors come from KeyClerk v0.27.0
 (`agent/internal/kcedge/testdata/SOURCE`, regenerated with `regen.py`); the core image pins KeyClerk 0.26.3. The
 section below maps edge protocol 1.1 to 1.3; the rest of this page records the port at v0.23.0 (commit bd6620f),
 with KeyClerk decision 0014 and amendments 0014a to 0014d. v0.21.2 and v0.22.0 fixed the
@@ -56,6 +56,8 @@ Fix to note: ending an edge, a person key or a visit lease was refused in 0.17.0
 about ending records must use 0.19.0 or later.
 
 ## Changelog
+- 2026-11-05: vectors at KeyClerk v0.27.0 (edge protocol 1.4): the verifier refuses a malformed or null
+  `records_head`; the ceiling_hours cases run against the agent's rounding.
 - 2026-10-29: edge protocol 1.1 to 1.3 mapped to the agent; vectors named at KeyClerk v0.26.1, the core at 0.26.3.
 - 2026-10-24: pinned to v0.23.0 (107 cases); the agent ported (one signing mode, modules by hash, kc-unlock-v2,
   bound ended notice). The "What it gives ReliKey (v0.18.0)" table below keeps its history; where it names v1/v2

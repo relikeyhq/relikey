@@ -37,6 +37,16 @@ type conformance struct {
 			} `json:"expected"`
 		} `json:"cases"`
 	} `json:"verifier"`
+	CeilingHours struct {
+		Cases []struct {
+			Name     string `json:"name"`
+			From     string `json:"from"`
+			Until    string `json:"until"`
+			Expected struct {
+				Hours int64 `json:"hours"`
+			} `json:"expected"`
+		} `json:"cases"`
+	} `json:"ceiling_hours"`
 }
 
 func load(t *testing.T, name string, v any) {
@@ -172,6 +182,25 @@ func TestLeaseHoursRoundUp(t *testing.T) {
 		{8*time.Hour + 59*time.Minute, 9}, {8 * time.Hour, 8}, {8*time.Hour + 500*time.Millisecond, 8}} {
 		if got := leaseHours(from, from.Add(c.d)); got != c.want {
 			t.Errorf("leaseHours(%v) = %d, want %d", c.d, got, c.want)
+		}
+	}
+}
+
+// The hours the ceiling judges a lease by, as KeyClerk records them (edge protocol 1.4, section 5).
+func TestReferenceCeilingHours(t *testing.T) {
+	var set conformance
+	load(t, "edge.json", &set)
+	if len(set.CeilingHours.Cases) == 0 {
+		t.Fatal("no ceiling_hours cases")
+	}
+	for _, c := range set.CeilingHours.Cases {
+		from, err1 := ParseTime(c.From)
+		until, err2 := ParseTime(c.Until)
+		if err1 != nil || err2 != nil {
+			t.Fatalf("%s: %v %v", c.Name, err1, err2)
+		}
+		if got := leaseHours(from, until); got != c.Expected.Hours {
+			t.Errorf("%s: %d hours, want %d", c.Name, got, c.Expected.Hours)
 		}
 	}
 }

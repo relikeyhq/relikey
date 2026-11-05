@@ -229,6 +229,40 @@ func governedRoles(obj Object) (*[]string, string) {
 	return &names, ""
 }
 
+// recordsHeadError checks the optional records_head member (edge protocol 1.4, section 7.1): {revision, head, size?},
+// a whole revision, the head as 64 lower-case hex, and a size of at least 1 when present, nothing else. A malformed
+// one, null included, refuses the whole bundle, as keyclerk.edge.records_head_errors does.
+func recordsHeadError(obj Object) string {
+	v, present := obj["records_head"]
+	if !present {
+		return ""
+	}
+	const shape = "records_head: {revision, head, size?}, a whole revision and size and the head as 64 lower-case hex"
+	m, ok := v.(Object)
+	if !ok {
+		return shape
+	}
+	for k := range m {
+		if k != "revision" && k != "head" && k != "size" {
+			return shape
+		}
+	}
+	head, ok := m["head"].(string)
+	if !ok || !hex64.MatchString(head) || !whole(m["revision"], 0) {
+		return shape
+	}
+	if size, present := m["size"]; present && !whole(size, 1) {
+		return shape
+	}
+	return ""
+}
+
+// whole is edge.py _whole: a JSON whole number of at least low (0 or 1), of any size, never a boolean.
+func whole(v Value, low int) bool {
+	n, ok := v.(Number)
+	return ok && !strings.HasPrefix(string(n), "-") && (low == 0 || n != "0")
+}
+
 func open(s Sealed, pins Pins) (*opened, error) {
 	obj, raw, err := Unseal(s, pins.BundleKey, BundleFormat)
 	if err != nil {
@@ -247,6 +281,9 @@ func open(s Sealed, pins Pins) (*opened, error) {
 	}
 	governed, why := governedRoles(obj)
 	if why != "" {
+		return nil, refuse(why)
+	}
+	if why := recordsHeadError(obj); why != "" {
 		return nil, refuse(why)
 	}
 	return &opened{b: b, obj: obj, issued: issued, governed: governed}, nil
