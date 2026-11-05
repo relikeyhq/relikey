@@ -37,6 +37,12 @@ for linux amd64, arm64, armv7). How it is written and built: `docs/go-engineerin
   `{lease_id, system, at}` with `system` the adapter kind and `at` the trusted time of that tick. A role another live
   lease still grants stays, so that confirmation waits. Confirmations survive a restart and leave the state once a
   report delivered them; at most 500 go per report and 5000 are kept while the desk cannot be reached.
+- **Incidents**: a role taken away behind the agent while its lease runs (a Warpgate SSO login whose roles claim
+  lacks it, warp-tech/warpgate#2785) is a drift line and, from edge protocol 1.4, a `lease_ended_early` incident for
+  each live lease that granted it (`POST /api/v1/edge/incident`: the lease, the adapter kind as `system`, the tick's
+  trusted time). Incidents wait in the state (`ended_early`, at most 500) and go after each delivered report, in
+  order; one the desk refuses (the lease left the last bundle, or ended on time) is dropped and logged, never sent
+  again. In enforce mode the plan grants the role again.
 - **Writes to disk**: edge hardware often boots from flash, so an idle tick writes nothing. The state slots are
   written only when the record changes. The status files (`status.json`, `status.html`, `metrics.prom`) are written
   when their content changes (the time, the tick and pull counts and the runtime gauges aside), and otherwise at a

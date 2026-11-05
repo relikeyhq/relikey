@@ -191,6 +191,8 @@ type Clerk interface {
 	Pull(ctx context.Context, after int64, wait time.Duration) (keyclerk.Pulled, error)
 	FetchModule(ctx context.Context, sha256hex string) ([]byte, error)
 	SendReport(ctx context.Context, r keyclerk.Report) error
+	// SendIncident posts an incident; a *keyclerk.StatusError of 4xx means the desk will never take it.
+	SendIncident(ctx context.Context, in keyclerk.Incident) error
 	EnrolmentKey() ed25519.PublicKey
 	// Email fetches a lease's verified address (edge protocol 1.3): the sealed answer and the request's nonce.
 	Email(ctx context.Context, leaseID string) (*kcedge.Sealed, string, error)
@@ -609,7 +611,8 @@ func (a *Agent) reconcile(ctx context.Context) {
 	a.harden(hctx, observed)
 	hcancel()
 	plan := apply.Compute(desired, observed, a.Provider)
-	plan.Drift = append(plan.Drift, a.removedOutside(desired, observed)...)
+	outside, early := a.removedOutside(desired, observed, l)
+	plan.Drift = append(plan.Drift, outside...)
 	a.emitRogue(observed)
 	a.st.LiveLeases, a.st.Leases = len(leases), leaseViews(leases)
 	var granted []apply.Action
@@ -652,7 +655,11 @@ func (a *Agent) reconcile(ctx context.Context) {
 		}
 	}
 	a.held = held
-	if r, changed := confirmRemovals(a.Store.Get(), l, held, observed, now, a.System); changed {
+	r, changed := confirmRemovals(a.Store.Get(), l, held, observed, now, a.System)
+	if len(early) > 0 {
+		r.EndedEarly, changed = queueEndedEarly(r.EndedEarly, early, a.System, now), true
+	}
+	if changed {
 		if err := a.Store.Save(r); err != nil {
 			a.Log.Error("cannot record the removals", "err", err)
 		}
@@ -662,9 +669,11 @@ func (a *Agent) reconcile(ctx context.Context) {
 
 // removedOutside names the roles a managed user held for a live lease at the last tick and no longer holds, though
 // the lease still runs: someone other than the agent removed them, such as Warpgate's SSO role sync at a login whose
-// roles claim lacks the role (warp-tech/warpgate#2785). An account that could not be read this tick is skipped.
-func (a *Agent) removedOutside(d apply.Desired, o *apply.Observed) []string {
-	var out []string
+// roles claim lacks the role (warp-tech/warpgate#2785). An account that could not be read this tick is skipped. It
+// also returns the live leases that granted each such role: the bastion ended their assignment early (edge protocol
+// 1.4, lease_ended_early).
+func (a *Agent) removedOutside(d apply.Desired, o *apply.Observed, l live) ([]string, []string) {
+	var out, early []string
 	for _, name := range slices.Sorted(maps.Keys(a.held)) {
 		du := d.Users[name]
 		if du == nil || o.Unreadable[name] {
@@ -689,9 +698,26 @@ func (a *Agent) removedOutside(d apply.Desired, o *apply.Observed) []string {
 			out = append(out, fmt.Sprintf("user %s lost role %s before its lease ends (%s), not by the agent "+
 				"(an SSO roles claim without role_mappings does this at login): %s", name, role,
 				end.UTC().Format(time.RFC3339), what))
+			early = append(early, leasesGranting(l, name, role)...)
 		}
 	}
-	return out
+	return out, early
+}
+
+// leasesGranting are the ids of the live leases and visit leases that grant role to user.
+func leasesGranting(l live, user, role string) []string {
+	var ids []string
+	for _, x := range l.leases {
+		if x.Username == user && x.Role == role {
+			ids = append(ids, x.LeaseID)
+		}
+	}
+	for _, x := range l.visits {
+		if x.Username == user && x.Role == role {
+			ids = append(ids, x.LeaseID)
+		}
+	}
+	return ids
 }
 
 // heldRoles are the roles each managed user holds for a live lease after this tick: observed active, or granted now.
@@ -834,6 +860,7 @@ func (a *Agent) report(ctx context.Context, rec state.Record) {
 		}
 		return
 	}
+	a.sendEndedEarly(rctx, rec.EndedEarly)
 	if len(removals) > 0 { // delivered: drop them, unless the record moved on meanwhile (sent again then; the desk keeps the first)
 		cur := a.Store.Get()
 		if len(cur.Removals) >= len(removals) && slices.Equal(cur.Removals[:len(removals)], removals) {
