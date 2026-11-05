@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"relikey/agent/internal/httpx"
@@ -314,6 +315,28 @@ type Parameters struct {
 	AllowOwnCredentialManagement bool   `json:"allow_own_credential_management"`
 	SSHClientAuthPassword        bool   `json:"ssh_client_auth_password"`
 	MaxAPITokenDurationSeconds   *int64 `json:"max_api_token_duration_seconds"`
+}
+
+// Version is Warpgate's own version without its leading v ("0.30.2"), from /@warpgate/api/info. Warpgate answers it
+// only to an authenticated caller; the admin token counts (checked on 0.30.1, 0.30.2 and 0.30.4).
+func (c *Client) Version(ctx context.Context) (string, error) {
+	base, ok := strings.CutSuffix(c.Base, "/admin/api")
+	if !ok {
+		return "", fmt.Errorf("the bastion URL %q does not end in /admin/api: cannot find Warpgate's info call", c.Base)
+	}
+	info := *c
+	info.Base = base
+	var out struct {
+		Version *string `json:"version"`
+	}
+	if err := info.do(ctx, http.MethodGet, "/api/info", nil, &out); err != nil {
+		return "", err
+	}
+	if out.Version == nil || *out.Version == "" {
+		return "", fmt.Errorf("Warpgate's info call gave no version: Warpgate shows it only to a signed-in caller; " +
+			"check that it runs with --enable-admin-token and the agent's token is WARPGATE_ADMIN_TOKEN")
+	}
+	return strings.TrimPrefix(*out.Version, "v"), nil
 }
 
 func (c *Client) Parameters(ctx context.Context) (out Parameters, err error) {

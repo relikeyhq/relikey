@@ -50,7 +50,9 @@ const (
 // Agent wires the parts. All fields are set by the caller (cmd/relikey-agent).
 type Agent struct {
 	Pins     kcedge.Pins
-	Provider string // the SSO provider name in Warpgate (decision 0010)
+	Provider string                       // the SSO provider name in Warpgate (decision 0010)
+	decl     *keyclerk.BastionDeclaration // the last declaration read (edge protocol 1.4), nil until one is
+	declAt   time.Time
 	// System names the bastion in removal confirmations (edge protocol 1.4): its adapter kind, "warpgate" by default.
 	System  string
 	Mode    Mode
@@ -852,7 +854,7 @@ func (a *Agent) report(ctx context.Context, rec state.Record) {
 	defer cancel()
 	removals := rec.Removals[:min(len(rec.Removals), kcedge.MaxRemovals)]
 	err := a.Clerk.SendReport(rctx, keyclerk.Report{AppliedSerial: rec.AppliedSerial, RecordsHead: rec.AppliedHead, Drift: drift,
-		Removals:    removals,
+		Removals: removals, Bastion: a.declaration(rctx),
 		Attestation: keyclerk.Attestation{Profile: kcedge.AttestedProfile, AgentVersion: a.Version, Mode: string(a.Mode)}})
 	if err != nil {
 		if !errors.Is(err, context.Canceled) {

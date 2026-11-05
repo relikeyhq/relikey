@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"relikey/agent/internal/apply"
+	"relikey/agent/internal/bastion"
 	"relikey/agent/internal/kcedge"
 	"relikey/agent/internal/keyclerk"
 	"relikey/agent/internal/state"
@@ -127,4 +128,28 @@ func (a *Agent) sendEndedEarly(ctx context.Context, pending []kcedge.EndedEarly)
 			a.Log.Error("cannot record the delivered incidents", "err", err)
 		}
 	}
+}
+
+// declareEvery is how often the bastion's declaration is read again: a Warpgate upgrade shows within it.
+const declareEvery = 10 * time.Minute
+
+// declaration is the bastion's declaration for the report (edge protocol 1.4), read again every declareEvery. A failed
+// read keeps the last one (the version rarely changes) and is logged; with none read yet the report leaves the member
+// out, which the desk takes as unknown, never as a bastion without capabilities.
+func (a *Agent) declaration(ctx context.Context) *keyclerk.BastionDeclaration {
+	d, ok := a.Bastion.(bastion.Declarer)
+	if !ok || (a.decl != nil && time.Since(a.declAt) < declareEvery) {
+		return a.decl
+	}
+	dctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	got, err := d.Declare(dctx)
+	if err != nil {
+		a.Log.Warn("cannot read what the bastion enforces; the report keeps the last declaration", "err", err)
+		return a.decl
+	}
+	a.decl = &keyclerk.BastionDeclaration{Product: got.Product, Version: got.Version, Capabilities: got.Capabilities,
+		Adapter: got.Adapter}
+	a.declAt = time.Now()
+	return a.decl
 }

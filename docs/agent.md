@@ -43,6 +43,14 @@ for linux amd64, arm64, armv7). How it is written and built: `docs/go-engineerin
   trusted time). Incidents wait in the state (`ended_early`, at most 500) and go after each delivered report, in
   order; one the desk refuses (the lease left the last bundle, or ended on time) is dropped and logged, never sent
   again. In enforce mode the plan grants the role again.
+- **Bastion declaration**: from edge protocol 1.4 each report says what Warpgate enforces by itself, so the desk knows
+  what still holds while the agent is down: `bastion {product, version, capabilities, adapter}`. The version comes from
+  `/@warpgate/api/info`, which Warpgate answers only to a signed-in caller (the admin token counts; checked on 0.30.1,
+  0.30.2 and 0.30.4), read again every 10 minutes. Declared: `expires_grants` and `injects_credentials` always,
+  `ends_sessions_on_revoke` from 0.30.2 (warp-tech/warpgate#2789), adapter `reads_hardening`. Not declared:
+  `records_sessions` (recording is set in Warpgate's configuration file, which the admin API does not show, so the
+  agent cannot vouch for it), `matches_subject` (not in Warpgate yet), `second_key` and `caps_session_hours`. Before
+  a first successful read the member is left out, which the desk takes as unknown; a failed read keeps the last one.
 - **Writes to disk**: edge hardware often boots from flash, so an idle tick writes nothing. The state slots are
   written only when the record changes. The status files (`status.json`, `status.html`, `metrics.prom`) are written
   when their content changes (the time, the tick and pull counts and the runtime gauges aside), and otherwise at a

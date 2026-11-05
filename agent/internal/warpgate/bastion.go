@@ -6,6 +6,8 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strconv"
+	"strings"
 	"time"
 
 	"relikey/agent/internal/bastion"
@@ -18,6 +20,7 @@ import (
 type Bastion struct{ C *Client }
 
 var _ bastion.Admin = Bastion{}
+var _ bastion.Declarer = Bastion{}
 
 // nf maps Warpgate's 404 to the role's not-found, keeping Warpgate's message.
 func nf(err error) error {
@@ -179,4 +182,49 @@ func (b Bastion) Hardening(ctx context.Context) (bastion.Hardening, error) {
 func (b Bastion) Harden(ctx context.Context) error {
 	return nf(b.C.SetParameters(ctx, map[string]any{"allow_own_credential_management": false,
 		"ssh_client_auth_password": false, "max_api_token_duration_seconds": bastion.APITokenMax}))
+}
+
+// Declare says what Warpgate enforces by itself at the version it reports (edge protocol 1.4, section 7.1):
+// expires_grants (a role assignment carries its expiry, which Warpgate enforces) and injects_credentials (Warpgate holds
+// the target's credential) in every version the agent supports; ends_sessions_on_revoke from 0.30.2, where removing a
+// role ends its live sessions (warp-tech/warpgate#2789). Not declared: records_sessions, since recording is a setting
+// in Warpgate's own configuration file that the admin API does not show, so the agent cannot vouch for it;
+// matches_subject, until Warpgate matches single sign-on by subject; second_key and caps_session_hours, which Warpgate
+// does not do itself. The adapter reads and restores the hardening (reads_hardening).
+func (b Bastion) Declare(ctx context.Context) (bastion.Declaration, error) {
+	v, err := b.C.Version(ctx)
+	if err != nil {
+		return bastion.Declaration{}, err
+	}
+	caps := []string{"expires_grants", "injects_credentials"}
+	if atLeast(v, 0, 30, 2) {
+		caps = append(caps, "ends_sessions_on_revoke")
+	}
+	slices.Sort(caps)
+	return bastion.Declaration{Product: "warpgate", Version: v, Capabilities: caps, Adapter: []string{"reads_hardening"}}, nil
+}
+
+// atLeast reports whether a version "major.minor.patch" (a suffix such as -rc.1 ignored) is at least the one given; an
+// unreadable version is not, so nothing is declared on a guess.
+func atLeast(v string, major, minor, patch int) bool {
+	core, _, _ := strings.Cut(v, "-")
+	parts := strings.Split(core, ".")
+	if len(parts) != 3 {
+		return false
+	}
+	var n [3]int
+	for i, s := range parts {
+		x, err := strconv.Atoi(s)
+		if err != nil || x < 0 {
+			return false
+		}
+		n[i] = x
+	}
+	want := [3]int{major, minor, patch}
+	for i := range n {
+		if n[i] != want[i] {
+			return n[i] > want[i]
+		}
+	}
+	return true
 }

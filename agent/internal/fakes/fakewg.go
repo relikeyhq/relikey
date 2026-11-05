@@ -7,6 +7,7 @@
 package fakes
 
 import (
+	"cmp"
 	"encoding/json/v2"
 	"fmt"
 	"math/rand/v2"
@@ -24,8 +25,10 @@ const wgBase = "/@warpgate/admin/api"
 
 // Warpgate is a fake admin API. Zero value is not usable: use NewWarpgate.
 type Warpgate struct {
-	mu       sync.Mutex
-	Token    string
+	mu    sync.Mutex
+	Token string
+	// Version is what /@warpgate/api/info shows a signed-in caller ("v0.30.2" by default); anonymous callers get none.
+	Version  string
 	Now      func() time.Time
 	FailRate float64 // share of requests answered 503
 	Down     bool    // every request 503
@@ -234,6 +237,15 @@ func (w *Warpgate) Handler() http.Handler {
 			f(rw, r)
 		})
 	}
+	mux.HandleFunc("GET /@warpgate/api/info", func(rw http.ResponseWriter, r *http.Request) {
+		w.mu.Lock()
+		defer w.mu.Unlock()
+		info := map[string]any{"version": nil}
+		if r.Header.Get("X-Warpgate-Token") == w.Token {
+			info["version"] = cmp.Or(w.Version, "v0.30.2")
+		}
+		writeJSON(rw, 200, info)
+	})
 	h("GET "+wgBase+"/parameters", func(rw http.ResponseWriter, r *http.Request) { writeJSON(rw, 200, w.params) })
 	h("PUT "+wgBase+"/parameters", func(rw http.ResponseWriter, r *http.Request) {
 		var in map[string]any

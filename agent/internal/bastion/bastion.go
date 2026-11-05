@@ -159,6 +159,22 @@ func (h Hardening) Weaknesses() []string {
 	return w
 }
 
+// Declaration is what the bastion behind the edge enforces by itself (edge protocol 1.4, section 7.1): its product and
+// version, its capability tokens, and what the adapter does beyond the profile. The desk keeps it, so it knows what
+// still holds while the agent is down; a token is declared only when it holds for the version read.
+type Declaration struct {
+	Product      string
+	Version      string
+	Capabilities []string // sorted
+	Adapter      []string // sorted
+}
+
+// Declarer is a bastion that can say what it enforces. Optional: a bastion without it is reported as unknown, never
+// as a bastion without capabilities.
+type Declarer interface {
+	Declare(ctx context.Context) (Declaration, error)
+}
+
 // Hardener is a bastion whose hardening the agent can read and restore. Optional: a bastion without it is reported
 // as unchecked.
 type Hardener interface {
