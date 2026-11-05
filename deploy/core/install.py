@@ -30,8 +30,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 SECRETS = ROOT / "deploy" / "secrets"
 CORE = ROOT / "deploy" / "core"
-KEYCLERK_VERSION = "0.26.3"                      # model/components.yaml, id clerk
-KEYCLERK_COMMIT = "cfc57939f3d88a7e44d62674465734d2c2f6f79c"   # the signed tag v0.26.3 on github.com/keyclerk/keyclerk
+KEYCLERK_VERSION = "0.27.0"                      # model/components.yaml, id clerk
+KEYCLERK_COMMIT = "f8dd982f15911fc7617f79c4c2b5232dbb8e0ff1"   # the signed tag v0.27.0 on github.com/keyclerk/keyclerk
 KEYCLERK_UID = 10001
 HOST = re.compile(r"^(?=.{1,253}$)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$")
 
@@ -50,7 +50,7 @@ BUSYBOX = pinned_busybox(CORE / "Dockerfile.fleet")   # also fleet_page.py's hel
 
 
 CLERK_READS = ("keyclerk-writer.secret", "keyclerk-reader.secret", "relikey-setup.secret", "keyclerk-mgmt.token", "records.key", "records.pub",
-               "keyclerk-seed.yaml", "people.json")   # compose.yaml: mounted into containers running as KEYCLERK_UID
+               "keyclerk-seed.yaml", "people.json", "mark.key")   # compose.yaml: mounted into containers running as KEYCLERK_UID
 
 
 def write(name: str, text: str, owner: int | None = KEYCLERK_UID, keep: bool = True) -> Path:
@@ -223,6 +223,8 @@ def main() -> int:
     write("keyclerk-reader.secret", secrets.token_urlsafe(32) + "\n")
     write("relikey-setup.secret", secrets.token_urlsafe(32) + "\n")   # the realm's setup client (stack attack C1)
     write("keyclerk-mgmt.token", secrets.token_urlsafe(32) + "\n")   # the desk's management listener bearer (>=32 chars, 0018)
+    # the reconciler signs the broker's high-water mark with its own Ed25519 key (KeyClerk 0.27.0): only it reads this
+    write("mark.key", secrets.token_bytes(32).hex() + "\n")
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
     from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
     if not (SECRETS / "records.key").exists():   # the records key: the signer's alone; the reconciler gets the public half
@@ -340,7 +342,7 @@ def main() -> int:
     dry = ["keyclerk.reconcile", "--config", "/etc/keyclerk/keyclerk.yaml", "--records", "/srv/desk/records.yaml",
            "--signing-key", "/etc/keyclerk/records.pub", "--keycloak", "http://127.0.0.1:8080", "--realm", o.realm,
            "--client", "keyclerk-writer", "--secret-file", "/run/secrets/writer", "--reader-client", "keyclerk-reader",
-           "--reader-secret-file", "/run/secrets/reader", "--state", "/var/lib/keyclerk", "--once",
+           "--reader-secret-file", "/run/secrets/reader", "--state", "/var/lib/keyclerk", "--once", "--mark-key", "/run/secrets/mark",
            "--approval-issuer", f"https://{hosts[0]}{suffix}/realms/{o.realm}", "--approval-audience", "keyclerk-desk"]
     for _ in range(20):                          # the desk publishes its first records shortly after it starts
         r = subprocess.run(compose + ["run", "--rm", "--no-deps", "reconcile"] + dry, capture_output=True, text=True)

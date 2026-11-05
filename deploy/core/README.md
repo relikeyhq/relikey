@@ -24,7 +24,7 @@ Nothing in the core opens a connection to an edge (decision 0005).
 
 ## Install
 
-    git clone https://github.com/keyclerk/keyclerk ../keyclerk   # install.py builds v0.26.3 from it with KeyClerk's Containerfile
+    git clone https://github.com/keyclerk/keyclerk ../keyclerk   # install.py builds v0.27.0 from it with KeyClerk's Containerfile
     python deploy/core/install.py --broker-host id.example --desk-host desk.example --edge-host edge.example \
         --root "First Last <root@example>" --officer "First Last <officer@example>" --keyclerk-src ../keyclerk \
         [--cert front.crt --key front.key] [--engine podman|docker]
@@ -36,7 +36,7 @@ install.py:
    the first people and the desk's first records (a root holder appointed by an officer, nothing granted);
 2. without `--cert`/`--key`, makes a local CA (`front-ca.crt`) and a leaf for the three names and `localhost`
    (`front.crt` holds the leaf followed by the CA, so the front presents the CA that enrolment codes pin);
-3. builds `localhost/keyclerk:0.26.3` from the tag, starts the front, the database and the broker, and sets up the
+3. builds `localhost/keyclerk:0.27.0` from the tag, starts the front, the database and the broker, and sets up the
    realm with `realm.py`. That sets SCIM on, e-mail editable by admins only, an admin-only `anchor` attribute behind
    SCIM `externalId`, the writer (group membership only, fine-grained permissions) and the reader, the desk's public
    PKCE client with the anchor in its tokens and back-channel logout, a client policy for every client (PKCE, no
