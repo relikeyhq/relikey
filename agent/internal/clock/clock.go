@@ -59,7 +59,7 @@ func Trusted(c Clock, wallAtVerify time.Time, bootAtVerify time.Duration, skew t
 // NamespaceOffsets reads a time namespace's offsets, as /proc/self/timens_offsets prints them (Linux 5.6+): one line
 // per clock, "<clock> <seconds> <nanoseconds>". It returns the clocks that are offset, "" when none is; content it
 // cannot read is an error, never "no offset". An offset boottime clock makes the boot clock the agent bounds elapsed
-// time with lie (KeyClerk decision 0032, second red team M3b).
+// time with lie (a review of KeyClerk decision 0032).
 func NamespaceOffsets(content string) (string, error) {
 	var offset []string
 	for line := range strings.Lines(content) {
