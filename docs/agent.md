@@ -16,7 +16,9 @@ for linux amd64, arm64, armv7). How it is written and built: `docs/go-engineerin
   again. If no read succeeds, nothing is changed that tick and `observe_errors` counts it (fail closed).
 - **Trusted time**: the wall clock, unless the boot clock (CLOCK_BOOTTIME, counts suspend) since the last verified
   bundle says more time has passed; then the later time wins and the skew is reported. A wall clock set back cannot
-  keep a lease alive. After a reboot (boot id changed) nothing is live until a fresh bundle verifies.
+  keep a lease alive. After a reboot (boot id changed) nothing is live until a fresh bundle verifies. Deployment
+  assumption: the boot clock is the host's, so enforce mode refuses a time namespace that offsets it
+  (`/proc/self/timens_offsets`), and a revertible VM snapshot is outside the model unless the hypervisor is trusted.
 - **The plan**: close sessions that no live lease reaches (or that ran past `max_session_hours`, or whose user no longer
   exists), then remove roles, SSO credentials and every other credential, delete users without leases, then create
   users (stripping Warpgate's default roles), add SSO credentials (provider and e-mail, decision 0010) and roles
@@ -122,7 +124,7 @@ relikey-agent status -file /var/lib/relikey/status.json       # exit 1 when unhe
  "tick_seconds": 15, "pull_seconds": 60, "long_poll_seconds": 55, "grace_seconds": 5}
 ```
 Refusals at start, each with what fixes it: a state directory others can read or on tmpfs/overlay, a key or token
-file others can read, a Warpgate URL that is not loopback, enforce mode without a boot id, a second agent on the same
+file others can read, a Warpgate URL that is not loopback, enforce mode without a boot id or in a time namespace that offsets its clocks, a second agent on the same
 state directory, state unreadable in both slots. In a container: read-only root, the state directory a volume,
 `USER 65532:65532`, all capabilities dropped, `no-new-privileges`; stop timeout above `grace_seconds`.
 

@@ -14,3 +14,6 @@ func (System) Boot() time.Duration { return time.Since(start) }
 
 // BootID outside Linux is unknown.
 func (System) BootID() string { return "" }
+
+// TimeNamespaceOffset: time namespaces are Linux only.
+func TimeNamespaceOffset() (string, error) { return "", nil }

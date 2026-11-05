@@ -54,3 +54,23 @@ func TestSystemClockReadsBoth(t *testing.T) {
 		t.Fatal("system clock unreadable")
 	}
 }
+
+// A time namespace's offsets as /proc/self/timens_offsets prints them; what cannot be read is never "no offset".
+func TestNamespaceOffsets(t *testing.T) {
+	for _, c := range []struct{ in, want string }{
+		{"", ""},
+		{"monotonic           0         0\nboottime            0         0\n", ""},
+		{"monotonic           0         0\nboottime        -3600         0\n", "boottime by -1h0m0s"},
+		{"monotonic          60         5\nboottime            0         0\n", "monotonic by 1m0.000000005s"},
+	} {
+		got, err := NamespaceOffsets(c.in)
+		if err != nil || got != c.want {
+			t.Errorf("%q: %q, %v; want %q", c.in, got, err, c.want)
+		}
+	}
+	for _, bad := range []string{"boottime x 0\n", "boottime 0\n"} {
+		if _, err := NamespaceOffsets(bad); err == nil {
+			t.Errorf("%q: read as no offset", bad)
+		}
+	}
+}
