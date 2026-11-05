@@ -333,7 +333,7 @@ func (c *Client) Version(ctx context.Context) (string, error) {
 		return "", err
 	}
 	if out.Version == nil || *out.Version == "" {
-		return "", fmt.Errorf("Warpgate's info call gave no version: Warpgate shows it only to a signed-in caller; " +
+		return "", fmt.Errorf("the info call gave no version: Warpgate shows it only to a signed-in caller; " +
 			"check that it runs with --enable-admin-token and the agent's token is WARPGATE_ADMIN_TOKEN")
 	}
 	return strings.TrimPrefix(*out.Version, "v"), nil
