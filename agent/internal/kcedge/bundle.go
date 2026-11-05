@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json/jsontext"
 	"encoding/json/v2"
 	"fmt"
 	"regexp"
@@ -408,6 +409,20 @@ func Issued(s Sealed, pins Pins) (time.Time, int64, error) {
 		return time.Time{}, 0, err
 	}
 	return o.issued, *o.b.Serial, nil
+}
+
+// RecordsHead is the bundle's records_head (edge protocol 1.4) in canonical bytes, for the report to echo as the edge
+// applied it; nil when the bundle carries none.
+func RecordsHead(s Sealed, pins Pins) (jsontext.Value, error) {
+	o, err := open(s, pins)
+	if err != nil {
+		return nil, err
+	}
+	h, present := o.obj["records_head"]
+	if !present {
+		return nil, nil
+	}
+	return jsontext.Value(Encode(h)), nil
 }
 
 func (o *opened) evaluate(doc Object, now time.Time, ceilingPolicy CeilingPolicy) (*Applied, error) {

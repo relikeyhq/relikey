@@ -28,7 +28,9 @@ for linux amd64, arm64, armv7). How it is written and built: `docs/go-engineerin
   an address is asked again no sooner than a minute later, because the desk can learn the address after the lease went
   live (full-stack run 8: until then the person's SSO sign-in finds no user). Every step is idempotent; a failed step is retried by the next tick's plan. Only users whose description is the
   ReliKey marker are ever touched; two people under one username get nothing.
-- **Reports**: after each pull, `POST /api/v1/edge/report` with the applied serial, the drift and the agent version.
+- **Reports**: after each pull, `POST /api/v1/edge/report` with the applied serial, the drift and the agent version,
+  and the applied bundle's `records_head` when it carried one (edge protocol 1.4: the edge as a weak witness of the
+  records), echoed byte for byte.
 - **Writes to disk**: edge hardware often boots from flash, so an idle tick writes nothing. The state slots are
   written only when the record changes. The status files (`status.json`, `status.html`, `metrics.prom`) are written
   when their content changes (the time, the tick and pull counts and the runtime gauges aside), and otherwise at a

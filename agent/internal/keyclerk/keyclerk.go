@@ -10,6 +10,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"encoding/base64"
+	"encoding/json/jsontext"
 	"encoding/json/v2"
 	"errors"
 	"fmt"
@@ -208,6 +209,8 @@ type Report struct {
 	AppliedSerial int64       `json:"applied_serial"`
 	Attestation   Attestation `json:"attestation"`
 	Drift         []string    `json:"drift"`
+	// RecordsHead echoes the applied bundle's records_head (edge protocol 1.4, section 7.1); left out when it had none.
+	RecordsHead jsontext.Value `json:"records_head,omitempty"`
 }
 
 // Attestation is claimed until quotes are verified (KeyClerk 0016).

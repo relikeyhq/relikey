@@ -37,9 +37,12 @@ import (
 
 // Record is the state of one edge.
 type Record struct {
-	Floors        kcedge.State   `json:"floors"`
-	AppliedSerial int64          `json:"applied_serial"`
-	Bundle        *kcedge.Sealed `json:"bundle,omitempty"`
+	Floors        kcedge.State `json:"floors"`
+	AppliedSerial int64        `json:"applied_serial"`
+	// AppliedHead is the records_head of the bundle applied in full (edge protocol 1.4), echoed in each report; absent
+	// when that bundle carried none.
+	AppliedHead jsontext.Value `json:"applied_records_head,omitempty"`
+	Bundle      *kcedge.Sealed `json:"bundle,omitempty"`
 	// Where the newest bundle was verified, to bound elapsed time without trusting the
 	// wall clock: the boot it happened in and the boot clock then (decision 0007 point 4).
 	BootID       string `json:"boot_id,omitempty"`

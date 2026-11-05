@@ -417,14 +417,14 @@ func (a *Agent) handlePull(ctx context.Context, got keyclerk.Pulled, err error) 
 	}
 	issued, serial, ierr := kcedge.Issued(*got.Bundle, a.Pins)
 	if ierr == nil && serial == rec.Floors.Serial {
-		a.report(ctx, rec.AppliedSerial)
+		a.report(ctx, rec)
 		return // the same bundle again: nothing new
 	}
 	now, _ := clock.Trusted(a.Clock, parseWall(rec.WallAtVerify), a.bootAtVerify(rec), kcedge.Skew)
 	applied, err := kcedge.VerifyBundle(*got.Bundle, a.Pins, rec.Floors, now, kcedge.CeilingPolicyGo)
 	if err != nil {
 		a.refused(err.Error())
-		a.report(ctx, rec.AppliedSerial)
+		a.report(ctx, rec)
 		return
 	}
 	rec.Floors, rec.Bundle = applied.State, got.Bundle
@@ -446,7 +446,7 @@ func (a *Agent) handlePull(ctx context.Context, got keyclerk.Pulled, err error) 
 	}
 	a.fetchModules(pctx, got.Bundle)
 	a.reconcile(ctx)
-	a.report(ctx, a.Store.Get().AppliedSerial)
+	a.report(ctx, a.Store.Get())
 	return changed
 }
 
@@ -630,7 +630,8 @@ func (a *Agent) reconcile(ctx context.Context) {
 		if failed == 0 && rec.Bundle != nil && !rec.Ended {
 			_, serial, _ := kcedge.Issued(*rec.Bundle, a.Pins)
 			if serial > rec.AppliedSerial {
-				rec.AppliedSerial = serial
+				head, _ := kcedge.RecordsHead(*rec.Bundle, a.Pins) // the bundle Issued just opened
+				rec.AppliedSerial, rec.AppliedHead = serial, head
 				if err := a.Store.Save(rec); err != nil {
 					a.Log.Error("cannot record the applied serial", "err", err)
 				}
@@ -806,14 +807,14 @@ func (a *Agent) copyMetrics(m []byte) {
 	}
 }
 
-func (a *Agent) report(ctx context.Context, applied int64) {
+func (a *Agent) report(ctx context.Context, rec state.Record) {
 	drift := a.st.Drift
 	if len(drift) > 50 {
 		drift = drift[:50]
 	}
 	rctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	err := a.Clerk.SendReport(rctx, keyclerk.Report{AppliedSerial: applied, Drift: drift,
+	err := a.Clerk.SendReport(rctx, keyclerk.Report{AppliedSerial: rec.AppliedSerial, RecordsHead: rec.AppliedHead, Drift: drift,
 		Attestation: keyclerk.Attestation{Profile: kcedge.AttestedProfile, AgentVersion: a.Version, Mode: string(a.Mode)}})
 	if err != nil && !errors.Is(err, context.Canceled) {
 		a.Log.Warn("report not delivered; sent again after the next pull", "err", err)
