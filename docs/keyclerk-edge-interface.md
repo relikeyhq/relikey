@@ -3,15 +3,16 @@
 **Source of truth:** `docs/keyclerk-edge-interface.md` in the KeyClerk repository (github.com/keyclerk/keyclerk) and
 the edge protocol specification (github.com/keyclerk/edge-protocol). The agent's vectors come from KeyClerk v0.27.0
 (`agent/internal/kcedge/testdata/SOURCE`, regenerated with `regen.py`); the core image pins KeyClerk 0.27.0. The
-section below maps edge protocol 1.1 to 1.3; the rest of this page records the port at v0.23.0 (commit bd6620f),
+sections below map edge protocol 1.1 to 1.4; the rest of this page records the port at v0.23.0 (commit bd6620f),
 with KeyClerk decision 0014 and amendments 0014a to 0014d. v0.21.2 and v0.22.0 fixed the
 Go port's findings KC-1 to KC-3 and KC-5 to KC-11 (`a review record kept with the maintainer`); v0.23.0
 adopts KC-4 (amendment 0014d, one signing mode over exact bytes), R-19 (kc-unlock-v2 over P-256) and AG-18 (the ended
 notice bound to the enrolment keys it ends), and names policy modules by hash. The reference implementation is
-`keyclerk/edge.py`; `tests/conformance/edge.json` holds 107 cases with fixed keys (policy, bundle verifier, and the
-families statements, ceilings, ended, unlock, module_bytes); tooling is `python -m keyclerk.edge_cli`. ReliKey's agent
-conforms to that document and those vectors (all 107 pass, plus ReliKey's own tests for two guards the set does not
-exercise yet); this page only maps it to ReliKey.
+`keyclerk/edge.py`; `tests/conformance/edge.json` held 107 cases with fixed keys at v0.23.0 and holds 147 at v0.27.0
+(policy, bundle verifier, and the families statements, ceilings, ended, unlock, module_bytes, requests, email,
+ceiling_hours, reports); tooling is `python -m keyclerk.edge_cli`. ReliKey's agent conforms to that document and those
+vectors (all pass; the reports family is the desk's side), plus ReliKey's own tests for guards the set does not
+exercise; this page only maps it to ReliKey.
 
 ## Edge protocol 1.1 to 1.3 (KeyClerk 0.25.0 and 0.26.0)
 | Edge protocol | The agent |
@@ -19,6 +20,17 @@ exercise yet); this page only maps it to ReliKey.
 | 1.1: the bundle's optional `governed_roles` member | checked for shape (`kcedge`), then joined with the edge's own `governed_roles_file`: the union names the bastion roles only leases grant, and a grant of one outside a lease is reported as unmanaged; when the file cannot be read and only the bundle's list is there, nothing is resolved that tick |
 | 1.2: the bundle long-poll, `GET /api/v1/edge/bundle?after=<serial>&wait=<seconds>`, at most 55 seconds | `Pull(after, wait)`; `Wait` 0 pulls plainly; the vectors' `requests` family pins the signed request with its query |
 | 1.3: a lease's `email` is null in the bundle; the address comes from `GET /api/v1/edge/lease/{lease_id}/email`, a sealed `kc-edge-email-v1` bound to the request's nonce | `Clerk.Email` and `kcedge.VerifyEmail` (bundle key, this edge and lease, own nonce); the address sets the gateway's credential and is kept nowhere; a lease without an address waits before it asks again, within the desk's six a minute; the vectors' `email` family |
+
+## Edge protocol 1.4 (KeyClerk 0.27.0)
+| Edge protocol | The agent |
+|---|---|
+| the bundle's optional `records_head {revision, head, size?}` | checked for shape; a malformed or null one refuses the bundle ([#113](https://github.com/relikeyhq/relikey/pull/113)); the head of the bundle applied in full is kept in the state and echoed byte for byte in every report ([#114](https://github.com/relikeyhq/relikey/pull/114)) |
+| the report's `removals [{lease_id, system, at}]`, the leaver proof | a lease whose role the bastion was seen holding is remembered; once it is no longer live and the role is seen gone, the removal is confirmed at the tick's trusted time, kept across a restart and dropped once a report delivered it ([#115](https://github.com/relikeyhq/relikey/pull/115)) |
+| the incident `lease_ended_early` | a role removed behind the agent while its lease runs, for each live lease that granted it; queued, sent after each report, dropped when the desk refuses it ([#120](https://github.com/relikeyhq/relikey/pull/120)) |
+| the report's `bastion {product, version, capabilities, adapter}` | from the version Warpgate shows the admin token: `expires_grants`, `injects_credentials`, `ends_sessions_on_revoke` from 0.30.2, adapter `reads_hardening`; `records_sessions` not declared (a configuration-file setting the admin API does not show) ([#121](https://github.com/relikeyhq/relikey/pull/121)) |
+| ceiling hours rounded up | `leaseHours`, whole hours rounded up, at least one ([#107](https://github.com/relikeyhq/relikey/pull/107)); the `ceiling_hours` vectors |
+
+A report carrying every 1.4 member, shaped as the agent sends it, passes KeyClerk 0.27.0's own report checks.
 
 A lease's `person` is opaque to the agent (on a desk with the signed change log it is KeyClerk's internal anchor).
 
