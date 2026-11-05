@@ -128,6 +128,21 @@ func TestARefusedIncidentIsNotSentAgain(t *testing.T) {
 	}
 }
 
+// The report declares what the bastion enforces (edge protocol 1.4), from the version Warpgate shows the agent.
+func TestTheReportDeclaresTheBastion(t *testing.T) {
+	r := newRig(t, Enforce)
+	r.eventually("the declaration is reported", func() bool {
+		var rep keyclerk.Report
+		if json.Unmarshal(r.kc.LastReport(), &rep) != nil || rep.Bastion == nil {
+			return false
+		}
+		b := rep.Bastion
+		return b.Product == "warpgate" && b.Version == "0.30.2" &&
+			fmt.Sprint(b.Capabilities) == "[ends_sessions_on_revoke expires_grants injects_credentials]" &&
+			fmt.Sprint(b.Adapter) == "[reads_hardening]"
+	})
+}
+
 // End to end: a lease ends, the agent removes the role, the next report confirms the removal, and once delivered the
 // confirmation leaves the edge's state.
 func TestAnEndedLeaseIsConfirmedInTheReport(t *testing.T) {

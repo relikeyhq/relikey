@@ -213,6 +213,16 @@ type Report struct {
 	RecordsHead jsontext.Value `json:"records_head,omitempty"`
 	// Removals confirm that leases' assignments were removed (edge protocol 1.4), at most kcedge.MaxRemovals.
 	Removals []kcedge.Removal `json:"removals,omitempty"`
+	// Bastion declares what the bastion enforces by itself (edge protocol 1.4); left out when unknown.
+	Bastion *BastionDeclaration `json:"bastion,omitempty"`
+}
+
+// BastionDeclaration is the report's bastion member: {product, version, capabilities [token], adapter? [token]}.
+type BastionDeclaration struct {
+	Product      string   `json:"product"`
+	Version      string   `json:"version"`
+	Capabilities []string `json:"capabilities"`
+	Adapter      []string `json:"adapter,omitempty"`
 }
 
 // Attestation is claimed until quotes are verified (KeyClerk 0016).
