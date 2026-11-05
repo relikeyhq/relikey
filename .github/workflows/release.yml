@@ -60,13 +60,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           AGENT: ${{ needs.build.outputs.agent }}
           FLEET: ${{ needs.build.outputs.fleet }}
+          DEMO: ${{ needs.build.outputs.demo }}
         run: |
           # the image digests, and how to check their signature and provenance (README.md, "Verifying a release")
           registry="ghcr.io/${GITHUB_REPOSITORY_OWNER}"
           signer="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/release-build.yml@${GITHUB_REF}"
           {
             echo
-            echo "Images, by digest: \`${registry}/relikey-agent@${AGENT}\` and \`${registry}/relikey-fleet@${FLEET}\`."
+            echo "Images, by digest: \`${registry}/relikey-agent@${AGENT}\` and \`${registry}/relikey-fleet@${FLEET}\`;" \
+              "the demo (not for deployment): \`${registry}/relikey-demo@${DEMO}\`."
             echo "Verify: \`cosign verify IMAGE@DIGEST --certificate-identity ${signer}" \
               "--certificate-oidc-issuer https://token.actions.githubusercontent.com\`," \
               "then \`gh attestation verify oci://IMAGE@DIGEST --repo ${GITHUB_REPOSITORY}\`."

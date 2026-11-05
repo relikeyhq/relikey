@@ -33,6 +33,7 @@ import (
 	"runtime"
 	"slices"
 	"sync"
+	"syscall"
 	"time"
 
 	"relikey/agent/internal/agent"
@@ -387,6 +388,12 @@ func openBrowser(u string) {
 	}
 }
 
+// containerMode is the demo image (deploy/demo/Dockerfile): it sets RELIKEY_DEMO_CONTAINER=1 and runs the demo as the
+// container's first process. Only then may the page listen on all of the container's addresses, so its published port
+// reaches it; a flag or the variable alone on a workstation never opens the page beyond loopback. Publish it on the
+// host's loopback only: docker run -p 127.0.0.1:8080:8080 (docs/demo.md).
+func containerMode() bool { return os.Getenv("RELIKEY_DEMO_CONTAINER") == "1" && os.Getpid() == 1 }
+
 func main() {
 	headless := flag.Bool("headless", false, "no page: print the steps as JSON lines and exit when the story ends")
 	addr := flag.String("addr", "127.0.0.1:0", "the page's loopback address")
@@ -394,7 +401,7 @@ func main() {
 	pace := flag.Duration("pace", 2*time.Second, "pause after each step when the page is shown")
 	wait := flag.Bool("wait", false, "start the story when the page is first opened (for a forwarded port)")
 	flag.Parse()
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM) // docker stop sends SIGTERM
 	defer stop()
 	s := &Story{}
 	if *headless {
@@ -405,8 +412,9 @@ func main() {
 		return
 	}
 	host, _, err := net.SplitHostPort(*addr)
-	if ip := net.ParseIP(host); err != nil || ip == nil || !ip.IsLoopback() {
-		fmt.Fprintln(os.Stderr, "relikey-demo: -addr must be a loopback address (127.0.0.1:port or [::1]:port)")
+	if ip := net.ParseIP(host); err != nil || ip == nil || !(ip.IsLoopback() || (ip.IsUnspecified() && containerMode())) {
+		fmt.Fprintln(os.Stderr, "relikey-demo: -addr must be a loopback address (127.0.0.1:port or [::1]:port); "+
+			"only the demo image listens beyond it, inside its container")
 		os.Exit(2)
 	}
 	ln, err := net.Listen("tcp", *addr)

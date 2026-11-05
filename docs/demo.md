@@ -41,6 +41,23 @@ terminal to stop.
 | `-pace` | `2s` | Pause after each step on the page, so you can follow it |
 | `-wait` | off | Start the story when the page is first opened, not at start (for a forwarded port) |
 
+## With Docker or Podman
+A signed image, `ghcr.io/relikeyhq/relikey-demo`, one per release, for amd64 and arm64. Once pulled it runs with no
+network, so it can be carried into a site without internet (`docker save`, then `docker load` there):
+
+    docker run --rm -p 127.0.0.1:8080:8080 ghcr.io/relikeyhq/relikey-demo:<version>
+
+Open http://127.0.0.1:8080/; the story starts when the page is opened, and `docker stop` ends it. Publish the port on
+`127.0.0.1` as above: a bare `-p 8080:8080` publishes it on every address of the host, past its firewall. The page
+listens beyond loopback only inside the image (it sets `RELIKEY_DEMO_CONTAINER=1` and runs the demo as the container's
+first process); the same flag on a workstation is refused. Verify the image before you run it:
+
+    cosign verify ghcr.io/relikeyhq/relikey-demo@DIGEST       --certificate-identity-regexp '^https://github.com/relikeyhq/relikey/.github/workflows/release-build.yml@'       --certificate-oidc-issuer https://token.actions.githubusercontent.com
+
+It is a demo, like the command: the image is labelled so, holds only the demo, and is never the agent. Build it
+yourself from the repository root with `podman build --ignorefile deploy/demo/Dockerfile.demo.dockerignore -f
+deploy/demo/Dockerfile.demo -t relikey-demo .` (Docker reads `Dockerfile.demo.dockerignore` beside it by itself).
+
 ## In a Codespace
 The README's Codespaces badge opens this repository with `.devcontainer/devcontainer.json`: the Go image pinned by
 digest, the demo built on create and started on attach with `-addr 127.0.0.1:8080 -no-open -wait`. Codespaces forwards

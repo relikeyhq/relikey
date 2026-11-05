@@ -226,7 +226,7 @@ def test_the_build_runs_in_the_reusable_workflow():
         assert not any("attest" in s.get("uses", "") or "cosign" in s.get("uses", "") for s in job.get("steps", []))
     called = yaml.safe_load((WORKFLOWS / "release-build.yml").read_text(encoding="utf-8"))
     assert list(called[True]) == ["workflow_call"]   # PyYAML reads the key `on` as True
-    assert set(_build_jobs()) == {"build", "sbom-attest", "images"}
+    assert set(_build_jobs()) == {"build", "sbom-attest", "images", "demo-image"}
 
 
 def test_the_built_binaries_are_smoke_tested_before_anything_is_attested_or_signed():

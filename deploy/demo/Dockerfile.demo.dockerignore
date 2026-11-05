@@ -1,0 +1,10 @@
+# The demo image builds the demo from source: only the agent module reaches its builder (go.mod, go.sum, the code),
+# never agent/dist, deploy/secrets, .git or a local venv. Docker BuildKit reads this file beside the Dockerfile; with
+# podman pass it: podman build --ignorefile deploy/demo/Dockerfile.demo.dockerignore -f deploy/demo/Dockerfile.demo .
+*
+!agent/go.mod
+!agent/go.sum
+!agent/cmd/
+!agent/internal/
+!agent/pkg/
+agent/**/testdata/fuzz

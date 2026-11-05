@@ -27,7 +27,7 @@ updates:
       python-tools:
         patterns: ["*"]
   - package-ecosystem: docker
-    directories: [/deploy/core, /deploy/edge]
+    directories: [/deploy/core, /deploy/demo, /deploy/edge]
     schedule:
       interval: weekly
     groups:

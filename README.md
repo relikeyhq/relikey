@@ -64,7 +64,12 @@ With Go installed, `cd agent && go run ./cmd/relikey-demo` runs the real edge ag
 Warpgate and the identity broker and shows, on a local page, a lease applied, a session, a revoke and a lease that
 ends while the edge is offline. Keys are generated per run and nothing is left behind: [docs/demo.md](docs/demo.md).
 
-Without Go, open it in a Codespace; the page opens in the editor and the story starts when it does:
+Without Go, run the signed demo image, offline once pulled, then open http://127.0.0.1:8080/ (publish it on
+loopback only, as here):
+
+    docker run --rm -p 127.0.0.1:8080:8080 ghcr.io/relikeyhq/relikey-demo:<version>
+
+Or open it in a Codespace; the page opens in the editor and the story starts when it does:
 
 [![Open the demo in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/relikeyhq/relikey?quickstart=1)
 

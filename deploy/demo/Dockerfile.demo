@@ -1,0 +1,28 @@
+# relikey-demo image: the demo (agent/cmd/relikey-demo, docs/demo.md), the real edge agent loop against stand-ins.
+# A demo, never a release artifact: build.py release builds the agent alone; this image is built from source here.
+# Build from the repository root (its own ignore file lets only the agent module in):
+#   podman build --ignorefile deploy/demo/Dockerfile.demo.dockerignore -f deploy/demo/Dockerfile.demo -t relikey-demo:dev .
+# Run, publishing on the host's loopback only:  docker run --rm -p 127.0.0.1:8080:8080 relikey-demo:dev
+FROM --platform=$BUILDPLATFORM docker.io/library/golang:1.27.3@sha256:0c050feb47802ae436b9030833694a0b80160d08e3b3049ad30bf7c9e724e09d AS build
+ARG TARGETOS
+ARG TARGETARCH
+WORKDIR /src/agent
+COPY agent/ ./
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH GOFLAGS=-mod=readonly \
+    go build -trimpath -ldflags "-s -w -buildid=" -o /out/relikey-demo ./cmd/relikey-demo \
+ && mkdir -p /out/root/tmp && chmod 1777 /out/root/tmp
+
+FROM scratch
+COPY --from=build --chmod=0555 /out/relikey-demo /relikey-demo
+# the demo's temporary state directory (removed when it stops): copied as part of a tree, so /tmp keeps its 1777 mode
+COPY --from=build /out/root/ /
+# Container mode (containerMode in the demo): with this variable and as the container's first process, the page may
+# listen on all of the container's addresses so the published port reaches it. Publish it on 127.0.0.1 only.
+ENV RELIKEY_DEMO_CONTAINER=1
+USER 65532:65532
+EXPOSE 8080
+LABEL org.opencontainers.image.title="ReliKey demo" \
+      org.opencontainers.image.description="A demo: the ReliKey edge agent against stand-ins. Not for deployment." \
+      org.opencontainers.image.source="https://github.com/relikeyhq/relikey" \
+      org.opencontainers.image.licenses="EUPL-1.2"
+ENTRYPOINT ["/relikey-demo", "-addr", "0.0.0.0:8080", "-no-open", "-wait"]
