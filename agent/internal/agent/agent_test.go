@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/ed25519"
+	"encoding/json/jsontext"
 	"encoding/json/v2"
 	"errors"
 	"fmt"
@@ -166,6 +167,25 @@ func TestALeaseIsAppliedAndReported(t *testing.T) {
 	r.eventually("the applied serial is reported", func() bool {
 		var rep keyclerk.Report
 		return json.Unmarshal(r.kc.LastReport(), &rep) == nil && rep.AppliedSerial == r.kc.Serial()
+	})
+}
+
+// The report echoes the records head of the bundle applied in full, byte for byte as the bundle carried it (edge
+// protocol 1.4, section 7.1); a bundle without one leaves it out of the report.
+func TestTheReportEchoesTheAppliedRecordsHead(t *testing.T) {
+	r := newRig(t, Enforce)
+	r.kc.SetLeases([]fakes.FakeLease{lease("L-1", time.Now().Add(time.Hour))}, nil)
+	r.eventually("a report without a head", func() bool {
+		var rep map[string]jsontext.Value
+		return json.Unmarshal(r.kc.LastReport(), &rep) == nil && rep["applied_serial"] != nil && rep["records_head"] == nil
+	})
+	head := kcedge.Object{"revision": kcedge.Number("12"), "head": strings.Repeat("ab", 32), "size": kcedge.Number("40")}
+	r.kc.SetRecordsHead(head)
+	want := `{"head":"` + strings.Repeat("ab", 32) + `","revision":12,"size":40}`
+	r.eventually("the head is echoed", func() bool {
+		var rep keyclerk.Report
+		return json.Unmarshal(r.kc.LastReport(), &rep) == nil && rep.AppliedSerial == r.kc.Serial() &&
+			string(rep.RecordsHead) == want
 	})
 }
 

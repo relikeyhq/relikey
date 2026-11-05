@@ -104,6 +104,7 @@ type KeyClerk struct {
 	Horizons     map[string]int64
 	// governed, when set, is carried as governed_roles (KeyClerk decision 0025); nil leaves the member out.
 	governed *[]string
+	head     kcedge.Value // records_head (edge protocol 1.4); nil leaves it out
 	Leases   []FakeLease
 	Visits   []FakeVisit
 	Revoked  []string
@@ -217,11 +218,7 @@ func (k *KeyClerk) bundle() kcedge.Sealed {
 		"policy": kcedge.Object{"modules": kcedge.Object{"ceiling": kcedge.Object{"sha256": hex.EncodeToString(sum[:])}},
 			"release": nil, "entrypoints": []kcedge.Value{}}},
 		kcedge.BundleFormat)
-	if k.governed != nil {
-		gr := []kcedge.Value{}
-		for _, r := range *k.governed {
-			gr = append(gr, kcedge.Object{"displayName": r})
-		}
+	if k.governed != nil || k.head != nil {
 		obj := kcedge.Object{}
 		raw, _ := base64.StdEncoding.DecodeString(s.Bytes)
 		v, _ := kcedge.Parse(raw)
@@ -230,11 +227,28 @@ func (k *KeyClerk) bundle() kcedge.Sealed {
 				obj[name] = val
 			}
 		}
-		obj["governed_roles"] = gr
+		if k.governed != nil {
+			gr := []kcedge.Value{}
+			for _, r := range *k.governed {
+				gr = append(gr, kcedge.Object{"displayName": r})
+			}
+			obj["governed_roles"] = gr
+		}
+		if k.head != nil {
+			obj["records_head"] = k.head
+		}
 		s = Seal(k.BundleKey, obj, kcedge.BundleFormat)
 	}
 	k.last = &s
 	return s
+}
+
+// SetRecordsHead makes the next bundles carry this records_head (edge protocol 1.4).
+func (k *KeyClerk) SetRecordsHead(head kcedge.Value) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	k.head = head
+	k.last = nil // the next pull gets a new bundle
 }
 
 // SetGoverned makes the next bundles carry these governed roles (KeyClerk decision 0025).
