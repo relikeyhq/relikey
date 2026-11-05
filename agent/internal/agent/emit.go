@@ -19,6 +19,7 @@ const (
 	ocsfUserAccess        = 3005 // User Access Management: a role granted, revoked or extended
 	ocsfComplianceFinding = 2003 // Findings: an unmanaged account holding a governed role (a required outcome failing)
 	ocsfDetectionFinding  = 2004 // Findings: a refused bundle, an ended edge
+	ocsfAppLifecycle      = 6002 // Application Activity: the agent started (activity 3 Start)
 )
 
 // actionEvents are the event type, OCSF class and activity of each action the agent carries out. Account Change
@@ -69,6 +70,8 @@ func ocsfClass(class int) (string, int) {
 		return "User Access Management", 3
 	case ocsfComplianceFinding:
 		return "Compliance Finding", 2
+	case ocsfAppLifecycle:
+		return "Application Lifecycle", 6
 	default:
 		return "Detection Finding", 2
 	}
@@ -172,6 +175,17 @@ func refusalCode(why string) string {
 		}
 	}
 	return "other"
+}
+
+// emitStarted is the first record of each start: a restart of the component that enforces access is an audit fact,
+// and an idle edge's event chain then has a record after every restart to be checked across (full-stack run 12).
+func (a *Agent) emitStarted() {
+	name, category := ocsfClass(ocsfAppLifecycle)
+	a.emit("relikey.agent.started.v1", "edge:"+a.Pins.Edge+"/agent", events.Success, events.Info, "started",
+		map[string]any{"class_uid": ocsfAppLifecycle, "category_uid": category, "class_name": name, "activity_id": 3,
+			"severity_id": 1, "metadata": metadata(),
+			"app":      map[string]any{"name": "ReliKey edge agent", "vendor_name": "ReliKey", "version": a.Version},
+			"unmapped": map[string]any{"relikey": map[string]any{"mode": string(a.Mode)}}})
 }
 
 // emitEnded reports that the desk ended this edge.

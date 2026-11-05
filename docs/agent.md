@@ -143,8 +143,10 @@ apart by `"specversion"`: a CloudEvents 1.0 envelope (type `relikey.<noun>.<verb
 made on the bastion (`relikey.account.created`, `deleted`, `role_granted`, `role_revoked`, `role_extended`,
 `sso_bound`, `sso_unbound`, `key_added`, `key_removed`, `credential_removed`; `relikey.session.closed`), an
 unmanaged account holding a governed role (`relikey.drift.rogue_account`, once when found and once when gone; which
-roles stays in the local drift report), a refused bundle (`relikey.bundle.refused`) and an ended edge
-(`relikey.edge.ended`). Events name bastion accounts and lease ids, never an e-mail.
+roles stays in the local drift report), a refused bundle (`relikey.bundle.refused`), an ended edge
+(`relikey.edge.ended`), and each start of the agent (`relikey.agent.started`, OCSF Application Lifecycle, activity
+Start, with the agent's version and mode: the first record of every epoch, so an idle edge's chain can be checked
+across a restart). Events name bastion accounts and lease ids, never an e-mail.
 
 **The event chain** (the first part of decision 0025 point 2, inside the agent): every record carries its sequence
 number and its id in OCSF `metadata.sequence` and `metadata.uid`, and in `unmapped.chain` its epoch and `prev`, the
