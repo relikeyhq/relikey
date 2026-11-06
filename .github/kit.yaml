@@ -1,0 +1,20 @@
+# The estate's test gate (repo-kit docs/gates.md, settings/gates.yaml): this repository's facts. Every rule not named
+# here follows the estate.
+gates:
+  suite: python -m pytest -q
+  extra: ["python tools/check_model.py"]
+  ci: true                       # GitHub Actions: ci.yml runs the Go checks, the merge queue requires them
+  authority: merge_queue
+  public_text: "python tools/public_text_check.py --strict --range {range}"   # decision 0027; RELIKEY_FLAGS_READ=1 after reading flags
+  always:
+    - tests/test_public_text_check.py
+    - tests/test_changelog.py
+    - tests/test_conformance.py
+    - tests/test_docs.py
+    - tests/test_mutants.py
+  foundation:
+    - model/**
+    - tools/check_model.py
+    - tools/publish_export.py
+    - tools/publish-*.yaml
+    - tests/data/**

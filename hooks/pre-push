@@ -1,31 +1,84 @@
-#!/bin/sh
-# ReliKey's gate: the model check and its tests.
-set -e
-python tools/check_model.py
-python -m pytest -q
+#!/usr/bin/env python
+"""pre-push: the estate gate (repo-kit docs/gates.md). This file is stable: the rules and the code that judges a push
+live in repo-kit, found through REPO_KIT or beside this repository, so an update of the estate's gate reaches this
+repository at its next push.
 
-# Decision 0027: what goes to the public repository is public at once. Scan each pushed range's added lines and
-# commit messages; a hard failure stops the push, flags must be read (re-run the check with --flags-ok, then push with
-# RELIKEY_FLAGS_READ=1).
-case "$2" in
-  *github.com*) ;;
-  *) exit 0 ;;
-esac
-zero=0000000000000000000000000000000000000000
-while read -r local_ref local_sha remote_ref remote_sha; do
-  [ "$local_sha" = "$zero" ] && continue
-  if [ "$remote_sha" = "$zero" ]; then
-    base=$(git merge-base "$local_sha" "refs/remotes/$1/main" 2>/dev/null || true)
-    if [ -z "$base" ] && [ "$local_ref" = refs/heads/publish/snapshot ]; then
-      echo "pre-push: first release push; publish_export.py --strict gated this snapshot" >&2; continue
-    fi
-    [ -n "$base" ] || { echo "pre-push: no base on $1/main for $local_ref; fetch first" >&2; exit 1; }
-  else
-    base=$remote_sha
-  fi
-  if [ "${RELIKEY_FLAGS_READ:-}" = 1 ]; then
-    python tools/public_text_check.py --strict --flags-ok --range "$base..$local_sha"
-  else
-    python tools/public_text_check.py --strict --range "$base..$local_sha"
-  fi
-done
+Without repo-kit (an outside contributor to a public repository): where CI or a merge queue is the authority
+(`ci: true` in the kit file), the repository's own stated facts run instead, the whole suite, its extra commands and
+the public-text scan for a public remote, and the hook says the estate core was not consulted. Where the push is the
+only record (`ci: false`), the push is refused: the gate never silently passes.
+
+A repository's own checks go in pre-push.local beside this file, run after the gate with the same arguments (remote
+name and URL) and the same refs on stdin, and only when the gate is green."""
+import os
+import shlex
+import subprocess
+import sys
+from pathlib import Path
+
+
+def _top() -> Path:
+    """The repository this hook belongs to, wherever core.hooksPath puts the hook (git runs hooks at the top)."""
+    try:
+        return Path(subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True,
+                                   check=True).stdout.strip())
+    except (subprocess.CalledProcessError, OSError):
+        sys.exit("the estate gate: not inside a git working tree")
+
+
+def _facts(here: Path) -> dict:
+    for p in (here / "kit.yaml", here / ".github" / "kit.yaml"):
+        if p.exists():
+            try:
+                import yaml
+            except ImportError:
+                sys.exit("pre-push: reading the gate's facts needs PyYAML (pip install pyyaml)")
+            return (yaml.safe_load(p.read_text(encoding="utf-8")) or {}).get("gates") or {}
+    return {}
+
+
+def _fallback(here: Path, refs: str, url: str) -> int:
+    """The repository's own facts, run whole: no selection, nothing the estate core would have narrowed."""
+    f = _facts(here)
+    if f.get("ci") is not True:
+        sys.exit("pre-push: the estate gate (repo-kit) is not here, and this repository's push is its only record "
+                 "(ci is not true): clone vdhome/repo-kit beside it or set REPO_KIT")
+    print("pre-push: the estate core (repo-kit) was not consulted; running this repository's stated suite whole. "
+          "CI is the authority.")
+    env = {k: v for k, v in os.environ.items() if not k.startswith(("PYTEST_", "HYPOTHESIS_"))}
+    rc = 0
+    suite = shlex.split(f.get("suite") or "python -m pytest -q")
+    if "pytest" in suite:
+        suite += ["-o", "addopts=", "-o", "xfail_strict=true", "-p", "no:cacheprovider"]
+    cmds = [suite] + [shlex.split(c) for c in (f.get("extra") or []) + (f.get("extra_full") or [])]
+    for cmd in cmds:
+        rc |= subprocess.run([sys.executable if c == "python" else c for c in cmd], cwd=here, env=env).returncode
+    scan = f.get("public_text")
+    if scan and any(h in url for h in (f.get("public_remotes") or ["github.com"])):
+        for line in refs.splitlines():
+            parts = line.split()
+            if len(parts) != 4 or set(parts[1]) == {"0"}:
+                continue
+            rng = parts[1] if set(parts[3]) == {"0"} else f"{parts[3]}..{parts[1]}"
+            cmd = [c.replace("{range}", rng) for c in shlex.split(scan)]
+            rc |= subprocess.run([sys.executable if c == "python" else c for c in cmd], cwd=here, env=env).returncode
+    return rc
+
+
+here = _top()
+refs = sys.stdin.read()
+url = sys.argv[2] if len(sys.argv) > 2 else ""
+kit = Path(os.environ.get("REPO_KIT") or here.parent / "repo-kit")
+runner = kit / "gates" / "gate_run.py"
+if runner.exists():
+    rc = subprocess.run([sys.executable, str(runner), "push", "--repo", str(here), "--remote-url", url],
+                        input=refs, text=True).returncode
+else:
+    rc = _fallback(here, refs, url)
+if rc:
+    sys.exit(rc)
+local = Path(__file__).with_name("pre-push.local")
+if local.exists():
+    first = local.read_text(encoding="utf-8").splitlines()[:1]
+    cmd = [sys.executable, str(local)] if first and "python" in first[0] else ["sh", str(local)]
+    sys.exit(subprocess.run([*cmd, *sys.argv[1:]], input=refs, text=True).returncode)
