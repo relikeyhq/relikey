@@ -90,9 +90,13 @@ Edge protocol 1.6 with KeyClerk 0.29.0, the evidence log, and working offline an
 8. IEC 62443-4-1 self-assessment ([#31](https://github.com/relikeyhq/relikey/issues/31))
 
 ## Then: [0.6.0](https://github.com/relikeyhq/relikey/milestone/6)
-What opens the remaining scenarios: offline visits on an attested edge, and a second person at the start of a session.
+What opens the remaining scenarios: offline visits on an attested edge, a second person at the start of a session, and
+an edge that runs natively on a site's own Windows Server.
 1. An assured edge: TPM attestation, which visit leases need ([#146](https://github.com/relikeyhq/relikey/issues/146))
 2. Session-start approval by a second person, from KeyClerk 0.30.0 (edge protocol 1.7, contract C-02, [#147](https://github.com/relikeyhq/relikey/issues/147))
+3. The edge on Windows: Warpgate and the agent as Windows services from a native installer, no containers, on an
+   up-to-date Windows Server in the same enclave as the legacy systems; a decision record sets its trust ceiling first
+   ([#81](https://github.com/relikeyhq/relikey/issues/81), behind Warpgate's Windows port)
 
 The order from 0.4.0 to 0.6.0 follows four reference deployments: OT on Windows, OT on Linux, legacy Windows IT, and a
 critical service with a twin site. Each item traces to what one of them needs.
@@ -105,4 +109,3 @@ its dependency lands:
 - Sign-in gateway part B: a Kerberos prototype ([#35](https://github.com/relikeyhq/relikey/issues/35))
 - Vendor sign-in through the vendor's own identity provider ([#36](https://github.com/relikeyhq/relikey/issues/36))
 - Production networking and high availability for the core ([#37](https://github.com/relikeyhq/relikey/issues/37))
-- Edge on Windows: what it takes, behind Warpgate's Windows port ([#81](https://github.com/relikeyhq/relikey/issues/81))
