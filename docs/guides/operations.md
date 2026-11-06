@@ -172,6 +172,44 @@ only to the targets its leases name: the agent refuses to assign a role that rea
 - **End it:** the desk ends an edge (KeyClerk). The agent verifies the sealed notice, removes all access and stays ended:
   to use that edge again, enrol it again. Not covered: removing the edge's client at the broker.
 
+## A spare node (decision 0028)
+A site that wants a second box gets a warm spare: a second node of the same edge that keeps its verified bundle
+current and changes nothing, until an operator on site makes it the active node. It takes over by hand, in minutes;
+automatic failover is designed (0028 option A) and built only when a site needs it.
+
+**Set it up**
+1. On the active node, make the site keys once: `python deploy/edge/install.py site-keys --out <dir>` (a new SSH host
+   key for the site, and the front's certificate and key). Apply them there: `python deploy/edge/install.py site-keys
+   --apply <dir>`, then `podman compose -f deploy/edge/compose.yaml up -d --force-recreate warpgate front`. People's
+   SSH clients see the host key change this once; tell them the new fingerprint the command printed.
+2. Install the spare as any edge (the install guide), with the same `--edge`, `--warpgate-url` and SSO client secret,
+   and `--site-keys <dir>`: it then shows people the same host key and certificate. Its enrolment key is its own.
+3. Enrol the spare's enrolment key at the desk as the edge's second node (KeyClerk: the officer's statement names two
+   nodes). Do not add it to the fleet yet: the fleet takes one key per edge (decision 0026 point 15).
+4. Put the spare's agent in shadow mode (`"mode": "shadow"` in its `agent.json`) and start the pod without the site's
+   address: it pulls and verifies the edge's bundles and keeps its floors, and changes nothing in its Warpgate. A
+   spare kept switched off instead grants nothing at takeover until it reaches the desk once, so on a site that can be
+   cut off, keep it warm.
+
+**Take over**
+1. Power the failed node off, or take it off the network. It must not come back beside the spare.
+2. On the spare: set `"mode": "enforce"` in `agent.json`, give it the site's address, and restart the agent
+   (`podman compose -f deploy/edge/compose.yaml up -d --force-recreate agent`). It applies the leases of the bundle it
+   holds at its first tick and pulls a newer one when it reaches the desk.
+   Announce the address so clients find the spare at once: for IPv4 a gratuitous ARP (`arping -U -c 3 -I <interface>
+   <address>`), for IPv6 an unsolicited neighbour advertisement (from the `ndisc6` package, or by adding the address
+   with `ip -6 addr add`, which sends one after its duplicate check). On IPv6 the kernel first checks that nobody else
+   answers for the address (duplicate address detection) and marks it `dadfailed` if the failed node is still on the
+   network: take that as the sign to finish step 1, not as a fault to work around. IPv6 is not yet walked end to end
+   (see the issue on IPv6 support).
+3. On the core: `python deploy/core/fleet_edge.py --edge <name> --key <the spare's enrolment public key>`, so the fleet
+   takes its reports.
+4. The failed node, once repaired, returns only as the spare: shadow mode, without the site's address.
+
+Not covered yet: the takeover's report to the desk. The agent's `promote` command, which checks the site key's
+promotion statement and reports a break-glass activation (edge protocol 1.5), comes with the agent's protocol 1.5
+release. Until then the desk sees the spare's node start reporting, and the takeover is recorded by the operator.
+
 ## Stop and start
 Stopping an edge makes the system behind it unreachable. Stopping the core leaves open leases running to the bundle's
 horizon and holds new sign-ins and grants. Use `podman compose ... stop` and `start`, not `down`, to keep the same
