@@ -1,7 +1,8 @@
-# 0028: The two-node edge: nothing that grants is replicated; a third vote only for the site's address
+# 0028: A second edge node: a cold spare now; two whole edges designed and kept ready; no replicated database
 
-- Status: proposed (draft 3, 2026-11-06), for the maintainer's decision between options A and B. Nothing built.
-  Amends 0012 HA-1 and 0013 (the Warpgate cluster on PostgreSQL) if A is accepted.
+- Status: accepted (maintainer, 2026-11-06), after three drafts, models, two adversarial reviews, code checks, a lab
+  and a prior-art pass: the cold spare now (point 1 below), option A designed and kept ready behind a trigger,
+  option B rejected. Amends 0012 HA-1 and 0013: the Warpgate cluster on PostgreSQL is withdrawn.
 - Date: 2026-11-06
 - Builds on: 0012 HA-1, 0013 (three votes, the witness by profile, break-glass), 0003 (LDAP lease credentials), 0006
   (working without a network), 0011 (the agent), 0025 (evidence), 0026 (the fleet service); KeyClerk 0031 points 1 and
@@ -22,8 +23,47 @@ In ReliKey the signed bundle is the authority (0011). Warpgate's users, roles an
 the agent, which compares desired with observed state in full on every tick (agent.go reconcile; checked). Replicating
 Warpgate's database replicates a cache, and the election exists only to keep that cache single-writer.
 
+## Decision (accepted 2026-11-06)
+1. **Now: a cold spare.** A site that wants a second box gets a pre-enrolled spare: the edge's second node in the
+   officer's statement (its own enrolment and unlock keys), installed with the same client-facing keys (SSH host key,
+   TLS certificate, SSO client, E3 below), kept powered off or with its agent stopped. Taking over is by hand: an
+   on-site operator powers the failed node off, starts the spare on the site's address and runs
+   `relikey-agent promote` with the site key's promotion statement, which the active node reports as a `break_glass`
+   activation (edge protocol 1.5 section 7.3) and the desk records as an incident. The spare pulls the edge's bundle
+   and serves within minutes; a node that was replaced returns only as the spare, never beside the active node. No
+   arbiter, no witness and no change to KeyClerk's desk: only one node produces at a time, so the desk's per-edge
+   records hold as built. A cut-off site keeps working on its last verified bundle in any case (0006, 0011).
+2. **Option A, designed and kept ready** (the section "Option A" below, with its models and lab evidence): two whole
+   edges sharing nothing that grants, the vote deciding only who holds the site's address. It is built when a
+   customer or pilot site needs automatic failover (a takeover without a person on site, in tens of seconds), and not
+   before: its cost in KeyClerk's core (per-node removals, comparisons, evidence chains, a decommission path, edge
+   protocol 1.6) is then justified by demand. It is built with the four lessons of the appliance pairs: a virtual MAC
+   by default, repeated gratuitous ARP, two heartbeat paths between the nodes (one in the kernel, so a busy agent never
+   looks dead), and a hardware watchdog.
+3. **Option B is rejected.** On two nodes a replicated writer needs three-node consensus and fencing by lease and
+   watchdog on bare metal (every product with a replicated writer has a real arbiter: CyberArk's quorum disk,
+   Patroni's consensus store); its failover is triggered by exactly the partitions an industrial site has (GitHub,
+   21 October 2018: a 43 s partition and an automatic database failover cost a day of reconciliation); the minority
+   side loses access; and it is 64-bit only. KeyClerk prefers B for its own footprint (E2); the cold spare costs the
+   desk nothing either.
+4. **Done regardless:** KeyClerk's two node-2 fixes (the ended notice, phoned unlock; in 0.28.0) and the validity
+   window on the site key's promotion statement (KeyClerk, edge protocol 1.6), which the cold spare's takeover uses.
+
+## Prior art: high availability in appliances and access gateways (2026-11-06)
+- **Firewall pairs** (FortiGate FGCP, Palo Alto HA, Cisco ASA failover) run two units with no third vote and fight
+  split brain only with more heartbeat paths; Fortinet documents "two units, same MAC" as the resulting outage. They
+  move a virtual MAC with the address and send repeated gratuitous ARP (FortiGate: five by default).
+- **Access gateways** (Teleport proxies, StrongDM gateways, CyberArk PSM pools, Boundary workers) put availability in
+  many interchangeable stateless edge nodes; they need their core for new sessions, which a signed, locally verified
+  bundle does not.
+- **A replicated writer always has a real arbiter**: CyberArk Vault's quorum disk, Patroni's consensus store and
+  watchdog, Teleport's and Boundary's consensus backends.
+- **Industrial remote access** (Claroty SRA, Secomea, TOSIBOX, Cyolo): none we could check documents on-site paired
+  high availability that keeps working offline; the site device is a single gateway. A cold spare matches the
+  category; option A would go beyond it.
+
 ## Options
-| | A: two whole edges (proposed) | B: a Warpgate cluster, Patroni + etcd |
+| | A: two whole edges (kept ready) | B: a Warpgate cluster, Patroni + etcd (rejected) |
 |---|---|---|
 | Shared | nothing that grants; the identity clients see (host key, TLS certificate, SSO client) | Warpgate's database |
 | The third vote decides | who holds the site's address | whose database is writable |
@@ -33,7 +73,7 @@ Warpgate's database replicates a cache, and the election exists only to keep tha
 | Kept whole | | one session history, one evidence chain, one lease credential, desk semantics as built |
 | Needs | the node-scoped changes in point 6 (KeyClerk and ReliKey) | PostgreSQL, Patroni, etcd per node; no armv7 |
 
-## Decision (proposed): A
+## Option A, designed and kept ready (built on the trigger in Decision point 2)
 1. **Two whole edges.** Each node is today's single-node pod with its own enrolment key, state, floors, serials, unlock
    key and Warpgate on SQLite, enrolled as one edge's two nodes. Both agents always apply and end sessions on their
    own node, whatever happens to the address or the other node. Nothing that grants access is replicated.
@@ -135,10 +175,14 @@ unreachable, which here buys no safety.
   hours); those need the target hardware or the vendors' documentation.
 
 ## Consequences
-- The 0012/0013 Warpgate cluster on PostgreSQL is withdrawn; the two-node profile is two single-node pods, the
-  arbiter in the agent, shared client-facing keys, and the witness (a compare-and-swap record at the core or on site).
-- armv7 nodes work as single-node edges do.
-- KeyClerk's per-edge structures change as listed; three of them block the profile.
+- The 0012/0013 Warpgate cluster on PostgreSQL is withdrawn. #127 becomes the cold spare: the agent's `promote`
+  command and its `break_glass` activation report, the install of a second node with the edge's shared client-facing
+  keys (SSH host key through `ssh.keys` as in E3, TLS certificate, SSO client), and an operator guide for the
+  takeover. KeyClerk's desk needs no change for it.
+- Option A stays designed: its models, lab prototype and evidence are in `tools/ha_models/`. If it is built, KeyClerk's
+  per-edge structures change as listed in its point 6, and ReliKey's fleet service admits a second node of an edge
+  (an amendment of 0026 point 15, which refuses a second key for an edge today).
+- armv7 nodes work as single-node edges do, as a spare or a second node alike.
 
 ## Changelog
 - 2026-11-06: draft 1 (pg_auto_failover), modelled and reviewed adversarially.
@@ -147,3 +191,5 @@ unreachable, which here buys no safety.
   and a message-level model of the arbiter.
 - 2026-11-06: evidence E1 to E3 on the maintainer's request: the arbiter on an emulated site network, KeyClerk's
   position, one host key on two Warpgate nodes.
+- 2026-11-06: accepted after a prior-art pass on appliances and access gateways: a cold spare now, option A kept
+  ready behind a trigger, option B rejected.
