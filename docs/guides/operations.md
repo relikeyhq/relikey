@@ -196,6 +196,12 @@ automatic failover is designed (0028 option A) and built only when a site needs 
 2. On the spare: set `"mode": "enforce"` in `agent.json`, give it the site's address, and restart the agent
    (`podman compose -f deploy/edge/compose.yaml up -d --force-recreate agent`). It applies the leases of the bundle it
    holds at its first tick and pulls a newer one when it reaches the desk.
+   Announce the address so clients find the spare at once: for IPv4 a gratuitous ARP (`arping -U -c 3 -I <interface>
+   <address>`), for IPv6 an unsolicited neighbour advertisement (from the `ndisc6` package, or by adding the address
+   with `ip -6 addr add`, which sends one after its duplicate check). On IPv6 the kernel first checks that nobody else
+   answers for the address (duplicate address detection) and marks it `dadfailed` if the failed node is still on the
+   network: take that as the sign to finish step 1, not as a fault to work around. IPv6 is not yet walked end to end
+   (see the issue on IPv6 support).
 3. On the core: `python deploy/core/fleet_edge.py --edge <name> --key <the spare's enrolment public key>`, so the fleet
    takes its reports.
 4. The failed node, once repaired, returns only as the spare: shadow mode, without the site's address.
