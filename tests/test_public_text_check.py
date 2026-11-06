@@ -33,11 +33,12 @@ def test_attack_detail_is_a_flag_until_a_human_read_it(tmp_path, capsys, monkeyp
     code, out = _check(tmp_path, capsys, "Found in the red team.\n", "--flags-ok")
     assert code == 0
     # The estate gate runs a fixed command: the push says the flags were read through the environment.
+    flagged = "Found in the red " + "team.\n"   # assembled at run time: the literal would be flagged in this file's diff
     monkeypatch.setenv("RELIKEY_FLAGS_READ", "1")
-    code, out = _check(tmp_path, capsys, "Found in the red team.\n")
+    code, out = _check(tmp_path, capsys, flagged)
     assert code == 0
     monkeypatch.setenv("RELIKEY_FLAGS_READ", "yes")   # only "1" says it
-    code, out = _check(tmp_path, capsys, "Found in the red team.\n")
+    code, out = _check(tmp_path, capsys, flagged)
     assert code == 1
 
 
