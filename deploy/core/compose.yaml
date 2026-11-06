@@ -97,11 +97,15 @@ services:
               # approvals.proofs is required (C-05): without these the signer checks no proof at all, silently -
               # and it is the line behind a compromised desk (found by the full-stack run)
               "--approval-issuer", "${BROKER_URL}/realms/${REALM}", "--approval-audience", "keyclerk-desk",
-              "--approval-jwks", "http://127.0.0.1:8080/realms/${REALM}/protocol/openid-connect/certs"]
+              "--approval-jwks", "http://127.0.0.1:8080/realms/${REALM}/protocol/openid-connect/certs",
+              # KeyClerk 0.29.0: the reconciler's key, the half of mark.key; leases name bastion accounts only from an
+              # identity map sealed under it (install.py writes identity.pub)
+              "--identity-key", "/run/secrets/identity.pub"]
     volumes:
       - ${KEYCLERK_CONFIG:-./keyclerk.yaml}:/etc/keyclerk/keyclerk.yaml:ro
       - ../secrets/records.key:/run/secrets/records.key:ro
-      - signer:/var/lib/keyclerk                 # its own copy of the last revision it signed
+      - ../secrets/identity.pub:/run/secrets/identity.pub:ro
+      - signer:/var/lib/keyclerk                 # its own copy of the last revision it signed, and the edges' bundle key
       - signer-socket:/run/keyclerk
     depends_on: [front]
 

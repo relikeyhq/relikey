@@ -50,7 +50,7 @@ BUSYBOX = pinned_busybox(CORE / "Dockerfile.fleet")   # also fleet_page.py's hel
 
 
 CLERK_READS = ("keyclerk-writer.secret", "keyclerk-reader.secret", "relikey-setup.secret", "keyclerk-mgmt.token", "records.key", "records.pub",
-               "keyclerk-seed.yaml", "people.json", "mark.key")   # compose.yaml: mounted into containers running as KEYCLERK_UID
+               "keyclerk-seed.yaml", "people.json", "mark.key", "identity.pub")   # compose.yaml: mounted into containers running as KEYCLERK_UID
 
 
 def write(name: str, text: str, owner: int | None = KEYCLERK_UID, keep: bool = True) -> Path:
@@ -151,7 +151,63 @@ def leaf_pin(pem_text: str) -> str:
     return hashlib.sha256(x509.load_pem_x509_certificate(pem_text.encode()).public_bytes(serialization.Encoding.DER)).hexdigest()
 
 
+def identity_key_hex(mark_hex: str) -> str:
+    """The reconciler's public key, the half of mark.key that the checking signer pins (KeyClerk 0.29.0, its decision
+    0021 point 2): the reconciler seals the identity map with mark.key, and leases name bastion accounts only from a
+    map under this key. The same derivation as `python -m keyclerk.init identity-key`."""
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+    from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+    try:
+        k = Ed25519PrivateKey.from_private_bytes(bytes.fromhex(mark_hex.strip()))
+    except ValueError:
+        sys.exit(f"{SECRETS / 'mark.key'}: not an Ed25519 private key in 64 hex digits; restore it from the core's "
+                 "backup (the reconciler's high-water mark is signed with it)")
+    return k.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw).hex()
+
+
+def write_identity_key() -> Path:
+    """identity.pub from mark.key, for the signer's --identity-key; rewritten whenever mark.key is (never stale)."""
+    return write("identity.pub", identity_key_hex((SECRETS / "mark.key").read_text(encoding="utf-8")) + "\n",
+                 keep=False)
+
+
+def upgrade_029_main(argv: list[str]) -> int:
+    """An installed core moves to KeyClerk 0.29.0: the checking signer builds every edge bundle and pins the
+    reconciler's identity map. Run it after updating the checkout, before starting the new images: the identity key
+    is derived, the desk's bundle.key is imported into the signer (enrolled edges keep their pin) and removed from the
+    desk, then the reconciler, the signer and the desk start in that order."""
+    a = argparse.ArgumentParser(prog="install.py upgrade-0.29", description=upgrade_029_main.__doc__.splitlines()[0])
+    a.add_argument("--engine", default="podman")
+    o = a.parse_args(argv)
+    if not (SECRETS / "mark.key").exists():
+        sys.exit(f"{SECRETS / 'mark.key'}: missing; this core predates KeyClerk 0.27.0's mark key. Run install.py "
+                 "once on 0.27.0 first (it writes mark.key), then this")
+    write_identity_key()
+    fix_owners(o.engine)
+    compose = [o.engine, "compose", "--env-file", str(SECRETS / "core.env"), "-f", str(CORE / "compose.yaml")]
+    busybox = [o.engine, "run", "--rm", "-v", "relikey-core_desk:/s", BUSYBOX]
+    subprocess.run(compose + ["stop", "desk"], check=True)
+    held = subprocess.run(busybox + ["test", "-f", "/s/bundle.key"], check=False).returncode == 0
+    if held:
+        # the signer's own command, in its own volume; the desk's copy read from the desk's volume
+        subprocess.run(compose + ["run", "--rm", "--no-deps", "-v", "relikey-core_desk:/srv/old-desk:ro", "signer",
+                                  "keyclerk.signer", "import-bundle-key", "--state", "/var/lib/keyclerk",
+                                  "--from", "/srv/old-desk/bundle.key"], check=True)
+        subprocess.run(busybox + ["rm", "/s/bundle.key"], check=True)
+        print("the signer holds the edges' bundle key now; the desk's copy is removed")
+    else:
+        print("the desk holds no bundle.key: nothing to import (a core whose signer already holds it, or that never "
+              "enrolled an edge)")
+    for svc in ("reconcile", "signer", "desk"):   # KeyClerk 0.29.0's order: the map first, then its pin, then the desk
+        subprocess.run(compose + ["up", "-d", "--force-recreate", "--no-deps", svc], check=True)
+    print("upgraded: the reconciler writes the identity map at its next run; until then leases name no bastion account "
+          "and the desk raises identity_map_missing per edge (bundles and revocations keep flowing)")
+    return 0
+
+
 def main() -> int:
+    if sys.argv[1:2] == ["upgrade-0.29"]:
+        return upgrade_029_main(sys.argv[2:])
     a = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     a.add_argument("--broker-host", required=True, help="the broker's name: sign-in for people and edges")
     a.add_argument("--desk-host", required=True, help="the desk's name, for people")
@@ -225,6 +281,7 @@ def main() -> int:
     write("keyclerk-mgmt.token", secrets.token_urlsafe(32) + "\n")   # the desk's management listener bearer (>=32 chars, 0018)
     # the reconciler signs the broker's high-water mark with its own Ed25519 key (KeyClerk 0.27.0): only it reads this
     write("mark.key", secrets.token_bytes(32).hex() + "\n")
+    write_identity_key()   # its public half, which the signer pins for the identity map (KeyClerk 0.29.0)
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
     from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
     if not (SECRETS / "records.key").exists():   # the records key: the signer's alone; the reconciler gets the public half

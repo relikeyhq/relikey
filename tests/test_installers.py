@@ -149,3 +149,63 @@ def test_move_keys_refuses_what_it_cannot_settle(setup, why, nxt, tmp_path, monk
     message = str(refused.value.code)
     assert why in message and nxt in message, message
     assert (secrets / "enrolment.key").exists(), "nothing moved"
+
+
+# KeyClerk 0.29.0: the signer pins the reconciler's identity-map key, the public half of mark.key.
+def test_the_identity_key_is_the_public_half_of_the_mark_key(tmp_path, monkeypatch):
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+    from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
+    secrets = tmp_path / "secrets"
+    secrets.mkdir()
+    k = Ed25519PrivateKey.generate()
+    (secrets / "mark.key").write_text(k.private_bytes_raw().hex() + "\n", encoding="utf-8")
+    mod = installer("core", secrets, monkeypatch)
+    mod.write_identity_key()
+    want = k.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw).hex()
+    assert (secrets / "identity.pub").read_text(encoding="utf-8") == want + "\n"
+    (secrets / "mark.key").write_text("not hex\n", encoding="utf-8")
+    with pytest.raises(SystemExit) as refused:
+        mod.write_identity_key()
+    assert "restore it from the core's backup" in str(refused.value.code)
+
+
+def test_the_signer_pins_the_identity_key():
+    compose = (ROOT / "deploy" / "core" / "compose.yaml").read_text(encoding="utf-8")
+    assert '"--identity-key", "/run/secrets/identity.pub"' in compose
+    assert "../secrets/identity.pub:/run/secrets/identity.pub:ro" in compose
+
+
+def test_upgrade_029_moves_the_bundle_key_into_the_signer_then_starts_in_order(tmp_path, monkeypatch):
+    secrets = tmp_path / "secrets"
+    secrets.mkdir()
+    (secrets / "mark.key").write_text("11" * 32 + "\n", encoding="utf-8")
+    mod = installer("core", secrets, monkeypatch)
+    calls = []
+
+    class Done:
+        returncode = 0
+
+    def run(cmd, **kw):
+        calls.append(cmd)
+        return Done()
+    monkeypatch.setattr(mod.subprocess, "run", run)
+    monkeypatch.setattr(mod, "fix_owners", lambda engine: None)
+    assert mod.upgrade_029_main([]) == 0
+    flat = [" ".join(c) for c in calls]
+    assert any("stop desk" in c for c in flat), "the desk stops first: it refuses edges while it holds a bundle.key"
+    imp = next(i for i, c in enumerate(flat) if "import-bundle-key" in c)
+    rm = next(i for i, c in enumerate(flat) if c.endswith("rm /s/bundle.key"))
+    assert imp < rm, "the desk's copy goes only after the signer took it"
+    ups = [c.split()[-1] for c in flat if "up -d --force-recreate" in c]
+    assert ups == ["reconcile", "signer", "desk"], "KeyClerk 0.29.0's order: the map, its pin, then the desk"
+    assert (secrets / "identity.pub").exists()
+
+
+def test_upgrade_029_refuses_a_core_without_a_mark_key(tmp_path, monkeypatch):
+    secrets = tmp_path / "secrets"
+    secrets.mkdir()
+    mod = installer("core", secrets, monkeypatch)
+    with pytest.raises(SystemExit) as refused:
+        mod.upgrade_029_main([])
+    message = str(refused.value.code)
+    assert "predates KeyClerk 0.27.0" in message and "then this" in message
