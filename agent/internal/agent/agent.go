@@ -106,6 +106,11 @@ type Agent struct {
 	// held are the roles each managed user held for a live lease at the end of the last tick (observed, or granted
 	// in it): one missing now while its lease is still live was removed by someone other than the agent.
 	held map[string]map[string]bool
+	// The time anchor (edge protocol 1.5, section 1): the trusted time ratcheted at every tick, the boot reading it was
+	// taken at and that boot's id, in memory; stored when an hour past the stored one.
+	anchor       time.Time
+	anchorBoot   time.Duration
+	anchorBootID string
 	// digest is the content digest of the last bundle pulled (kcedge.ContentDigest): an answer with the same content
 	// that came at once means the desk did not hold the long-poll (over its cap, or older than KeyClerk 0026).
 	digest string
@@ -195,6 +200,8 @@ type Clerk interface {
 	SendReport(ctx context.Context, r keyclerk.Report) error
 	// SendIncident posts an incident; a *keyclerk.StatusError of 4xx means the desk will never take it.
 	SendIncident(ctx context.Context, in keyclerk.Incident) error
+	// Time asks for the desk's time (edge protocol 1.5): the sealed answer and the request's nonce.
+	Time(ctx context.Context) (*kcedge.Sealed, string, error)
 	EnrolmentKey() ed25519.PublicKey
 	// Email fetches a lease's verified address (edge protocol 1.3): the sealed answer and the request's nonce.
 	Email(ctx context.Context, leaseID string) (*kcedge.Sealed, string, error)
@@ -426,11 +433,38 @@ func (a *Agent) handlePull(ctx context.Context, got keyclerk.Pulled, err error) 
 		return // an ended edge never takes a bundle again (re-enrol to use it)
 	}
 	issued, serial, ierr := kcedge.Issued(*got.Bundle, a.Pins)
-	if ierr == nil && serial == rec.Floors.Serial {
+	same := ierr == nil && serial == rec.Floors.Serial
+	if cur := a.Clock.BootID(); cur != "" && rec.BootID != cur {
+		// no anchor in this boot (a reboot, or the first bundle): the desk's time first, never the edge's own clock, so a
+		// held-back bundle delivered after a wall clock set back cannot re-anchor the edge in the past (edge protocol 1.5).
+		// Asked before the same-bundle shortcut: a bundle stored without it must not wait for a new serial.
+		at, boot, err := a.deskTime(ctx)
+		if err != nil {
+			if same { // stored already, its reductions with it
+				a.st.LastRefusal = "no bundle is live after a reboot until the desk's time verifies: " + err.Error()
+			} else {
+				a.storeReductions(rec, got, err)
+			}
+			a.report(ctx, a.Store.Get())
+			return
+		}
+		rec.BootID, rec.BootAtVerify, rec.WallAtVerify = cur, int64(boot), formatWall(at)
+		rec.StartAt, rec.StartBoot = formatWall(at), int64(a.Clock.Boot()) // verified time, at its arrival
+		if same {                                                          // the stored bundle, now anchored on the desk's time: live from here
+			if err := a.Store.Save(rec); err != nil {
+				a.Log.Error("cannot store the time anchor", "err", err)
+				return
+			}
+			a.reconcile(ctx)
+			a.report(ctx, a.Store.Get())
+			return
+		}
+	}
+	if same {
 		a.report(ctx, rec)
 		return // the same bundle again: nothing new
 	}
-	now, _ := clock.Trusted(a.Clock, parseWall(rec.WallAtVerify), a.bootAtVerify(rec), kcedge.Skew)
+	now, _ := a.trustedNow(rec)
 	applied, err := kcedge.VerifyBundle(*got.Bundle, a.Pins, rec.Floors, now, kcedge.CeilingPolicyGo)
 	if err != nil {
 		a.refused(err.Error())
@@ -439,6 +473,12 @@ func (a *Agent) handlePull(ctx context.Context, got keyclerk.Pulled, err error) 
 	}
 	rec.Floors, rec.Bundle = applied.State, got.Bundle
 	rec.BootID, rec.BootAtVerify, rec.WallAtVerify = a.Clock.BootID(), int64(a.Clock.Boot()), formatWall(now)
+	// the start anchor: the newest verified time, carried by the boot clock to now (a held-back bundle's old issue
+	// time only delays starts)
+	if boot := a.Clock.Boot(); rec.StartAt == "" ||
+		issued.After(parseWall(rec.StartAt).Add(boot-time.Duration(rec.StartBoot))) {
+		rec.StartAt, rec.StartBoot = formatWall(issued), int64(boot)
+	}
 	// Floors and the bundle are stored before anything is applied: a crash after this
 	// re-applies from the stored bundle, never leaving a refused serial with stale state.
 	// A new serial is stored even when its content equals the bundle held: the serial and the
@@ -467,6 +507,73 @@ func (a *Agent) refused(why string) {
 	a.emitRefused(why)
 }
 
+// storeReductions keeps what a bundle takes away while the desk's time has not verified after a reboot (edge protocol
+// 1.5): the bundle is verified against the wall clock and stored with its floors, so its revocations and ends count at
+// once and an older bundle is refused from now on. Nothing is live until the time answer: the record keeps the
+// previous boot id, so live() still holds every lease back.
+func (a *Agent) storeReductions(rec state.Record, got keyclerk.Pulled, timeErr error) {
+	why := "no bundle is live after a reboot until the desk's time verifies: " + timeErr.Error()
+	applied, err := kcedge.VerifyBundle(*got.Bundle, a.Pins, rec.Floors, a.Clock.Now(), kcedge.CeilingPolicyGo)
+	if err != nil {
+		a.refused(why + "; the bundle itself is refused: " + err.Error())
+		return
+	}
+	rec.Floors, rec.Bundle = applied.State, got.Bundle
+	if err := a.Store.Save(rec); err != nil {
+		a.Log.Error("cannot store the bundle's reductions", "err", err)
+	}
+	a.refused(why + "; its reductions are stored")
+}
+
+// deskTime asks the desk for its time and verifies it (edge protocol 1.5): this edge, this request's nonce, within
+// kcedge.TimeMaxWait on the boot clock. It returns the desk's time and the boot reading taken at the request, so the
+// anchor errs early (leases end early, never late).
+func (a *Agent) deskTime(ctx context.Context) (time.Time, time.Duration, error) {
+	boot := a.Clock.Boot()
+	tctx, cancel := context.WithTimeout(ctx, kcedge.TimeMaxWait)
+	defer cancel()
+	s, nonce, err := a.Clerk.Time(tctx)
+	if err != nil {
+		return time.Time{}, 0, err
+	}
+	at, err := kcedge.VerifyTime(*s, a.Pins, nonce, a.Clock.Boot()-boot)
+	return at, boot, err
+}
+
+// trustedNow is the moment the agent acts on. Within the boot of the last verified bundle it ratchets the anchor first
+// (clock.Ratchet: the later of the wall clock and the anchor carried by the boot clock), so a boot clock frozen while
+// the wall clock stays right, then a wall clock set back, cannot stretch a lease (edge protocol 1.5, relikeyhq/relikey
+// #125). An anchor an hour or more past the stored one is stored, so a restart within the boot keeps it; ticks in
+// between write nothing (flash).
+func (a *Agent) trustedNow(rec state.Record) (time.Time, bool) {
+	wallAt, bootAt := parseWall(rec.WallAtVerify), a.bootAtVerify(rec)
+	if bootAt < 0 || wallAt.IsZero() {
+		a.anchor = time.Time{}
+		return clock.Trusted(a.Clock, wallAt, bootAt, kcedge.Skew)
+	}
+	// the later of the stored anchor and the one in memory, both carried to now: a save of an older record (another
+	// part of the tick writing what it read before) can never pull the anchor back
+	boot := a.Clock.Boot()
+	carried := wallAt.Add(boot - bootAt)
+	if !a.anchor.IsZero() && a.anchorBootID == rec.BootID {
+		if mem := a.anchor.Add(boot - a.anchorBoot); mem.After(carried) {
+			carried = mem
+		}
+	}
+	a.anchor, a.anchorBoot = clock.Ratchet(carried, boot, boot, a.Clock.Now())
+	a.anchorBootID = rec.BootID
+	if a.anchor.Sub(wallAt) >= time.Hour {
+		cur := a.Store.Get()
+		if cur.BootID == rec.BootID && cur.WallAtVerify == rec.WallAtVerify {
+			cur.WallAtVerify, cur.BootAtVerify = formatWall(a.anchor), int64(a.anchorBoot)
+			if err := a.Store.Save(cur); err != nil {
+				a.Log.Error("cannot store the time anchor; a restart falls back to the last stored one", "err", err)
+			}
+		}
+	}
+	return clock.Trusted(a.Clock, a.anchor, a.anchorBoot, kcedge.Skew)
+}
+
 func (a *Agent) bootAtVerify(rec state.Record) time.Duration {
 	if rec.BootID == "" || rec.BootID != a.Clock.BootID() || rec.BootAtVerify <= 0 {
 		return -1
@@ -477,13 +584,13 @@ func (a *Agent) bootAtVerify(rec state.Record) time.Duration {
 // live is what the stored bundle allows at the trusted moment, with the reasons when
 // nothing is live.
 func (a *Agent) live(rec state.Record) (live, time.Time, []string) {
-	now, skewed := clock.Trusted(a.Clock, parseWall(rec.WallAtVerify), a.bootAtVerify(rec), kcedge.Skew)
+	now, skewed := a.trustedNow(rec)
 	switch {
 	case rec.Ended:
 		return live{}, now, []string{"the desk ended this edge: no access"}
 	case rec.Bundle == nil:
 		return live{}, now, []string{"no verified bundle yet: no access"}
-	case rec.BootID != "" && a.Clock.BootID() != "" && rec.BootID != a.Clock.BootID():
+	case a.Clock.BootID() != "" && rec.BootID != a.Clock.BootID():
 		// Elapsed time across a reboot is unknown on a basic edge (no TPM clock).
 		return live{}, now, []string{"rebooted since the last verified bundle: no lease is live until a fresh bundle verifies"}
 	}
@@ -493,7 +600,12 @@ func (a *Agent) live(rec state.Record) (live, time.Time, []string) {
 		drift = append(drift, "the wall clock and the boot clock disagree by more than 5 minutes: "+
 			"the later time is used, so leases end early rather than late")
 	}
-	applied, err := kcedge.LiveAt(*rec.Bundle, a.Pins, now, kcedge.CeilingPolicyGo)
+	start, ok := clock.StartTime(a.Clock.Now(), parseWall(rec.StartAt), time.Duration(rec.StartBoot), a.Clock.Boot(),
+		rec.StartAt != "" && rec.BootID == a.Clock.BootID())
+	if !ok { // no verified time in this boot: nothing starts (a lease that started before ends as usual)
+		start = time.Time{}
+	}
+	applied, err := kcedge.LiveAt(*rec.Bundle, a.Pins, now, start, kcedge.CeilingPolicyGo)
 	if err != nil {
 		return live{}, now, append(drift, "the stored bundle no longer verifies: no access ("+err.Error()+")")
 	}

@@ -27,7 +27,8 @@ A = Path("internal/apply")
 G = Path("internal/agent")
 MUTANTS = [
     ("the ceiling policy is not run on the tick", G / "agent.go",
-     "kcedge.LiveAt(*rec.Bundle, a.Pins, now, kcedge.CeilingPolicyGo)", "kcedge.LiveAt(*rec.Bundle, a.Pins, now, nil)"),
+     "kcedge.LiveAt(*rec.Bundle, a.Pins, now, start, kcedge.CeilingPolicyGo)",
+     "kcedge.LiveAt(*rec.Bundle, a.Pins, now, start, nil)"),
     ("the ceiling refuses no one", K / "ceiling.go",
      "\tif !inside {\n", "\tif false {\n"),
     ("two people may share a username", A / "apply.go",
@@ -67,9 +68,9 @@ MUTANTS = [
     ("a failing metrics copy rewrites the status on every tick (flash wear)", G / "agent.go",
      "\tst.MetricsDirFailures = 0\n", ""),
     ("a same-content bundle with a new serial is not stored (its floors are lost: an older bundle replays)",
-     G / "agent.go", "\trec.Floors, rec.Bundle = applied.State, got.Bundle\n",
+     G / "agent.go", "\trec.Floors, rec.Bundle = applied.State, got.Bundle\n\trec.BootID, rec.BootAtVerify",
      "\tif d, _ := kcedge.ContentDigest(*got.Bundle, a.Pins); d == a.digest {\n\t\treturn\n\t}\n"
-     "\trec.Floors, rec.Bundle = applied.State, got.Bundle\n"),
+     "\trec.Floors, rec.Bundle = applied.State, got.Bundle\n\trec.BootID, rec.BootAtVerify"),
     ("an address the desk learns after the lease went live is never asked for again", Path("internal/agent") / "agent.go",
      "|| (f.ok && !f.has && time.Since(f.tried) >= noAddressRetry)", "|| (false && f.ok && !f.has && time.Since(f.tried) >= noAddressRetry)"),
     ("a transient read of the bastion is not asked again within the tick", Path("internal/agent") / "agent.go",
@@ -209,7 +210,8 @@ MUTANTS = [
     ("a second key for a slot is answered as taken in", Path("../fleet/internal/fleet") / "server.go",
      "case errors.Is(err, enrol.ErrTaken):", "case false && errors.Is(err, enrol.ErrTaken):"),
     ("an e-mail answer to another request is taken", Path("internal/kcedge") / "sealed.go",
-     'if obj["nonce"] != nonce {', 'if false && obj["nonce"] != nonce {'),
+     'errs = append(errs, "an answer for another lease")\n\t}\n\tif obj["nonce"] != nonce {',
+     'errs = append(errs, "an answer for another lease")\n\t}\n\tif false && obj["nonce"] != nonce {'),
     ("an e-mail answer for another lease is taken", Path("internal/kcedge") / "sealed.go",
      'if obj["lease_id"] != leaseID {', 'if false && obj["lease_id"] != leaseID {'),
     ("a 1.3 lease never gets its address", Path("internal/agent") / "agent.go",
@@ -267,10 +269,30 @@ MUTANTS = [
      "age <= time.Duration(horizon)*time.Hour &&\n\t\t\t!slices.Contains(*b.Revoked, x.LeaseID)",
      "age <= time.Duration(horizon)*time.Hour"),
     ("revoked visit leases stay live", K / "bundle.go",
-     "now.Before(until) && !slices.Contains(*b.Revoked, x.LeaseID) {\n\t\t\tx.Ends = until\n\t\t\tout.VisitLeases",
-     "now.Before(until) {\n\t\t\tx.Ends = until\n\t\t\tout.VisitLeases"),
+     "leaseLive(from, until, now, nowStart) && !slices.Contains(*b.Revoked, x.LeaseID) {\n\t\t\tx.Ends = until\n\t\t\tout.VisitLeases",
+     "leaseLive(from, until, now, nowStart) {\n\t\t\tx.Ends = until\n\t\t\tout.VisitLeases"),
     ("leases live before their start", K / "bundle.go",
-     "if !from.After(now) && now.Before(until) && age", "if now.Before(until) && age"),
+     "\treturn !from.After(nowStart) && now.Before(until)", "\treturn now.Before(until)"),
+    ("the ratchet ignores the wall clock (a frozen boot clock loses time)", Path("internal/clock") / "clock.go",
+     "\tif wall.After(carried) {\n\t\treturn wall, boot", "\tif false {\n\t\treturn wall, boot"),
+    ("a bundle goes live after a reboot without the desk's time", G / "agent.go",
+     "if cur := a.Clock.BootID(); cur != \"\" && rec.BootID != cur {",
+     "if cur := a.Clock.BootID(); false && cur != \"\" && rec.BootID != cur {"),
+    ("a time answer held back past the wait is taken", Path("internal/kcedge") / "sealed.go",
+     "\tif waited < 0 || waited > TimeMaxWait {", "\tif false {"),
+    ("a time answer to another request is taken", Path("internal/kcedge") / "sealed.go",
+     'if obj["nonce"] != nonce {\n\t\terrs = append(errs, "an answer to another request: replayed")\n\t}\n\tif waited',
+     'if false && obj["nonce"] != nonce {\n\t\terrs = append(errs, "an answer to another request: replayed")\n\t}\n\tif waited'),
+    ("starts are judged on the trusted time (a wall set forward opens a later start)", G / "agent.go",
+     "\tif !ok { // no verified time in this boot: nothing starts",
+     "\tstart = now\n\tif !ok { // no verified time in this boot: nothing starts"),
+    # Two guards hold a lease back after a reboot until verified time arrives, each on its own: the reboot lock (a
+    # stored boot other than this one, a fresh install's empty one included) and the start gate (no start anchor in
+    # this boot, nothing starts). Removing either alone changes nothing a test can see, so neither is a mutant here;
+    # both stay, as layers.
+    ("a bundle's reductions wait for the desk's time", G / "agent.go",
+     "\trec.Floors, rec.Bundle = applied.State, got.Bundle\n\tif err := a.Store.Save(rec); err != nil {\n\t\ta.Log.Error(\"cannot store the bundle's reductions\"",
+     "\t_ = applied\n\tif err := error(nil); err != nil {\n\t\ta.Log.Error(\"cannot store the bundle's reductions\""),
     ("the ceiling key set is not checked", K / "bundle.go",
      "\tif !sameKeys(c, ceilingKeys) {\n\t\treturn []string{\"a ceiling has exactly \"", "\tif false {\n\t\treturn []string{\"a ceiling has exactly \""),
     ("the ceiling signature is not checked", K / "bundle.go",
@@ -405,6 +427,7 @@ TEST_INPUTS = {
     "agent/internal/agent": ("brand/mark/geometry.json",),   # page_test.go: the mark's geometry
     "agent/internal/apply": ("agent/internal/agent/",),       # seam_test.go: the agent package's imports
     "fleet/internal/fleet": ("deploy/edge/install.py",),      # enrolled_test.go: the edge installer's enrolment
+    "agent/internal/clock": ("agent/internal/kcedge/testdata/edge.json",),   # vectors_test.go: KeyClerk's time vectors
 }
 
 

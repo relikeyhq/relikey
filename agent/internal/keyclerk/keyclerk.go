@@ -287,6 +287,23 @@ var ErrRateLimited = errors.New("the desk limits e-mail requests for this lease:
 
 // Email asks the desk for a lease's verified address (edge protocol 1.3, GET /api/v1/edge/lease/{id}/email). It returns
 // the sealed answer and the nonce this request was signed with: the caller verifies both (kcedge.VerifyEmail).
+// Time asks the desk for its time (edge protocol 1.5): the sealed answer and the request's nonce, which the answer
+// must echo (kcedge.VerifyTime).
+func (c *Client) Time(ctx context.Context) (*kcedge.Sealed, string, error) {
+	status, b, nonce, err := c.callNonce(ctx, c.HTTP, http.MethodGet, "/api/v1/edge/time", nil, 16<<10)
+	if err != nil {
+		return nil, "", err
+	}
+	if status != http.StatusOK {
+		return nil, "", &StatusError{Status: status, Body: string(b[:min(len(b), 200)])}
+	}
+	var s kcedge.Sealed
+	if err := json.Unmarshal(b, &s, json.RejectUnknownMembers(true)); err != nil {
+		return nil, "", fmt.Errorf("the time answer is not a sealed object: %w", err)
+	}
+	return &s, nonce, nil
+}
+
 func (c *Client) Email(ctx context.Context, leaseID string) (*kcedge.Sealed, string, error) {
 	status, b, nonce, err := c.callNonce(ctx, c.HTTP, http.MethodGet, "/api/v1/edge/lease/"+url.PathEscape(leaseID)+"/email", nil,
 		16<<10)

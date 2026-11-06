@@ -13,6 +13,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Sealed is a signed object on the wire: exactly {"bytes": base64 canonical JSON,
@@ -362,4 +363,45 @@ func VerifyEmail(s Sealed, pins Pins, leaseID, nonce string) (email string, has 
 		return "", false, errors.New(errorList(errs))
 	}
 	return email, has, nil
+}
+
+// TimeFormat is the desk's time for an edge's own time request (edge protocol 1.5, section 1): after a reboot an edge
+// anchors on it before any bundle is live again.
+const TimeFormat = "kc-edge-time-v1"
+
+// TimeMaxWait is how long after the request, on the edge's boot clock, the desk's time may arrive: an answer held back
+// longer could move the anchor back.
+const TimeMaxWait = 30 * time.Second
+
+// VerifyTime is keyclerk.edge.verify_time: the answer to this edge's own GET /edge/time, sealed by the pinned bundle
+// key, for this edge, echoing this request's nonce, arrived within TimeMaxWait of the request on the boot clock
+// (waited). It returns the desk's issued time, the anchor after a reboot.
+func VerifyTime(s Sealed, pins Pins, nonce string, waited time.Duration) (time.Time, error) {
+	obj, _, err := Unseal(s, pins.BundleKey, TimeFormat)
+	if err != nil {
+		return time.Time{}, err
+	}
+	t, ok := obj["issued"].(string)
+	if !ok {
+		return time.Time{}, errors.New("issued: a UTC time")
+	}
+	issued, err := ParseTime(t)
+	if err != nil {
+		return time.Time{}, err
+	}
+	var errs []string
+	if obj["edge"] != pins.Edge {
+		errs = append(errs, "an answer for another edge")
+	}
+	if obj["nonce"] != nonce {
+		errs = append(errs, "an answer to another request: replayed")
+	}
+	if waited < 0 || waited > TimeMaxWait {
+		errs = append(errs, fmt.Sprintf("the answer arrived more than %d s after the request on the boot clock: held back",
+			int(TimeMaxWait/time.Second)))
+	}
+	if len(errs) > 0 {
+		return time.Time{}, errors.New(strings.Join(errs, "; "))
+	}
+	return issued, nil
 }

@@ -1,14 +1,14 @@
 # The KeyClerk edge interface
 
 **Source of truth:** `docs/keyclerk-edge-interface.md` in the KeyClerk repository (github.com/keyclerk/keyclerk) and
-the edge protocol specification (github.com/keyclerk/edge-protocol). The agent's vectors come from KeyClerk v0.27.0
+the edge protocol specification (github.com/keyclerk/edge-protocol). The agent's vectors come from KeyClerk v0.28.0
 (`agent/internal/kcedge/testdata/SOURCE`, regenerated with `regen.py`); the core image pins KeyClerk 0.27.0. The
-sections below map edge protocol 1.1 to 1.4; the rest of this page records the port at v0.23.0 (commit bd6620f),
+sections below map edge protocol 1.1 to 1.5; the rest of this page records the port at v0.23.0 (commit bd6620f),
 with KeyClerk decision 0014 and amendments 0014a to 0014d. v0.21.2 and v0.22.0 fixed the
 Go port's findings KC-1 to KC-3 and KC-5 to KC-11 (`a review record kept with the maintainer`); v0.23.0
 adopts KC-4 (amendment 0014d, one signing mode over exact bytes), R-19 (kc-unlock-v2 over P-256) and AG-18 (the ended
 notice bound to the enrolment keys it ends), and names policy modules by hash. The reference implementation is
-`keyclerk/edge.py`; `tests/conformance/edge.json` held 107 cases with fixed keys at v0.23.0 and holds 147 at v0.27.0
+`keyclerk/edge.py`; `tests/conformance/edge.json` held 107 cases with fixed keys at v0.23.0 and holds 194 at v0.28.0
 (policy, bundle verifier, and the families statements, ceilings, ended, unlock, module_bytes, requests, email,
 ceiling_hours, reports); tooling is `python -m keyclerk.edge_cli`. ReliKey's agent conforms to that document and those
 vectors (all pass; the reports family is the desk's side), plus ReliKey's own tests for guards the set does not
@@ -31,6 +31,17 @@ exercise; this page only maps it to ReliKey.
 | ceiling hours rounded up | `leaseHours`, whole hours rounded up, at least one ([#107](https://github.com/relikeyhq/relikey/pull/107)); the `ceiling_hours` vectors |
 
 A report carrying every 1.4 member, shaped as the agent sends it, passes KeyClerk 0.27.0's own report checks.
+
+## Edge protocol 1.5 (KeyClerk 0.28.0)
+| Edge protocol | The agent |
+|---|---|
+| the trusted time (section 1): the wall clock, or the wall clock at the last verified bundle plus the boot clock since it when that is more than 5 minutes later; nothing live after a reboot until a fresh bundle verifies | `trustedNow` from the clock's anchor; the vectors' `trusted_time` family (7) |
+| the ratchet: at least once an hour a new anchor, the later of the wall clock and the anchor plus the boot clock since (#125) | `clock.Ratchet` on the raw readings, kept in the state; the `ratchet` family (4) |
+| a start judged on the earlier reading (`now_start`), from a start anchor set only by verified time | `clock.StartTime`, `LiveAt(now, nowStart)`; the `start_time` family (5) and the three admit cases |
+| the desk's time after a reboot, `GET /api/v1/edge/time`, a sealed `kc-edge-time-v1` bound to the request's nonce | `kcedge.VerifyTime` within 30 s on the boot clock; reductions are stored before it arrives; the `time` family (6) |
+| relay certificates and the site key (section 14) | not read yet: the agent has no relay; the `relays` family (11) waits for it |
+
+A Linux agent from 1.5 needs a 1.5 desk (KeyClerk 0.28.0): after a reboot it asks the desk's time before anything is live.
 
 A lease's `person` is opaque to the agent (on a desk with the signed change log it is KeyClerk's internal anchor).
 

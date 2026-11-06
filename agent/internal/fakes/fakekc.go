@@ -133,7 +133,10 @@ type KeyClerk struct {
 	Reports []jsontext.Value
 	// Incidents are the incidents the desk took; IncidentsRefused counts the ones it refused (edge protocol 1.4: a
 	// lease_ended_early for a lease not in the last bundle).
-	Incidents        []map[string]string
+	Incidents []map[string]string
+	// TimeRequests counts GET /edge/time; NoTime answers it 404, as a desk before edge protocol 1.5 does.
+	TimeRequests     int
+	NoTime           bool
 	IncidentsRefused int
 }
 
@@ -354,6 +357,16 @@ func (k *KeyClerk) Handler() http.Handler {
 		writeJSON(rw, 200, map[string]string{"name": "ceiling", "sha256": hex.EncodeToString(sum[:]),
 			"wasm": base64.StdEncoding.EncodeToString(k.Module)})
 	}))
+	mux.HandleFunc("GET /api/v1/edge/time", guard(func(rw http.ResponseWriter, r *http.Request, _ []byte) {
+		k.TimeRequests++
+		if k.NoTime {
+			writeJSON(rw, 404, map[string]string{"error": "not found"})
+			return
+		}
+		nonce := strings.Split(r.Header.Get(kcedge.RequestHeader), ";")[2]
+		writeJSON(rw, 200, Seal(k.BundleKey, kcedge.Object{"edge": k.Edge, "nonce": nonce, "issued": iso(k.Now())},
+			kcedge.TimeFormat))
+	}))
 	mux.HandleFunc("POST /api/v1/edge/incident", guard(func(rw http.ResponseWriter, r *http.Request, body []byte) {
 		var in map[string]string
 		if json.Unmarshal(body, &in) != nil || in["kind"] == "" {
@@ -392,6 +405,20 @@ func (k *KeyClerk) Handler() http.Handler {
 		writeJSON(rw, 200, map[string]bool{"ok": true})
 	}))
 	return mux
+}
+
+// SetNoTime makes the desk answer GET /edge/time 404 (a desk before edge protocol 1.5), or serve it again.
+func (k *KeyClerk) SetNoTime(no bool) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	k.NoTime = no
+}
+
+// TimeAsked is how many times the edge asked for the desk's time.
+func (k *KeyClerk) TimeAsked() int {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	return k.TimeRequests
 }
 
 // TakenIncidents returns a copy of the incidents the desk took, and how many it refused.
