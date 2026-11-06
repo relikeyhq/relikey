@@ -149,3 +149,55 @@ def test_move_keys_refuses_what_it_cannot_settle(setup, why, nxt, tmp_path, monk
     message = str(refused.value.code)
     assert why in message and nxt in message, message
     assert (secrets / "enrolment.key").exists(), "nothing moved"
+
+
+# Decision 0028: the cold spare shows people what the active node shows (its SSH host key, the front's certificate).
+OPENSSH_PEM = "-----BEGIN OPENSSH " + "PRIVATE KEY-----"   # assembled: the literal reads as a key to the leak scan
+
+
+def test_the_site_host_key_is_an_openssh_ed25519_key_with_its_fingerprint(tmp_path, monkeypatch):
+    from cryptography.hazmat.primitives.serialization import load_ssh_private_key
+    mod = installer("edge", tmp_path / "secrets", monkeypatch)
+    pem, fp = mod.site_host_key()
+    assert pem.startswith(OPENSSH_PEM)
+    assert load_ssh_private_key(pem.encode(), password=None) is not None
+    assert fp.startswith("SHA256:") and len(fp) == 50 and "=" not in fp
+    assert mod.site_host_key()[0] != pem, "a new key each time"
+
+
+def test_warpgate_reads_the_site_key_from_its_keys_path(tmp_path, monkeypatch):
+    mod = installer("edge", tmp_path / "secrets", monkeypatch)
+    assert mod.with_site_keys({"ssh": {"enable": True}}) == {"ssh": {"enable": True, "keys": "/data/keys"}}
+    assert mod.with_site_keys({}) == {"ssh": {"keys": "/data/keys"}}
+
+
+def test_site_keys_out_makes_the_set_from_an_installed_node(tmp_path, monkeypatch):
+    secrets = tmp_path / "secrets"
+    secrets.mkdir()
+    (secrets / "front.crt").write_text("CERT\n", encoding="utf-8")
+    (secrets / "front.key").write_text("KEY\n", encoding="utf-8")
+    mod = installer("edge", secrets, monkeypatch)
+    out = tmp_path / "site"
+    assert mod.site_keys_main(["--out", str(out)]) == 0
+    assert sorted(p.name for p in out.iterdir()) == sorted(mod.SITE_FILES)
+    assert (out / "site.crt").read_text(encoding="utf-8") == "CERT\n"
+    assert (out / "site.key").read_text(encoding="utf-8") == "KEY\n"
+    assert (out / "host-ed25519").read_text(encoding="utf-8").startswith(OPENSSH_PEM)
+    with pytest.raises(SystemExit) as refused:   # never into an existing directory: no older set mixed in
+        mod.site_keys_main(["--out", str(out)])
+    assert "exists" in str(refused.value.code) and "new directory" in str(refused.value.code)
+
+
+@pytest.mark.parametrize("args,why,nxt", [
+    (["site-keys", "--out", "{tmp}/site"], "no front certificate and key", "run this on an installed node"),
+    (["site-keys", "--apply", "{tmp}/empty"], "missing", "site-keys --out DIR"),
+    (EDGE + ["--site-keys", "{tmp}/empty"], "missing", "carry DIR here whole"),
+], ids=["out on a node not installed", "apply an incomplete set", "install with an incomplete set"])
+def test_site_keys_refusals_say_why_and_what_to_do_next(args, why, nxt, tmp_path, monkeypatch):
+    (tmp_path / "empty").mkdir()
+    mod = installer("edge", tmp_path / "secrets", monkeypatch)
+    monkeypatch.setattr(sys, "argv", ["install.py"] + [a.replace("{tmp}", str(tmp_path)) for a in args])
+    with pytest.raises(SystemExit) as refused:
+        mod.main()
+    message = str(refused.value.code)
+    assert why in message and nxt in message, message

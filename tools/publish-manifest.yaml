@@ -62,6 +62,8 @@ holdback:
   - deploy/secrets/
   # the identity patterns the export refuses (publishing them would leak them)
   - tools/publish-private.yaml
+  # the internal repository's estate-gate facts (ci false, mirror authority); the public one is .github/kit.yaml
+  - kit.yaml
   # the brand's working material (rejected concepts, mockups, the category scan): the public repo gets the result
   - brand/concepts/
   - brand/scan.json
