@@ -110,6 +110,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--flags-ok", action="store_true", help="flags were read by a human: report, do not fail")
     ap.add_argument("--strict", action="store_true", help="fail if gitleaks is not installed (--range)")
     args = ap.parse_args(argv)
+    # The estate gate runs this with a fixed command line; flags read by a human are said by the environment instead
+    # (RELIKEY_FLAGS_READ=1 on the push, as the hook took it before).
+    args.flags_ok = args.flags_ok or os.environ.get("RELIKEY_FLAGS_READ") == "1"
 
     pats = load_patterns()
     lines = text_lines(args.text) if args.text else range_lines(args.range)

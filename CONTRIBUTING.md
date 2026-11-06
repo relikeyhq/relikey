@@ -1,7 +1,8 @@
 # Contributing
 
 - Every change keeps the gate green: `python tools/check_model.py` and `python -m pytest`; the pre-push hook runs both
-  (`git config core.hooksPath hooks`).
+  (`git config core.hooksPath hooks`; it needs PyYAML). For maintainers it is the estate gate; without that, as for a
+  contributor, it runs the facts in `.github/kit.yaml` itself. CI and the merge queue are the record either way.
 - ReliKey forks and patches no component (decision 0001). Code that a contract needs goes into a KeyClerk plugin or
   upstream.
 - ReliKey names no deployment, customer or site; the model check fails if a file does.
