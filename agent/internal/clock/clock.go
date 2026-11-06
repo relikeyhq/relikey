@@ -81,3 +81,31 @@ func NamespaceOffsets(content string) (string, error) {
 	}
 	return strings.Join(offset, ", "), nil
 }
+
+// Ratchet is the anchor an edge records at each wake (edge protocol 1.5, section 1): the later of the wall clock and
+// the anchor carried forward by the boot clock, from the raw readings (never Trusted's skew-tolerant result, whose lag
+// would grow by up to the skew at every wake). A boot clock frozen while the wall clock stays right (a paused virtual
+// machine) loses nothing, and a wall clock set back after the thaw cannot pull the anchor back. Both clocks held back
+// together is beyond what the edge can see. It returns the new anchor and the boot reading it was taken at.
+func Ratchet(anchor time.Time, bootAtAnchor, boot time.Duration, wall time.Time) (time.Time, time.Duration) {
+	carried := anchor.Add(boot - bootAtAnchor)
+	if wall.After(carried) {
+		return wall, boot
+	}
+	return carried, boot
+}
+
+// StartTime is the earlier reading a start is judged on (edge protocol 1.5, keyclerk.edge.start_time): the earlier of
+// the wall clock and the start anchor carried by the boot clock. The start anchor is verified time only (the newest
+// verified bundle's issue time or the desk's time answer, with the boot reading at its arrival), never the ratchet's
+// anchor, which a wall clock set forward raises at the next wake. A frozen boot clock only lowers it: a start is
+// delayed, never opened early. ok is false after a reboot until verified time arrives: nothing starts.
+func StartTime(wall, signedAt time.Time, bootAtSigned, boot time.Duration, sameBoot bool) (time.Time, bool) {
+	if !sameBoot || signedAt.IsZero() || bootAtSigned < 0 {
+		return time.Time{}, false
+	}
+	if carried := signedAt.Add(boot - bootAtSigned); carried.Before(wall) {
+		return carried, true
+	}
+	return wall, true
+}

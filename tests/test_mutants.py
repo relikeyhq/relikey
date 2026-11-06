@@ -46,13 +46,15 @@ def test_a_shared_test_or_harness_change_runs_every_mutant(changed):
 
 
 def _in_package(pkg):
-    return [m for m in ALL if mutants.repo_path(m[1]).rsplit("/", 1)[0] == pkg]
+    pkgs = pkg if isinstance(pkg, tuple) else (pkg,)
+    return [m for m in ALL if mutants.repo_path(m[1]).rsplit("/", 1)[0] in pkgs]
 
 
 @pytest.mark.parametrize("changed, pkg", [
     ("agent/internal/kcedge/kcedge_test.go", "agent/internal/kcedge"),       # a weakened test
     ("fleet/internal/page/page_test.go", "fleet/internal/page"),
-    ("agent/internal/kcedge/testdata/edge.json", "agent/internal/kcedge"),   # test data
+    # test data, which the clock's tests read too (KeyClerk's time vectors)
+    ("agent/internal/kcedge/testdata/edge.json", ("agent/internal/kcedge", "agent/internal/clock")),
     ("fleet/internal/page/testdata/browser_ceremony.py", "fleet/internal/page"),
     ("brand/mark/geometry.json", "agent/internal/agent"),                    # read by a test from outside
 ])
@@ -60,7 +62,7 @@ def test_a_test_change_runs_every_mutant_of_its_package(changed, pkg):
     picked, why = mutants.select_changed(ALL, [changed, "docs/agent.md"])
     assert picked == _in_package(pkg)
     assert 0 < len(picked) < len(ALL)
-    assert "the tests of 1 package" in why
+    assert f"the tests of {len(pkg) if isinstance(pkg, tuple) else 1} package" in why
 
 
 def test_a_package_read_by_another_package_s_tests_runs_both():
@@ -94,8 +96,8 @@ def test_a_fleet_file_is_matched_by_its_repository_path():
     assert picked and all(mutants.repo_path(m[1]) == "fleet/internal/admin/admin.go" for m in picked)
 
 
-@pytest.mark.parametrize("changed", [[], ["docs/agent.md", "CHANGELOG.md"], ["agent/internal/clock/clock.go"],
-                                     ["agent/internal/clock/clock_test.go"], ["agent/internal/apply/visit.go"]])
+@pytest.mark.parametrize("changed", [[], ["docs/agent.md", "CHANGELOG.md"], ["agent/internal/clock/boot_linux.go"],
+                                     ["agent/internal/apply/visit.go"]])
 def test_no_mutated_file_and_no_harness_change_runs_none(changed):
     picked, why = mutants.select_changed(ALL, changed)
     assert picked == []

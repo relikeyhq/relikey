@@ -55,6 +55,10 @@ type Record struct {
 	BootID       string `json:"boot_id,omitempty"`
 	BootAtVerify int64  `json:"boot_at_verify_ns,omitempty"`
 	WallAtVerify string `json:"wall_at_verify,omitempty"`
+	// The start anchor (edge protocol 1.5): verified time only, the newest verified bundle's issue time or the desk's
+	// time answer, with the boot reading at its arrival (in BootID's boot); starts are judged on it, never on the clock.
+	StartAt   string `json:"start_at,omitempty"`
+	StartBoot int64  `json:"start_boot_ns,omitempty"`
 	// Ended is set when the desk sent a valid ended notice: nothing is live again.
 	Ended bool `json:"ended,omitempty"`
 }

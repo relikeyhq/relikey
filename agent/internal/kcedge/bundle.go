@@ -345,7 +345,7 @@ func VerifyBundle(s Sealed, pins Pins, state State, now time.Time, ceilingPolicy
 	if len(errs) > 0 {
 		return nil, refuse(errs...)
 	}
-	out, err := o.evaluate(doc, now, ceilingPolicy)
+	out, err := o.evaluate(doc, now, now, ceilingPolicy)
 	if err != nil {
 		return nil, err
 	}
@@ -364,7 +364,9 @@ func VerifyBundle(s Sealed, pins Pins, state State, now time.Time, ceilingPolicy
 // moment: the signature, the edge and the ceiling's signature are checked again, the
 // floors are not (the bundle set them). The agent calls it on every tick, so leases
 // end on the edge at their end without asking KeyClerk (decision 0008, GE-6).
-func LiveAt(s Sealed, pins Pins, now time.Time, ceilingPolicy CeilingPolicy) (*Applied, error) {
+// nowStart is the earlier reading (edge protocol 1.5, edge.rego's now_start): a lease's start is a widening, judged on
+// it; its end and its class horizon on now, the trusted time. Pass now for both where there is one reading.
+func LiveAt(s Sealed, pins Pins, now, nowStart time.Time, ceilingPolicy CeilingPolicy) (*Applied, error) {
 	o, err := open(s, pins)
 	if err != nil {
 		return nil, err
@@ -376,7 +378,7 @@ func LiveAt(s Sealed, pins Pins, now time.Time, ceilingPolicy CeilingPolicy) (*A
 	if len(errs) > 0 {
 		return nil, refuse(errs...)
 	}
-	out, err := o.evaluate(doc, now, ceilingPolicy)
+	out, err := o.evaluate(doc, now, nowStart, ceilingPolicy)
 	if err != nil {
 		return nil, err
 	}
@@ -444,7 +446,7 @@ func RecordsHead(s Sealed, pins Pins) (jsontext.Value, error) {
 	return jsontext.Value(Encode(h)), nil
 }
 
-func (o *opened) evaluate(doc Object, now time.Time, ceilingPolicy CeilingPolicy) (*Applied, error) {
+func (o *opened) evaluate(doc Object, now, nowStart time.Time, ceilingPolicy CeilingPolicy) (*Applied, error) {
 	b := o.b
 	offlineCap := int64(0)
 	if doc != nil {
@@ -480,7 +482,7 @@ func (o *opened) evaluate(doc Object, now time.Time, ceilingPolicy CeilingPolicy
 			continue // a class without a horizon is never live (KC-6)
 		}
 		horizon := min(classHorizon, offlineCap) // the ceiling narrows offline validity
-		if !from.After(now) && now.Before(until) && age <= time.Duration(horizon)*time.Hour &&
+		if leaseLive(from, until, now, nowStart) && age <= time.Duration(horizon)*time.Hour &&
 			!slices.Contains(*b.Revoked, x.LeaseID) {
 			x.Ends = until
 			if h := o.issued.Add(time.Duration(horizon) * time.Hour); h.Before(until) {
@@ -514,7 +516,7 @@ func (o *opened) evaluate(doc Object, now time.Time, ceilingPolicy CeilingPolicy
 				continue
 			}
 		}
-		if !from.After(now) && now.Before(until) && !slices.Contains(*b.Revoked, x.LeaseID) {
+		if leaseLive(from, until, now, nowStart) && !slices.Contains(*b.Revoked, x.LeaseID) {
 			x.Ends = until
 			out.VisitLeases = append(out.VisitLeases, x)
 		}
@@ -669,6 +671,12 @@ func strs(v Value) bool {
 
 // leaseHours is the length the ceiling judges a lease by: whole hours rounded up, at least 1 (KeyClerk 0.27.0's
 // ceiling_hours vectors). Rounding down let a lease run up to 59 minutes past max_lease_hours or max_offline_hours.
+// leaseLive is edge.rego's window: started by the earlier reading (a start is a widening, edge protocol 1.5) and not
+// yet ended by the trusted time.
+func leaseLive(from, until, now, nowStart time.Time) bool {
+	return !from.After(nowStart) && now.Before(until)
+}
+
 func leaseHours(from, until time.Time) int64 {
 	return max(1, -floorDiv(-int64(until.Sub(from)/time.Second), 3600))
 }

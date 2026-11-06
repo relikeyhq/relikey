@@ -159,6 +159,93 @@
     "leases": []
    },
    "input": {
+    "issued": 1100,
+    "leases": [
+     {
+      "class": "privileged",
+      "from": 1000,
+      "lease_id": "L-1",
+      "person": "idp:7c1f-ann",
+      "target": "plc-ssh",
+      "until": 100000
+     }
+    ],
+    "now": 1200,
+    "now_start": 900,
+    "person": "idp:7c1f-ann",
+    "revoked": [],
+    "target": "plc-ssh",
+    "visit_leases": []
+   },
+   "name": "a start is judged on the earlier reading: a wall clock set forward opens nothing early (1.5)",
+   "policy": "edge"
+  },
+  {
+   "entrypoint": "keyclerk/edge/admit",
+   "expected": {
+    "allow": false,
+    "leases": []
+   },
+   "input": {
+    "issued": 1100,
+    "leases": [],
+    "now": 1200,
+    "now_start": 900,
+    "person": "idp:7c1f-ann",
+    "revoked": [],
+    "target": "plc-ssh",
+    "visit_leases": [
+     {
+      "from": 1000,
+      "lease_id": "V-1",
+      "person": "idp:7c1f-ann",
+      "targets": [
+       "plc-ssh"
+      ],
+      "until": 300000
+     }
+    ]
+   },
+   "name": "a visit lease's start is judged on the earlier reading too (1.5)",
+   "policy": "edge"
+  },
+  {
+   "entrypoint": "keyclerk/edge/admit",
+   "expected": {
+    "allow": true,
+    "leases": [
+     "L-1"
+    ]
+   },
+   "input": {
+    "issued": 1100,
+    "leases": [
+     {
+      "class": "privileged",
+      "from": 1000,
+      "lease_id": "L-1",
+      "person": "idp:7c1f-ann",
+      "target": "plc-ssh",
+      "until": 100000
+     }
+    ],
+    "now": 1200,
+    "now_start": 1100,
+    "person": "idp:7c1f-ann",
+    "revoked": [],
+    "target": "plc-ssh",
+    "visit_leases": []
+   },
+   "name": "with the earlier reading past the start, the lease admits (1.5)",
+   "policy": "edge"
+  },
+  {
+   "entrypoint": "keyclerk/edge/admit",
+   "expected": {
+    "allow": false,
+    "leases": []
+   },
+   "input": {
     "issued": 1500,
     "leases": [
      {
@@ -994,9 +1081,659 @@
  },
  "modules": {
   "ceiling": "8db9a04fe3e2e886de8d6af2fcc8cb52163860b4480ed7ff85efde29c1876d1c",
-  "edge": "59606fcf1f44cefa6911003039587adb24dde2e99c014c336a8842e6f108f077"
+  "edge": "415e5980546c8794506b196b9601686906f051a51fd62b4a7c2d847c13a555a5"
  },
  "note": "evaluate each input against the module named; the result must equal expected (sets as sorted lists)",
+ "ratchet": {
+  "cases": [
+   {
+    "anchor": "2026-11-05T10:00:00Z",
+    "boot_at_anchor": 1000,
+    "expected": {
+     "anchor": "2026-11-05T15:00:00Z",
+     "trusted": "2026-11-05T16:00:00Z"
+    },
+    "name": "honest clocks, hourly wakes for a day",
+    "now": {
+     "boot": 22600,
+     "wall": "2026-11-05T16:00:00Z"
+    },
+    "wakes": [
+     {
+      "boot": 4600,
+      "wall": "2026-11-05T11:00:00Z"
+     },
+     {
+      "boot": 8200,
+      "wall": "2026-11-05T12:00:00Z"
+     },
+     {
+      "boot": 11800,
+      "wall": "2026-11-05T13:00:00Z"
+     },
+     {
+      "boot": 15400,
+      "wall": "2026-11-05T14:00:00Z"
+     },
+     {
+      "boot": 19000,
+      "wall": "2026-11-05T15:00:00Z"
+     }
+    ]
+   },
+   {
+    "anchor": "2026-11-05T10:00:00Z",
+    "boot_at_anchor": 1000,
+    "expected": {
+     "anchor": "2026-11-06T11:00:00Z",
+     "trusted": "2026-11-06T12:00:00Z"
+    },
+    "name": "the boot clock frozen a day while the wall stays honest, then thawed, then the wall set back a day",
+    "now": {
+     "boot": 8200,
+     "wall": "2026-11-05T12:00:00Z"
+    },
+    "wakes": [
+     {
+      "boot": 1000,
+      "wall": "2026-11-05T16:00:00Z"
+     },
+     {
+      "boot": 1000,
+      "wall": "2026-11-05T22:00:00Z"
+     },
+     {
+      "boot": 1000,
+      "wall": "2026-11-06T10:00:00Z"
+     },
+     {
+      "boot": 4600,
+      "wall": "2026-11-06T11:00:00Z"
+     }
+    ]
+   },
+   {
+    "anchor": "2026-11-05T10:00:00Z",
+    "boot_at_anchor": 1000,
+    "expected": {
+     "anchor": "2026-11-05T15:00:00Z",
+     "trusted": "2026-11-05T15:56:00Z"
+    },
+    "name": "the wall set back 4 minutes before every hourly wake: no lag accumulates",
+    "now": {
+     "boot": 22600,
+     "wall": "2026-11-05T15:56:00Z"
+    },
+    "wakes": [
+     {
+      "boot": 4600,
+      "wall": "2026-11-05T10:56:00Z"
+     },
+     {
+      "boot": 8200,
+      "wall": "2026-11-05T11:56:00Z"
+     },
+     {
+      "boot": 11800,
+      "wall": "2026-11-05T12:56:00Z"
+     },
+     {
+      "boot": 15400,
+      "wall": "2026-11-05T13:56:00Z"
+     },
+     {
+      "boot": 19000,
+      "wall": "2026-11-05T14:56:00Z"
+     }
+    ]
+   },
+   {
+    "anchor": "2026-11-05T10:00:00Z",
+    "boot_at_anchor": 1000,
+    "expected": {
+     "anchor": "2026-11-05T10:00:00Z",
+     "trusted": "2026-11-05T10:00:00Z"
+    },
+    "name": "both clocks held back together: beyond what the edge can see (the stated limit)",
+    "now": {
+     "boot": 1000,
+     "wall": "2026-11-05T10:00:00Z"
+    },
+    "wakes": [
+     {
+      "boot": 1000,
+      "wall": "2026-11-05T10:00:00Z"
+     },
+     {
+      "boot": 1000,
+      "wall": "2026-11-05T10:00:00Z"
+     }
+    ]
+   }
+  ],
+  "note": "edge protocol 1.5, section 1: from an anchor and the boot clock at it, each wake (wall, boot) records ratchet(anchor, boot_at_anchor, boot, wall), the later raw reading; then the anchor and trusted_time at now (same boot)"
+ },
+ "relays": {
+  "cases": [
+   {
+    "applied": {
+     "leases": [
+      {
+       "lease_id": "L-example-0001",
+       "until": "2026-11-05T18:00:00Z"
+      }
+     ],
+     "visit_leases": []
+    },
+    "cert": {
+     "bytes": "eyJlZGdlcyI6WyJlZGdlLWEiXSwiZXhwaXJlcyI6IjIwMjYtMTEtMTJUMTE6MDA6MDBaIiwiZm9ybWF0Ijoia2MtZWRnZS1yZWxheS12MSIsImlzc3VlZCI6IjIwMjYtMTEtMDVUMTE6MDA6MDBaIiwib2ZmaWNlcl9rZXkiOiJlYTRhNmM2M2UyOWM1MjBhYmVmNTUwN2IxMzJlYzVmOTk1NDc3NmFlYmViZTdiOTI0MjFlZWE2OTE0NDZkMjJjIiwib3BlcmF0aW9ucyI6WyJjdXRfc2Vzc2lvbnMiLCJlbmRfbGVhc2UiLCJob2xkX3JlbGVhc2UiLCJyZXZva2VfbGVhc2UiLCJyb2xsYmFja19yZWxlYXNlIiwic3VzcGVuZF9lZGdlIl0sInJlbGF5X2tleSI6IjEzOThmNjJjNmQxYTQ1N2M1MWJhNmE0YjVmM2RiZDJmNjlmY2E5MzIxNjIxOGRjODk5N2U0MTZiZDE3ZDkzY2EiLCJzZXJpYWwiOjF9",
+     "signatures": [
+      {
+       "key": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c",
+       "key_id": "fe812c12f3ab4ce6",
+       "signature": "daba572d492732adeb66c83c8ed9bc38047fca77d84ea79f00b59c2894065fc8bbeeb8662c2c4d3daa0cc5f01cce622cf56811c0a4c5c88eada11b682aa52803"
+      }
+     ]
+    },
+    "expected": {
+     "ok": true,
+     "state": {
+      "relay_counters": {
+       "1398f62c6d1a457c51ba6a4b5f3dbd2f69fca93216218dc8997e416bd17d93ca": 1
+      }
+     }
+    },
+    "name": "a certified relay revokes a lease",
+    "now": "2026-11-05T12:30:00Z",
+    "pins": {
+     "edge": "edge-a",
+     "officer_key": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c"
+    },
+    "release": {
+     "floor": 3,
+     "serial": 5
+    },
+    "state": {
+     "newest": "2026-11-05T11:30:00Z",
+     "relay_counters": {},
+     "serial": 12
+    },
+    "tighten": {
+     "bytes": "eyJjZXJ0X3NoYTI1NiI6IjY4N2JiMTdjNGQ2N2Y3ODU3NzJjZGRhNWU1OGZkYzRkZTE4ZjU3MzU3Y2ZhNDI2NTQxNjlkZWY3ZjllZmM4NGQiLCJjb3VudGVyIjoxLCJlZGdlIjoiZWRnZS1hIiwiZm9ybWF0Ijoia2MtZWRnZS10aWdodGVuLXYxIiwia2V5X2lkIjoiNWMyOWI3OGYxMGEzNWE0OSIsIm9wcyI6W3sibGVhc2VfaWQiOiJMLWV4YW1wbGUtMDAwMSIsIm9wIjoicmV2b2tlX2xlYXNlIn1dLCJwYXJlbnRfc2VyaWFsIjoxMiwic2lnbmVkX2F0IjoiMjAyNi0xMS0wNVQxMjowMDowMFoifQ==",
+     "key": "1398f62c6d1a457c51ba6a4b5f3dbd2f69fca93216218dc8997e416bd17d93ca",
+     "key_id": "5c29b78f10a35a49",
+     "signature": "496335b7a4032dadbfcd539d6987098b64859b937dd5c73919a2d697e57bc309ac5372efd9cd107e552a49a07963a6279cea78ea421ba4f66f25e90895365700"
+    }
+   },
+   {
+    "applied": {
+     "leases": [
+      {
+       "lease_id": "L-example-0001",
+       "until": "2026-11-05T18:00:00Z"
+      }
+     ],
+     "visit_leases": []
+    },
+    "cert": {
+     "bytes": "eyJlZGdlcyI6WyJlZGdlLWEiXSwiZXhwaXJlcyI6IjIwMjYtMTEtMTJUMTE6MDA6MDBaIiwiZm9ybWF0Ijoia2MtZWRnZS1yZWxheS12MSIsImlzc3VlZCI6IjIwMjYtMTEtMDVUMTE6MDA6MDBaIiwib2ZmaWNlcl9rZXkiOiJlYTRhNmM2M2UyOWM1MjBhYmVmNTUwN2IxMzJlYzVmOTk1NDc3NmFlYmViZTdiOTI0MjFlZWE2OTE0NDZkMjJjIiwib3BlcmF0aW9ucyI6WyJjdXRfc2Vzc2lvbnMiLCJlbmRfbGVhc2UiLCJob2xkX3JlbGVhc2UiLCJyZXZva2VfbGVhc2UiLCJyb2xsYmFja19yZWxlYXNlIiwic3VzcGVuZF9lZGdlIl0sInJlbGF5X2tleSI6IjEzOThmNjJjNmQxYTQ1N2M1MWJhNmE0YjVmM2RiZDJmNjlmY2E5MzIxNjIxOGRjODk5N2U0MTZiZDE3ZDkzY2EiLCJzZXJpYWwiOjF9",
+     "signatures": [
+      {
+       "key": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c",
+       "key_id": "fe812c12f3ab4ce6",
+       "signature": "daba572d492732adeb66c83c8ed9bc38047fca77d84ea79f00b59c2894065fc8bbeeb8662c2c4d3daa0cc5f01cce622cf56811c0a4c5c88eada11b682aa52803"
+      }
+     ]
+    },
+    "expected": {
+     "ok": true,
+     "state": {
+      "relay_counters": {
+       "1398f62c6d1a457c51ba6a4b5f3dbd2f69fca93216218dc8997e416bd17d93ca": 1
+      }
+     }
+    },
+    "name": "ends a lease earlier",
+    "now": "2026-11-05T12:30:00Z",
+    "pins": {
+     "edge": "edge-a",
+     "officer_key": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c"
+    },
+    "release": {
+     "floor": 3,
+     "serial": 5
+    },
+    "state": {
+     "newest": "2026-11-05T11:30:00Z",
+     "relay_counters": {},
+     "serial": 12
+    },
+    "tighten": {
+     "bytes": "eyJjZXJ0X3NoYTI1NiI6IjY4N2JiMTdjNGQ2N2Y3ODU3NzJjZGRhNWU1OGZkYzRkZTE4ZjU3MzU3Y2ZhNDI2NTQxNjlkZWY3ZjllZmM4NGQiLCJjb3VudGVyIjoxLCJlZGdlIjoiZWRnZS1hIiwiZm9ybWF0Ijoia2MtZWRnZS10aWdodGVuLXYxIiwia2V5X2lkIjoiNWMyOWI3OGYxMGEzNWE0OSIsIm9wcyI6W3sibGVhc2VfaWQiOiJMLWV4YW1wbGUtMDAwMSIsIm9wIjoiZW5kX2xlYXNlIiwidW50aWwiOiIyMDI2LTExLTA1VDEzOjAwOjAwWiJ9XSwicGFyZW50X3NlcmlhbCI6MTIsInNpZ25lZF9hdCI6IjIwMjYtMTEtMDVUMTI6MDA6MDBaIn0=",
+     "key": "1398f62c6d1a457c51ba6a4b5f3dbd2f69fca93216218dc8997e416bd17d93ca",
+     "key_id": "5c29b78f10a35a49",
+     "signature": "ca8b30117d608f195ff19fcdab99a058479188da9cb289c84158ee07756165bc373884fba1588e3c204cf7f069d8a559468d4968db653eabf9b94c1b60fed00d"
+    }
+   },
+   {
+    "applied": {
+     "leases": [
+      {
+       "lease_id": "L-example-0001",
+       "until": "2026-11-05T18:00:00Z"
+      }
+     ],
+     "visit_leases": []
+    },
+    "cert": {
+     "bytes": "eyJlZGdlcyI6WyJlZGdlLWEiXSwiZXhwaXJlcyI6IjIwMjYtMTEtMTJUMTE6MDA6MDBaIiwiZm9ybWF0Ijoia2MtZWRnZS1yZWxheS12MSIsImlzc3VlZCI6IjIwMjYtMTEtMDVUMTE6MDA6MDBaIiwib2ZmaWNlcl9rZXkiOiJlYTRhNmM2M2UyOWM1MjBhYmVmNTUwN2IxMzJlYzVmOTk1NDc3NmFlYmViZTdiOTI0MjFlZWE2OTE0NDZkMjJjIiwib3BlcmF0aW9ucyI6WyJjdXRfc2Vzc2lvbnMiLCJlbmRfbGVhc2UiLCJob2xkX3JlbGVhc2UiLCJyZXZva2VfbGVhc2UiLCJyb2xsYmFja19yZWxlYXNlIiwic3VzcGVuZF9lZGdlIl0sInJlbGF5X2tleSI6IjEzOThmNjJjNmQxYTQ1N2M1MWJhNmE0YjVmM2RiZDJmNjlmY2E5MzIxNjIxOGRjODk5N2U0MTZiZDE3ZDkzY2EiLCJzZXJpYWwiOjF9",
+     "signatures": [
+      {
+       "key": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c",
+       "key_id": "fe812c12f3ab4ce6",
+       "signature": "daba572d492732adeb66c83c8ed9bc38047fca77d84ea79f00b59c2894065fc8bbeeb8662c2c4d3daa0cc5f01cce622cf56811c0a4c5c88eada11b682aa52803"
+      }
+     ]
+    },
+    "expected": {
+     "ok": false,
+     "state": null
+    },
+    "name": "ends a lease later: refused",
+    "now": "2026-11-05T12:30:00Z",
+    "pins": {
+     "edge": "edge-a",
+     "officer_key": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c"
+    },
+    "release": {
+     "floor": 3,
+     "serial": 5
+    },
+    "state": {
+     "newest": "2026-11-05T11:30:00Z",
+     "relay_counters": {},
+     "serial": 12
+    },
+    "tighten": {
+     "bytes": "eyJjZXJ0X3NoYTI1NiI6IjY4N2JiMTdjNGQ2N2Y3ODU3NzJjZGRhNWU1OGZkYzRkZTE4ZjU3MzU3Y2ZhNDI2NTQxNjlkZWY3ZjllZmM4NGQiLCJjb3VudGVyIjoxLCJlZGdlIjoiZWRnZS1hIiwiZm9ybWF0Ijoia2MtZWRnZS10aWdodGVuLXYxIiwia2V5X2lkIjoiNWMyOWI3OGYxMGEzNWE0OSIsIm9wcyI6W3sibGVhc2VfaWQiOiJMLWV4YW1wbGUtMDAwMSIsIm9wIjoiZW5kX2xlYXNlIiwidW50aWwiOiIyMDI2LTExLTA2VDAwOjAwOjAwWiJ9XSwicGFyZW50X3NlcmlhbCI6MTIsInNpZ25lZF9hdCI6IjIwMjYtMTEtMDVUMTI6MDA6MDBaIn0=",
+     "key": "1398f62c6d1a457c51ba6a4b5f3dbd2f69fca93216218dc8997e416bd17d93ca",
+     "key_id": "5c29b78f10a35a49",
+     "signature": "815932a8fab975f4be7526655eb4313a26c0c78438e453f658b3260207feba9764788235a5f93f447a40a4068227fbe458f2d38cc356f124ff8ebad5f7c39b0a"
+    }
+   },
+   {
+    "applied": {
+     "leases": [
+      {
+       "lease_id": "L-example-0001",
+       "until": "2026-11-05T18:00:00Z"
+      }
+     ],
+     "visit_leases": []
+    },
+    "cert": {
+     "bytes": "eyJlZGdlcyI6WyJlZGdlLWEiXSwiZXhwaXJlcyI6IjIwMjYtMTEtMTJUMTE6MDA6MDBaIiwiZm9ybWF0Ijoia2MtZWRnZS1yZWxheS12MSIsImlzc3VlZCI6IjIwMjYtMTEtMDVUMTE6MDA6MDBaIiwib2ZmaWNlcl9rZXkiOiJlYTRhNmM2M2UyOWM1MjBhYmVmNTUwN2IxMzJlYzVmOTk1NDc3NmFlYmViZTdiOTI0MjFlZWE2OTE0NDZkMjJjIiwib3BlcmF0aW9ucyI6WyJjdXRfc2Vzc2lvbnMiLCJlbmRfbGVhc2UiLCJob2xkX3JlbGVhc2UiLCJyZXZva2VfbGVhc2UiLCJyb2xsYmFja19yZWxlYXNlIiwic3VzcGVuZF9lZGdlIl0sInJlbGF5X2tleSI6IjEzOThmNjJjNmQxYTQ1N2M1MWJhNmE0YjVmM2RiZDJmNjlmY2E5MzIxNjIxOGRjODk5N2U0MTZiZDE3ZDkzY2EiLCJzZXJpYWwiOjF9",
+     "signatures": [
+      {
+       "key": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c",
+       "key_id": "fe812c12f3ab4ce6",
+       "signature": "daba572d492732adeb66c83c8ed9bc38047fca77d84ea79f00b59c2894065fc8bbeeb8662c2c4d3daa0cc5f01cce622cf56811c0a4c5c88eada11b682aa52803"
+      }
+     ]
+    },
+    "expected": {
+     "ok": false,
+     "state": null
+    },
+    "name": "a lease the edge does not hold",
+    "now": "2026-11-05T12:30:00Z",
+    "pins": {
+     "edge": "edge-a",
+     "officer_key": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c"
+    },
+    "release": {
+     "floor": 3,
+     "serial": 5
+    },
+    "state": {
+     "newest": "2026-11-05T11:30:00Z",
+     "relay_counters": {},
+     "serial": 12
+    },
+    "tighten": {
+     "bytes": "eyJjZXJ0X3NoYTI1NiI6IjY4N2JiMTdjNGQ2N2Y3ODU3NzJjZGRhNWU1OGZkYzRkZTE4ZjU3MzU3Y2ZhNDI2NTQxNjlkZWY3ZjllZmM4NGQiLCJjb3VudGVyIjoxLCJlZGdlIjoiZWRnZS1hIiwiZm9ybWF0Ijoia2MtZWRnZS10aWdodGVuLXYxIiwia2V5X2lkIjoiNWMyOWI3OGYxMGEzNWE0OSIsIm9wcyI6W3sibGVhc2VfaWQiOiJMLWV4YW1wbGUtMDAwOSIsIm9wIjoicmV2b2tlX2xlYXNlIn1dLCJwYXJlbnRfc2VyaWFsIjoxMiwic2lnbmVkX2F0IjoiMjAyNi0xMS0wNVQxMjowMDowMFoifQ==",
+     "key": "1398f62c6d1a457c51ba6a4b5f3dbd2f69fca93216218dc8997e416bd17d93ca",
+     "key_id": "5c29b78f10a35a49",
+     "signature": "8770609fa27e87ea1730fb801589d399d2aa7f9a7f6e4c87661eeed04f35e0f42711f8b416a325771cdbd756c6a4b27014951874d55f631e5a3649517af1ea08"
+    }
+   },
+   {
+    "applied": {
+     "leases": [
+      {
+       "lease_id": "L-example-0001",
+       "until": "2026-11-05T18:00:00Z"
+      }
+     ],
+     "visit_leases": []
+    },
+    "cert": {
+     "bytes": "eyJlZGdlcyI6WyJlZGdlLWEiXSwiZXhwaXJlcyI6IjIwMjYtMTEtMTJUMTE6MDA6MDBaIiwiZm9ybWF0Ijoia2MtZWRnZS1yZWxheS12MSIsImlzc3VlZCI6IjIwMjYtMTEtMDVUMTE6MDA6MDBaIiwib2ZmaWNlcl9rZXkiOiJlYTRhNmM2M2UyOWM1MjBhYmVmNTUwN2IxMzJlYzVmOTk1NDc3NmFlYmViZTdiOTI0MjFlZWE2OTE0NDZkMjJjIiwib3BlcmF0aW9ucyI6WyJyZXZva2VfbGVhc2UiXSwicmVsYXlfa2V5IjoiMTM5OGY2MmM2ZDFhNDU3YzUxYmE2YTRiNWYzZGJkMmY2OWZjYTkzMjE2MjE4ZGM4OTk3ZTQxNmJkMTdkOTNjYSIsInNlcmlhbCI6MX0=",
+     "signatures": [
+      {
+       "key": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c",
+       "key_id": "fe812c12f3ab4ce6",
+       "signature": "7b83044155d468d8f93cc356f84e835f9682e4179ace5a4daad567cba10db43fc55faecfb795721d59a2bfbfb80ec2ab28381f77085f58629758497ef5cfb70e"
+      }
+     ]
+    },
+    "expected": {
+     "ok": false,
+     "state": null
+    },
+    "name": "an operation the certificate does not allow",
+    "now": "2026-11-05T12:30:00Z",
+    "pins": {
+     "edge": "edge-a",
+     "officer_key": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c"
+    },
+    "release": {
+     "floor": 3,
+     "serial": 5
+    },
+    "state": {
+     "newest": "2026-11-05T11:30:00Z",
+     "relay_counters": {},
+     "serial": 12
+    },
+    "tighten": {
+     "bytes": "eyJjZXJ0X3NoYTI1NiI6IjcwMDFmYzRhNjU3MDk5NjlkNDljNTUzNzdmYzJkZDhhNzkyMTlkMWU2Nzc2MjhiZjFhYTE3MjNhNzE1NGFkOGQiLCJjb3VudGVyIjoxLCJlZGdlIjoiZWRnZS1hIiwiZm9ybWF0Ijoia2MtZWRnZS10aWdodGVuLXYxIiwia2V5X2lkIjoiNWMyOWI3OGYxMGEzNWE0OSIsIm9wcyI6W3sib3AiOiJzdXNwZW5kX2VkZ2UifV0sInBhcmVudF9zZXJpYWwiOjEyLCJzaWduZWRfYXQiOiIyMDI2LTExLTA1VDEyOjAwOjAwWiJ9",
+     "key": "1398f62c6d1a457c51ba6a4b5f3dbd2f69fca93216218dc8997e416bd17d93ca",
+     "key_id": "5c29b78f10a35a49",
+     "signature": "e815d54225625b5222bfd9d38566d9dea5e5b0945d0de0771b0c77ea8ec943b2a34a6464b25dcf40b4e93eca1bba62cf561641a9f6b31e6ed7d167b928186a08"
+    }
+   },
+   {
+    "applied": {
+     "leases": [
+      {
+       "lease_id": "L-example-0001",
+       "until": "2026-11-05T18:00:00Z"
+      }
+     ],
+     "visit_leases": []
+    },
+    "cert": {
+     "bytes": "eyJlZGdlcyI6WyJlZGdlLWEiXSwiZXhwaXJlcyI6IjIwMjYtMTEtMTJUMTE6MDA6MDBaIiwiZm9ybWF0Ijoia2MtZWRnZS1yZWxheS12MSIsImlzc3VlZCI6IjIwMjYtMTEtMDVUMTE6MDA6MDBaIiwib2ZmaWNlcl9rZXkiOiJmZDE3MjQzODVhYTBjNzViNjRmYjc4Y2Q2MDJmYTFkOTkxZmRlYmY3NmIxM2M1OGVkNzAyZWFjODM1ZTlmNjE4Iiwib3BlcmF0aW9ucyI6WyJjdXRfc2Vzc2lvbnMiLCJlbmRfbGVhc2UiLCJob2xkX3JlbGVhc2UiLCJyZXZva2VfbGVhc2UiLCJyb2xsYmFja19yZWxlYXNlIiwic3VzcGVuZF9lZGdlIl0sInJlbGF5X2tleSI6IjEzOThmNjJjNmQxYTQ1N2M1MWJhNmE0YjVmM2RiZDJmNjlmY2E5MzIxNjIxOGRjODk5N2U0MTZiZDE3ZDkzY2EiLCJzZXJpYWwiOjF9",
+     "signatures": [
+      {
+       "key": "fd1724385aa0c75b64fb78cd602fa1d991fdebf76b13c58ed702eac835e9f618",
+       "key_id": "dbc298251c51321b",
+       "signature": "9be14d3a31f57de68acbb29d1231994802debf119de5d5e07378c1fe0dca58b5cac5ecdce3804bc98afa6c472f2e5216fc3ee66fd8f76e372fa8ade697a44802"
+      }
+     ]
+    },
+    "expected": {
+     "ok": false,
+     "state": null
+    },
+    "name": "a certificate not from the pinned officer",
+    "now": "2026-11-05T12:30:00Z",
+    "pins": {
+     "edge": "edge-a",
+     "officer_key": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c"
+    },
+    "release": {
+     "floor": 3,
+     "serial": 5
+    },
+    "state": {
+     "newest": "2026-11-05T11:30:00Z",
+     "relay_counters": {},
+     "serial": 12
+    },
+    "tighten": {
+     "bytes": "eyJjZXJ0X3NoYTI1NiI6IjcyMGUzMzYxZTIzYmU1YjgxMGE1NTUwZDA5MzYwYWViZGY4ZWZiMDljMmQ2ZmQzMzExNTAyNzkzZTg0MzczYTUiLCJjb3VudGVyIjoxLCJlZGdlIjoiZWRnZS1hIiwiZm9ybWF0Ijoia2MtZWRnZS10aWdodGVuLXYxIiwia2V5X2lkIjoiNWMyOWI3OGYxMGEzNWE0OSIsIm9wcyI6W3sibGVhc2VfaWQiOiJMLWV4YW1wbGUtMDAwMSIsIm9wIjoicmV2b2tlX2xlYXNlIn1dLCJwYXJlbnRfc2VyaWFsIjoxMiwic2lnbmVkX2F0IjoiMjAyNi0xMS0wNVQxMjowMDowMFoifQ==",
+     "key": "1398f62c6d1a457c51ba6a4b5f3dbd2f69fca93216218dc8997e416bd17d93ca",
+     "key_id": "5c29b78f10a35a49",
+     "signature": "4265f0e2be816ff2d3259c1953df577639b25ce99b60033207d66a6cc243efc46e7bc37c5a02f915ccb20b44428d3a47570cfbc6dcab02d57a102b8ebe0a1b0e"
+    }
+   },
+   {
+    "applied": {
+     "leases": [
+      {
+       "lease_id": "L-example-0001",
+       "until": "2026-11-05T18:00:00Z"
+      }
+     ],
+     "visit_leases": []
+    },
+    "cert": {
+     "bytes": "eyJlZGdlcyI6WyJlZGdlLWEiXSwiZXhwaXJlcyI6IjIwMjYtMTEtMTJUMTE6MDA6MDBaIiwiZm9ybWF0Ijoia2MtZWRnZS1yZWxheS12MSIsImlzc3VlZCI6IjIwMjYtMTEtMDVUMTE6MDA6MDBaIiwib2ZmaWNlcl9rZXkiOiJlYTRhNmM2M2UyOWM1MjBhYmVmNTUwN2IxMzJlYzVmOTk1NDc3NmFlYmViZTdiOTI0MjFlZWE2OTE0NDZkMjJjIiwib3BlcmF0aW9ucyI6WyJjdXRfc2Vzc2lvbnMiLCJlbmRfbGVhc2UiLCJob2xkX3JlbGVhc2UiLCJyZXZva2VfbGVhc2UiLCJyb2xsYmFja19yZWxlYXNlIiwic3VzcGVuZF9lZGdlIl0sInJlbGF5X2tleSI6IjEzOThmNjJjNmQxYTQ1N2M1MWJhNmE0YjVmM2RiZDJmNjlmY2E5MzIxNjIxOGRjODk5N2U0MTZiZDE3ZDkzY2EiLCJzZXJpYWwiOjF9",
+     "signatures": [
+      {
+       "key": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c",
+       "key_id": "fe812c12f3ab4ce6",
+       "signature": "daba572d492732adeb66c83c8ed9bc38047fca77d84ea79f00b59c2894065fc8bbeeb8662c2c4d3daa0cc5f01cce622cf56811c0a4c5c88eada11b682aa52803"
+      }
+     ]
+    },
+    "expected": {
+     "ok": false,
+     "state": null
+    },
+    "name": "signed by another key than the certified relay key",
+    "now": "2026-11-05T12:30:00Z",
+    "pins": {
+     "edge": "edge-a",
+     "officer_key": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c"
+    },
+    "release": {
+     "floor": 3,
+     "serial": 5
+    },
+    "state": {
+     "newest": "2026-11-05T11:30:00Z",
+     "relay_counters": {},
+     "serial": 12
+    },
+    "tighten": {
+     "bytes": "eyJjZXJ0X3NoYTI1NiI6IjY4N2JiMTdjNGQ2N2Y3ODU3NzJjZGRhNWU1OGZkYzRkZTE4ZjU3MzU3Y2ZhNDI2NTQxNjlkZWY3ZjllZmM4NGQiLCJjb3VudGVyIjoxLCJlZGdlIjoiZWRnZS1hIiwiZm9ybWF0Ijoia2MtZWRnZS10aWdodGVuLXYxIiwia2V5X2lkIjoiZGJjMjk4MjUxYzUxMzIxYiIsIm9wcyI6W3sibGVhc2VfaWQiOiJMLWV4YW1wbGUtMDAwMSIsIm9wIjoicmV2b2tlX2xlYXNlIn1dLCJwYXJlbnRfc2VyaWFsIjoxMiwic2lnbmVkX2F0IjoiMjAyNi0xMS0wNVQxMjowMDowMFoifQ==",
+     "key": "fd1724385aa0c75b64fb78cd602fa1d991fdebf76b13c58ed702eac835e9f618",
+     "key_id": "dbc298251c51321b",
+     "signature": "879e139de12fa7b6e2da81a803d6b591fdf5daf80c7610538a6f5a4c8b87d198fed31b62db85a90aba0479572e0644fb2f96f20c3f4c11b291f4e4e658e3d707"
+    }
+   },
+   {
+    "applied": {
+     "leases": [
+      {
+       "lease_id": "L-example-0001",
+       "until": "2026-11-05T18:00:00Z"
+      }
+     ],
+     "visit_leases": []
+    },
+    "cert": {
+     "bytes": "eyJlZGdlcyI6WyJlZGdlLWEiXSwiZXhwaXJlcyI6IjIwMjYtMTEtMTJUMTE6MDA6MDBaIiwiZm9ybWF0Ijoia2MtZWRnZS1yZWxheS12MSIsImlzc3VlZCI6IjIwMjYtMTEtMDVUMTE6MDA6MDBaIiwib2ZmaWNlcl9rZXkiOiJlYTRhNmM2M2UyOWM1MjBhYmVmNTUwN2IxMzJlYzVmOTk1NDc3NmFlYmViZTdiOTI0MjFlZWE2OTE0NDZkMjJjIiwib3BlcmF0aW9ucyI6WyJjdXRfc2Vzc2lvbnMiLCJlbmRfbGVhc2UiLCJob2xkX3JlbGVhc2UiLCJyZXZva2VfbGVhc2UiLCJyb2xsYmFja19yZWxlYXNlIiwic3VzcGVuZF9lZGdlIl0sInJlbGF5X2tleSI6IjEzOThmNjJjNmQxYTQ1N2M1MWJhNmE0YjVmM2RiZDJmNjlmY2E5MzIxNjIxOGRjODk5N2U0MTZiZDE3ZDkzY2EiLCJzZXJpYWwiOjF9",
+     "signatures": [
+      {
+       "key": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c",
+       "key_id": "fe812c12f3ab4ce6",
+       "signature": "daba572d492732adeb66c83c8ed9bc38047fca77d84ea79f00b59c2894065fc8bbeeb8662c2c4d3daa0cc5f01cce622cf56811c0a4c5c88eada11b682aa52803"
+      }
+     ]
+    },
+    "expected": {
+     "ok": false,
+     "state": null
+    },
+    "name": "made against an older parent bundle",
+    "now": "2026-11-05T12:30:00Z",
+    "pins": {
+     "edge": "edge-a",
+     "officer_key": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c"
+    },
+    "release": {
+     "floor": 3,
+     "serial": 5
+    },
+    "state": {
+     "newest": "2026-11-05T11:30:00Z",
+     "relay_counters": {},
+     "serial": 12
+    },
+    "tighten": {
+     "bytes": "eyJjZXJ0X3NoYTI1NiI6IjY4N2JiMTdjNGQ2N2Y3ODU3NzJjZGRhNWU1OGZkYzRkZTE4ZjU3MzU3Y2ZhNDI2NTQxNjlkZWY3ZjllZmM4NGQiLCJjb3VudGVyIjoxLCJlZGdlIjoiZWRnZS1hIiwiZm9ybWF0Ijoia2MtZWRnZS10aWdodGVuLXYxIiwia2V5X2lkIjoiNWMyOWI3OGYxMGEzNWE0OSIsIm9wcyI6W3sibGVhc2VfaWQiOiJMLWV4YW1wbGUtMDAwMSIsIm9wIjoicmV2b2tlX2xlYXNlIn1dLCJwYXJlbnRfc2VyaWFsIjoxMSwic2lnbmVkX2F0IjoiMjAyNi0xMS0wNVQxMjowMDowMFoifQ==",
+     "key": "1398f62c6d1a457c51ba6a4b5f3dbd2f69fca93216218dc8997e416bd17d93ca",
+     "key_id": "5c29b78f10a35a49",
+     "signature": "82c76561248b1d6314e6a048e2cf55c5affbbf059b19ab0585b1953b8e4437a1b2bf695fd54647303778203520685150e3cf0da0ab42aab9400fcd5a916ff60f"
+    }
+   },
+   {
+    "applied": {
+     "leases": [
+      {
+       "lease_id": "L-example-0001",
+       "until": "2026-11-05T18:00:00Z"
+      }
+     ],
+     "visit_leases": []
+    },
+    "cert": {
+     "bytes": "eyJlZGdlcyI6WyJlZGdlLWEiXSwiZXhwaXJlcyI6IjIwMjYtMTEtMTJUMTE6MDA6MDBaIiwiZm9ybWF0Ijoia2MtZWRnZS1yZWxheS12MSIsImlzc3VlZCI6IjIwMjYtMTEtMDVUMTE6MDA6MDBaIiwib2ZmaWNlcl9rZXkiOiJlYTRhNmM2M2UyOWM1MjBhYmVmNTUwN2IxMzJlYzVmOTk1NDc3NmFlYmViZTdiOTI0MjFlZWE2OTE0NDZkMjJjIiwib3BlcmF0aW9ucyI6WyJjdXRfc2Vzc2lvbnMiLCJlbmRfbGVhc2UiLCJob2xkX3JlbGVhc2UiLCJyZXZva2VfbGVhc2UiLCJyb2xsYmFja19yZWxlYXNlIiwic3VzcGVuZF9lZGdlIl0sInJlbGF5X2tleSI6IjEzOThmNjJjNmQxYTQ1N2M1MWJhNmE0YjVmM2RiZDJmNjlmY2E5MzIxNjIxOGRjODk5N2U0MTZiZDE3ZDkzY2EiLCJzZXJpYWwiOjF9",
+     "signatures": [
+      {
+       "key": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c",
+       "key_id": "fe812c12f3ab4ce6",
+       "signature": "daba572d492732adeb66c83c8ed9bc38047fca77d84ea79f00b59c2894065fc8bbeeb8662c2c4d3daa0cc5f01cce622cf56811c0a4c5c88eada11b682aa52803"
+      }
+     ]
+    },
+    "expected": {
+     "ok": false,
+     "state": null
+    },
+    "name": "a counter at or below the last one",
+    "now": "2026-11-05T12:30:00Z",
+    "pins": {
+     "edge": "edge-a",
+     "officer_key": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c"
+    },
+    "release": {
+     "floor": 3,
+     "serial": 5
+    },
+    "state": {
+     "newest": "2026-11-05T11:30:00Z",
+     "relay_counters": {
+      "1398f62c6d1a457c51ba6a4b5f3dbd2f69fca93216218dc8997e416bd17d93ca": 2
+     },
+     "serial": 12
+    },
+    "tighten": {
+     "bytes": "eyJjZXJ0X3NoYTI1NiI6IjY4N2JiMTdjNGQ2N2Y3ODU3NzJjZGRhNWU1OGZkYzRkZTE4ZjU3MzU3Y2ZhNDI2NTQxNjlkZWY3ZjllZmM4NGQiLCJjb3VudGVyIjoyLCJlZGdlIjoiZWRnZS1hIiwiZm9ybWF0Ijoia2MtZWRnZS10aWdodGVuLXYxIiwia2V5X2lkIjoiNWMyOWI3OGYxMGEzNWE0OSIsIm9wcyI6W3sibGVhc2VfaWQiOiJMLWV4YW1wbGUtMDAwMSIsIm9wIjoicmV2b2tlX2xlYXNlIn1dLCJwYXJlbnRfc2VyaWFsIjoxMiwic2lnbmVkX2F0IjoiMjAyNi0xMS0wNVQxMjowMDowMFoifQ==",
+     "key": "1398f62c6d1a457c51ba6a4b5f3dbd2f69fca93216218dc8997e416bd17d93ca",
+     "key_id": "5c29b78f10a35a49",
+     "signature": "0fcb0deef57412b27cacafeb40ada8434a9068f8ab8fd060f59fe2b01718ff8a74a0bd29ded1fa8e1a653345ea2251baa1476a27c65007079bc5be16c6fa580d"
+    }
+   },
+   {
+    "applied": {
+     "leases": [
+      {
+       "lease_id": "L-example-0001",
+       "until": "2026-11-05T18:00:00Z"
+      }
+     ],
+     "visit_leases": []
+    },
+    "cert": {
+     "bytes": "eyJlZGdlcyI6WyJlZGdlLWEiXSwiZXhwaXJlcyI6IjIwMjYtMTEtMDZUMTE6MDA6MDBaIiwiZm9ybWF0Ijoia2MtZWRnZS1yZWxheS12MSIsImlzc3VlZCI6IjIwMjYtMTEtMDVUMTE6MDA6MDBaIiwib2ZmaWNlcl9rZXkiOiJlYTRhNmM2M2UyOWM1MjBhYmVmNTUwN2IxMzJlYzVmOTk1NDc3NmFlYmViZTdiOTI0MjFlZWE2OTE0NDZkMjJjIiwib3BlcmF0aW9ucyI6WyJjdXRfc2Vzc2lvbnMiLCJlbmRfbGVhc2UiLCJob2xkX3JlbGVhc2UiLCJyZXZva2VfbGVhc2UiLCJyb2xsYmFja19yZWxlYXNlIiwic3VzcGVuZF9lZGdlIl0sInJlbGF5X2tleSI6IjEzOThmNjJjNmQxYTQ1N2M1MWJhNmE0YjVmM2RiZDJmNjlmY2E5MzIxNjIxOGRjODk5N2U0MTZiZDE3ZDkzY2EiLCJzZXJpYWwiOjF9",
+     "signatures": [
+      {
+       "key": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c",
+       "key_id": "fe812c12f3ab4ce6",
+       "signature": "c7728821b06a95f76c7ee05ad9fb106899781ec1d479f5e5a854c3516e3e09615f3c43f093adc676d18ad64943cb5b8614dc3400d7fd27604a95c25cb209e50e"
+      }
+     ]
+    },
+    "expected": {
+     "ok": false,
+     "state": null
+    },
+    "name": "a certificate expired in trusted time",
+    "now": "2026-11-05T12:30:00Z",
+    "pins": {
+     "edge": "edge-a",
+     "officer_key": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c"
+    },
+    "release": {
+     "floor": 3,
+     "serial": 5
+    },
+    "state": {
+     "newest": "2026-11-07T00:00:00Z",
+     "relay_counters": {},
+     "serial": 12
+    },
+    "tighten": {
+     "bytes": "eyJjZXJ0X3NoYTI1NiI6ImYwZjdkNjUwY2U1MWFhODU2MzRmNTQ1NDEzNmUyZmE0NmFmNmUyYzIwMDhlYjI2ODM5ZWU5ZDAxMDk1MTdiYWQiLCJjb3VudGVyIjoxLCJlZGdlIjoiZWRnZS1hIiwiZm9ybWF0Ijoia2MtZWRnZS10aWdodGVuLXYxIiwia2V5X2lkIjoiNWMyOWI3OGYxMGEzNWE0OSIsIm9wcyI6W3sibGVhc2VfaWQiOiJMLWV4YW1wbGUtMDAwMSIsIm9wIjoicmV2b2tlX2xlYXNlIn1dLCJwYXJlbnRfc2VyaWFsIjoxMiwic2lnbmVkX2F0IjoiMjAyNi0xMS0wNVQxMjowMDowMFoifQ==",
+     "key": "1398f62c6d1a457c51ba6a4b5f3dbd2f69fca93216218dc8997e416bd17d93ca",
+     "key_id": "5c29b78f10a35a49",
+     "signature": "53c9669d2a5fec5286c045b2b1e874f28e55679295b02956b6097debf9b71a0d4b28a8a63073ecbe82fbc44d3c274785afcd90ddb87ac483083823de7a998c04"
+    }
+   },
+   {
+    "applied": {
+     "leases": [
+      {
+       "lease_id": "L-example-0001",
+       "until": "2026-11-05T18:00:00Z"
+      }
+     ],
+     "visit_leases": []
+    },
+    "cert": {
+     "bytes": "eyJlZGdlcyI6WyJlZGdlLWIiXSwiZXhwaXJlcyI6IjIwMjYtMTEtMTJUMTE6MDA6MDBaIiwiZm9ybWF0Ijoia2MtZWRnZS1yZWxheS12MSIsImlzc3VlZCI6IjIwMjYtMTEtMDVUMTE6MDA6MDBaIiwib2ZmaWNlcl9rZXkiOiJlYTRhNmM2M2UyOWM1MjBhYmVmNTUwN2IxMzJlYzVmOTk1NDc3NmFlYmViZTdiOTI0MjFlZWE2OTE0NDZkMjJjIiwib3BlcmF0aW9ucyI6WyJjdXRfc2Vzc2lvbnMiLCJlbmRfbGVhc2UiLCJob2xkX3JlbGVhc2UiLCJyZXZva2VfbGVhc2UiLCJyb2xsYmFja19yZWxlYXNlIiwic3VzcGVuZF9lZGdlIl0sInJlbGF5X2tleSI6IjEzOThmNjJjNmQxYTQ1N2M1MWJhNmE0YjVmM2RiZDJmNjlmY2E5MzIxNjIxOGRjODk5N2U0MTZiZDE3ZDkzY2EiLCJzZXJpYWwiOjF9",
+     "signatures": [
+      {
+       "key": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c",
+       "key_id": "fe812c12f3ab4ce6",
+       "signature": "83d513b9efb04f3e40759a6f6d1cc275b776262651c764a131c0caf26103af0896e4623d5ac71748d6ad875cbe22e998f23937926d1b52437ab521333063d00b"
+      }
+     ]
+    },
+    "expected": {
+     "ok": false,
+     "state": null
+    },
+    "name": "another edge's certificate",
+    "now": "2026-11-05T12:30:00Z",
+    "pins": {
+     "edge": "edge-a",
+     "officer_key": "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c"
+    },
+    "release": {
+     "floor": 3,
+     "serial": 5
+    },
+    "state": {
+     "newest": "2026-11-05T11:30:00Z",
+     "relay_counters": {},
+     "serial": 12
+    },
+    "tighten": {
+     "bytes": "eyJjZXJ0X3NoYTI1NiI6IjYzMWI4YWQ2Y2FjMDFjNTdkY2U4Y2FjYTM5YzViNDMzZTY5YTVjOTY2ZDA5ZWVhMmMyZmUyMjliNjFlNmJiNTAiLCJjb3VudGVyIjoxLCJlZGdlIjoiZWRnZS1hIiwiZm9ybWF0Ijoia2MtZWRnZS10aWdodGVuLXYxIiwia2V5X2lkIjoiNWMyOWI3OGYxMGEzNWE0OSIsIm9wcyI6W3sibGVhc2VfaWQiOiJMLWV4YW1wbGUtMDAwMSIsIm9wIjoicmV2b2tlX2xlYXNlIn1dLCJwYXJlbnRfc2VyaWFsIjoxMiwic2lnbmVkX2F0IjoiMjAyNi0xMS0wNVQxMjowMDowMFoifQ==",
+     "key": "1398f62c6d1a457c51ba6a4b5f3dbd2f69fca93216218dc8997e416bd17d93ca",
+     "key_id": "5c29b78f10a35a49",
+     "signature": "f7a881748187ddfa59312d5daba7dd0b87e24d3ab3c463990d6cfabeecf9b815fcd6b6657654e06509ed7351ab977dc8beaa4210a4727a886e76372e487fdf0b"
+    }
+   }
+  ],
+  "note": "edge protocol 1.5, section 14: verify_tighten(cert, tighten, pins, state, applied, now, release): ok, and the state the edge stores after a tightening it applies"
+ },
  "reports": {
   "cases": [
    {
@@ -1267,6 +2004,63 @@
     },
     "name": "an unknown report member",
     "now": "2026-11-04T12:00:00Z"
+   },
+   {
+    "body": {
+     "activation": {
+      "at": "2026-11-04T09:00:00Z",
+      "by": "witness"
+     },
+     "applied_serial": 7,
+     "attestation": {
+      "profile": "basic"
+     },
+     "drift": []
+    },
+    "expected": {
+     "bastion": null,
+     "ok": true
+    },
+    "name": "a node active by the witness (1.5)",
+    "now": "2026-11-04T12:00:00Z"
+   },
+   {
+    "body": {
+     "activation": {
+      "at": "2026-11-04T09:00:00Z",
+      "by": "break_glass"
+     },
+     "applied_serial": 7,
+     "attestation": {
+      "profile": "basic"
+     },
+     "drift": []
+    },
+    "expected": {
+     "bastion": null,
+     "ok": false
+    },
+    "name": "a break-glass activation without its statement (1.5)",
+    "now": "2026-11-04T12:00:00Z"
+   },
+   {
+    "body": {
+     "activation": {
+      "at": "2026-11-04T09:00:00Z",
+      "by": "timer"
+     },
+     "applied_serial": 7,
+     "attestation": {
+      "profile": "basic"
+     },
+     "drift": []
+    },
+    "expected": {
+     "bastion": null,
+     "ok": false
+    },
+    "name": "a node active on its own timer (1.5)",
+    "now": "2026-11-04T12:00:00Z"
    }
   ],
   "note": "edge protocol 1.4: whether the desk accepts a report body (section 7) at the moment now, and the bastion declaration it keeps: tokens it knows as capabilities and adapter, the rest as unknown, never refused"
@@ -1403,6 +2197,66 @@
    }
   ],
   "note": "kc-edge-request-v2 (section 3): message is the bytes the edge signs, base64; ok is the desk's check of the header against the request as received (method, path with its query, body), the pinned key and the moment now (unix seconds); the query is signed exactly as sent"
+ },
+ "start_time": {
+  "cases": [
+   {
+    "boot": 8200,
+    "boot_at_signed": 1000,
+    "expected": {
+     "start_now": "2026-11-05T12:00:00Z"
+    },
+    "name": "honest clocks: the earlier reading is the wall clock",
+    "same_boot": true,
+    "signed_at": "2026-11-05T10:00:00Z",
+    "wall": "2026-11-05T12:00:00Z"
+   },
+   {
+    "boot": 8200,
+    "boot_at_signed": 1000,
+    "expected": {
+     "start_now": "2026-11-05T12:00:00Z"
+    },
+    "name": "the wall set forward a day: the start anchor plus the boot clock holds the start back",
+    "same_boot": true,
+    "signed_at": "2026-11-05T10:00:00Z",
+    "wall": "2026-11-06T12:00:00Z"
+   },
+   {
+    "boot": 26200,
+    "boot_at_signed": 1000,
+    "expected": {
+     "start_now": "2026-11-05T17:00:00Z"
+    },
+    "name": "the wall set forward and hourly wakes since: the ratchet raised its anchor, the start anchor did not",
+    "same_boot": true,
+    "signed_at": "2026-11-05T10:00:00Z",
+    "wall": "2026-11-06T17:00:00Z"
+   },
+   {
+    "boot": 1000,
+    "boot_at_signed": 1000,
+    "expected": {
+     "start_now": "2026-11-05T10:00:00Z"
+    },
+    "name": "the boot clock frozen: the start is delayed, never opened early",
+    "same_boot": true,
+    "signed_at": "2026-11-05T10:00:00Z",
+    "wall": "2026-11-05T22:00:00Z"
+   },
+   {
+    "boot": 50,
+    "boot_at_signed": 1000,
+    "expected": {
+     "start_now": null
+    },
+    "name": "after a reboot, before verified time: nothing starts",
+    "same_boot": false,
+    "signed_at": "2026-11-05T10:00:00Z",
+    "wall": "2026-11-05T12:00:00Z"
+   }
+  ],
+  "note": "edge protocol 1.5, section 1: start_time(wall, signed_at, boot_at_signed, boot, same_boot): the earlier reading on which starts are judged (admit's now_start), from the start anchor, verified time only (the newest bundle's issue time or the desk's time answer) and the boot clock at its arrival; never the ratchet's anchor; null after a reboot until verified time"
  },
  "statements": {
   "cases": [
@@ -1722,6 +2576,233 @@
    }
   ],
   "note": "unseal_multi(sealed, required, format); ok, and what it says when ok"
+ },
+ "time": {
+  "cases": [
+   {
+    "expected": {
+     "issued": "2026-10-24T09:00:00Z",
+     "ok": true
+    },
+    "name": "the desk's time for this request, on time",
+    "nonce": "bm9uY2Utb2YtdGhlLWNhc2U",
+    "pins": {
+     "bundle_key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+     "edge": "edge-a",
+     "officer_key": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
+     "release_key": null
+    },
+    "sealed": {
+     "bytes": "eyJlZGdlIjoiZWRnZS1hIiwiZm9ybWF0Ijoia2MtZWRnZS10aW1lLXYxIiwiaXNzdWVkIjoiMjAyNi0xMC0yNFQwOTowMDowMFoiLCJrZXlfaWQiOiIzNDc1MGY5OGJkNTlmY2ZjIiwibm9uY2UiOiJibTl1WTJVdGIyWXRkR2hsTFdOaGMyVSJ9",
+     "key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+     "key_id": "34750f98bd59fcfc",
+     "signature": "35c2c15bf893972c7687cdd7998fc5e64f0afd1a027afe8db181e39ef4521c3b49e267895f4324f035d903a22ac196b0cda9bd78dd790934152bd1c02b56aa00"
+    },
+    "waited": 2
+   },
+   {
+    "expected": {
+     "issued": null,
+     "ok": false
+    },
+    "name": "held back past the wait on the boot clock",
+    "nonce": "bm9uY2Utb2YtdGhlLWNhc2U",
+    "pins": {
+     "bundle_key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+     "edge": "edge-a",
+     "officer_key": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
+     "release_key": null
+    },
+    "sealed": {
+     "bytes": "eyJlZGdlIjoiZWRnZS1hIiwiZm9ybWF0Ijoia2MtZWRnZS10aW1lLXYxIiwiaXNzdWVkIjoiMjAyNi0xMC0yNFQwOTowMDowMFoiLCJrZXlfaWQiOiIzNDc1MGY5OGJkNTlmY2ZjIiwibm9uY2UiOiJibTl1WTJVdGIyWXRkR2hsTFdOaGMyVSJ9",
+     "key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+     "key_id": "34750f98bd59fcfc",
+     "signature": "35c2c15bf893972c7687cdd7998fc5e64f0afd1a027afe8db181e39ef4521c3b49e267895f4324f035d903a22ac196b0cda9bd78dd790934152bd1c02b56aa00"
+    },
+    "waited": 31
+   },
+   {
+    "expected": {
+     "issued": null,
+     "ok": false
+    },
+    "name": "an answer for another edge",
+    "nonce": "bm9uY2Utb2YtdGhlLWNhc2U",
+    "pins": {
+     "bundle_key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+     "edge": "edge-a",
+     "officer_key": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
+     "release_key": null
+    },
+    "sealed": {
+     "bytes": "eyJlZGdlIjoiZWRnZS1iIiwiZm9ybWF0Ijoia2MtZWRnZS10aW1lLXYxIiwiaXNzdWVkIjoiMjAyNi0xMC0yNFQwOTowMDowMFoiLCJrZXlfaWQiOiIzNDc1MGY5OGJkNTlmY2ZjIiwibm9uY2UiOiJibTl1WTJVdGIyWXRkR2hsTFdOaGMyVSJ9",
+     "key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+     "key_id": "34750f98bd59fcfc",
+     "signature": "df85997d1f5fb8fb7cc2ab08d13bdadcb5bcdec5761e2c51801a2381cd33fd8e1cb01942a23ab609ff96842ce0ff3ddb85a2a9703b7630cdaa1b5faae387880f"
+    },
+    "waited": 2
+   },
+   {
+    "expected": {
+     "issued": null,
+     "ok": false
+    },
+    "name": "an answer to another request (replayed)",
+    "nonce": "bm9uY2Utb2YtdGhlLWNhc2U",
+    "pins": {
+     "bundle_key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+     "edge": "edge-a",
+     "officer_key": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
+     "release_key": null
+    },
+    "sealed": {
+     "bytes": "eyJlZGdlIjoiZWRnZS1hIiwiZm9ybWF0Ijoia2MtZWRnZS10aW1lLXYxIiwiaXNzdWVkIjoiMjAyNi0xMC0yNFQwOTowMDowMFoiLCJrZXlfaWQiOiIzNDc1MGY5OGJkNTlmY2ZjIiwibm9uY2UiOiJiM1JvWlhJdGNtVnhkV1Z6ZEMxdWIyNWpaUSJ9",
+     "key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+     "key_id": "34750f98bd59fcfc",
+     "signature": "59d3b82c9d4b4c344d03f0f7d14cc6ac605f99d2f99bdac22462718c5be331f5256616615dafbdc9f44dfde63d97c0310d2c6d4b8acb02163bd1ac5aa5913205"
+    },
+    "waited": 2
+   },
+   {
+    "expected": {
+     "issued": null,
+     "ok": false
+    },
+    "name": "signed by another key",
+    "nonce": "bm9uY2Utb2YtdGhlLWNhc2U",
+    "pins": {
+     "bundle_key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+     "edge": "edge-a",
+     "officer_key": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
+     "release_key": null
+    },
+    "sealed": {
+     "bytes": "eyJlZGdlIjoiZWRnZS1hIiwiZm9ybWF0Ijoia2MtZWRnZS10aW1lLXYxIiwiaXNzdWVkIjoiMjAyNi0xMC0yNFQwOTowMDowMFoiLCJrZXlfaWQiOiJiNjJlODY3ZmEyZjMzYWZlIiwibm9uY2UiOiJibTl1WTJVdGIyWXRkR2hsTFdOaGMyVSJ9",
+     "key": "ed4928c628d1c2c6eae90338905995612959273a5c63f93636c14614ac8737d1",
+     "key_id": "b62e867fa2f33afe",
+     "signature": "54f84af25e9e9e7d501fb9f38bb407c27215361f94e2f3bd18a6f21d9e5ff864301d2e83df45940bf1b0584f1e3049d77ab94440c6e7403dacc06a53f5d14c0d"
+    },
+    "waited": 2
+   },
+   {
+    "expected": {
+     "issued": null,
+     "ok": false
+    },
+    "name": "an e-mail answer is not a time answer",
+    "nonce": "bm9uY2Utb2YtdGhlLWNhc2U",
+    "pins": {
+     "bundle_key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+     "edge": "edge-a",
+     "officer_key": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
+     "release_key": null
+    },
+    "sealed": {
+     "bytes": "eyJlZGdlIjoiZWRnZS1hIiwiZW1haWwiOiJhbm5AZXhhbXBsZS5vcmciLCJmb3JtYXQiOiJrYy1lZGdlLWVtYWlsLXYxIiwiaXNzdWVkIjoiMjAyNi0xMC0yNFQwOTowMDowMFoiLCJrZXlfaWQiOiIzNDc1MGY5OGJkNTlmY2ZjIiwibGVhc2VfaWQiOiJMLWV4YW1wbGUtMDAwMSIsIm5vbmNlIjoiYm05dVkyVXRiMll0ZEdobExXTmhjMlUiLCJwZXJzb24iOiJrYzphYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYSJ9",
+     "key": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
+     "key_id": "34750f98bd59fcfc",
+     "signature": "42b162589ce975c035c910bf5ff5488f2a2864d4a7a8e26d515b923a9a790de60072b733898f0259fe6921c27b7d3f5a746014c7405aad102d52cee0b62af100"
+    },
+    "waited": 2
+   }
+  ],
+  "note": "edge protocol 1.5, section 1: verify_time(sealed, pins, nonce, waited): the desk's time for one signed request of this edge (its nonce), arrived within 30 seconds of the request on the edge's boot clock (waited, seconds); ok, and the issued time it anchors on after a reboot"
+ },
+ "trusted_time": {
+  "cases": [
+   {
+    "boot": 4600,
+    "boot_at_verify": 1000,
+    "expected": {
+     "live": true,
+     "skewed": false,
+     "trusted": "2026-11-05T11:00:00Z"
+    },
+    "name": "honest clocks, an hour on",
+    "same_boot": true,
+    "wall": "2026-11-05T11:00:00Z",
+    "wall_at_verify": "2026-11-05T10:00:00Z"
+   },
+   {
+    "boot": 4600,
+    "boot_at_verify": 1000,
+    "expected": {
+     "live": true,
+     "skewed": true,
+     "trusted": "2026-11-05T11:00:00Z"
+    },
+    "name": "the wall clock set back an hour: the boot clock wins",
+    "same_boot": true,
+    "wall": "2026-11-05T10:00:00Z",
+    "wall_at_verify": "2026-11-05T10:00:00Z"
+   },
+   {
+    "boot": 87400,
+    "boot_at_verify": 1000,
+    "expected": {
+     "live": true,
+     "skewed": true,
+     "trusted": "2026-11-06T10:00:00Z"
+    },
+    "name": "the wall clock held at the last bundle for a day",
+    "same_boot": true,
+    "wall": "2026-11-05T10:00:00Z",
+    "wall_at_verify": "2026-11-05T10:00:00Z"
+   },
+   {
+    "boot": 4600,
+    "boot_at_verify": 1000,
+    "expected": {
+     "live": true,
+     "skewed": true,
+     "trusted": "2026-11-06T11:00:00Z"
+    },
+    "name": "the wall clock set forward a day: it stands, leases end early",
+    "same_boot": true,
+    "wall": "2026-11-06T11:00:00Z",
+    "wall_at_verify": "2026-11-05T10:00:00Z"
+   },
+   {
+    "boot": 4600,
+    "boot_at_verify": 1000,
+    "expected": {
+     "live": true,
+     "skewed": false,
+     "trusted": "2026-11-05T10:56:00Z"
+    },
+    "name": "within the skew: the wall clock stands",
+    "same_boot": true,
+    "wall": "2026-11-05T10:56:00Z",
+    "wall_at_verify": "2026-11-05T10:00:00Z"
+   },
+   {
+    "boot": 30,
+    "boot_at_verify": 1000,
+    "expected": {
+     "live": false,
+     "skewed": false,
+     "trusted": "2026-11-05T11:00:00Z"
+    },
+    "name": "rebooted since the last bundle: nothing is live",
+    "same_boot": false,
+    "wall": "2026-11-05T11:00:00Z",
+    "wall_at_verify": "2026-11-05T10:00:00Z"
+   },
+   {
+    "boot": 30,
+    "boot_at_verify": null,
+    "expected": {
+     "live": false,
+     "skewed": false,
+     "trusted": "2026-11-05T11:00:00Z"
+    },
+    "name": "no verified bundle in this boot",
+    "same_boot": true,
+    "wall": "2026-11-05T11:00:00Z",
+    "wall_at_verify": null
+   }
+  ],
+  "note": "edge protocol 1.5, section 1: the moment an edge acts on, from its wall clock, the trusted time it recorded and its boot clock (seconds, counting suspend) at its last verified bundle, the boot clock now, and whether it is the same boot; skew 300 s. live is false when no bundle verified in this boot: nothing is live until a fresh one does"
  },
  "unlock": {
   "cases": [
