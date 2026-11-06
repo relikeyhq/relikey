@@ -26,13 +26,17 @@ Warpgate's database replicates a cache, and the election exists only to keep tha
 ## Decision (accepted 2026-11-06)
 1. **Now: a cold spare.** A site that wants a second box gets a pre-enrolled spare: the edge's second node in the
    officer's statement (its own enrolment and unlock keys), installed with the same client-facing keys (SSH host key,
-   TLS certificate, SSO client, E3 below), kept powered off or with its agent stopped. Taking over is by hand: an
-   on-site operator powers the failed node off, starts the spare on the site's address and runs
-   `relikey-agent promote` with the site key's promotion statement, which the active node reports as a `break_glass`
-   activation (edge protocol 1.5 section 7.3) and the desk records as an incident. The spare pulls the edge's bundle
-   and serves within minutes; a node that was replaced returns only as the spare, never beside the active node. No
-   arbiter, no witness and no change to KeyClerk's desk: only one node produces at a time, so the desk's per-edge
-   records hold as built. A cut-off site keeps working on its last verified bundle in any case (0006, 0011).
+   TLS certificate, SSO client, E3 below). It is kept **warm**: its agent in shadow mode, without the site's address,
+   pulling and verifying the edge's bundles and keeping its floors, changing nothing in its Warpgate. A spare kept
+   switched off would grant nothing at takeover until it reached the desk once (0011: nothing is live after a reboot
+   until a fresh bundle verifies), which on a cut-off site is exactly when it is needed. Taking over is by hand: an
+   on-site operator powers the failed node off, gives the spare the site's address, switches its agent to enforce and
+   runs `relikey-agent promote` with the site key's promotion statement, which the active node reports as a
+   `break_glass` activation (edge protocol 1.5 section 7.3) and the desk records as an incident. The spare serves from
+   the bundle it holds at its first tick; a node that was replaced returns only as the spare, never beside the active
+   node. No arbiter, no witness and no change to KeyClerk's desk: only one node applies at a time (a shadow agent
+   pulls and reports but applies nothing), so the desk's per-edge records hold as built; KeyClerk 0.28.0 keeps each
+   node's pulls and reports apart. The fleet takes one key per edge (0026 point 15): the spare joins it at takeover.
 2. **Option A, designed and kept ready** (the section "Option A" below, with its models and lab evidence): two whole
    edges sharing nothing that grants, the vote deciding only who holds the site's address. It is built when a
    customer or pilot site needs automatic failover (a takeover without a person on site, in tens of seconds), and not
@@ -193,3 +197,4 @@ unreachable, which here buys no safety.
   position, one host key on two Warpgate nodes.
 - 2026-11-06: accepted after a prior-art pass on appliances and access gateways: a cold spare now, option A kept
   ready behind a trigger, option B rejected.
+- 2026-11-06: the spare is kept warm (shadow mode), found writing its takeover guide (#138).
