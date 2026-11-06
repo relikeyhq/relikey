@@ -37,6 +37,78 @@ Releases are semver tags, `v0.1.0` first. A ReliKey release is its pins and its 
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-06
+
+### Added
+- Each release carries an OpenVEX document, `relikey.openvex.json`: for each known vulnerability in a Go module or the
+  standard library a binary is built from, whether that binary calls the vulnerable code, as govulncheck found it at
+  release time. Products are named by the package URL in each binary's SBOM and by its SHA-256. The VEX is listed in
+  `SHA256SUMS`, attested and signed like a binary, and a release whose binaries call vulnerable code is not published
+  (`python agent/build.py vex`; README.md, "Verifying a release", step 7; docs/publishing.md).
+- The demo as a signed image, `ghcr.io/relikeyhq/relikey-demo`, for amd64 and arm64, built from source with its
+  own build context (only the agent module), attested and signed by digest at each release. It runs offline once
+  pulled. Its page listens beyond loopback only inside the image; the docs publish it on `127.0.0.1` only.
+- Operator guides in `docs/guides/`: an overview of what runs where, installing a core and an edge at a site, day-2
+  operations (watching, upgrading, backing up, rotating keys and certificates) and troubleshooting built from the
+  messages the installers and the agent print. Each guide says plainly what the repository does not yet support.
+- A role taken away behind the agent while its lease runs is sent to the desk as a `lease_ended_early` incident
+  (edge protocol 1.4) for each live lease that granted it, besides the drift line. Incidents survive a restart;
+  one the desk refuses is dropped, never sent again.
+- A spare edge node (decision 0028): `install.py site-keys --out DIR` makes the site's SSH host key beside the front's
+  certificate and key on the active node, `site-keys --apply DIR` puts them on an installed node, and `--site-keys DIR`
+  installs a spare with them, so a node that takes over shows people the same host key and certificate. The operations
+  guide has the warm spare and its takeover by hand.
+- Prometheus alerting rules for an edge site, `deploy/edge/relikey-agent.rules.yaml`: a silent or unhealthy agent, a
+  refused bundle, a failed Warpgate action, Warpgate unreadable, failing pulls and an edge the desk ended, each with
+  what to check next and a promtool unit test (docs/agent.md, Alerting rules). The staleness threshold the docs
+  suggested is 180 s now, three heartbeats, since 120 s could fire on a live agent between scrapes.
+- Each start of the agent is an event, `relikey.agent.started.v1` (OCSF Application Lifecycle, activity Start, with
+  the agent's version and mode): a restart of the component that enforces access is on the record, and an idle
+  edge's event chain has a record after every restart to be checked across.
+- The agent's report declares what Warpgate enforces by itself (edge protocol 1.4), from the version Warpgate shows
+  the agent's admin token: `expires_grants`, `injects_credentials`, and `ends_sessions_on_revoke` from 0.30.2. Session
+  recording is not declared, since the agent cannot read that setting.
+- The agent's report echoes the `records_head` of the bundle it applied in full (edge protocol 1.4), so the
+  desk can tell when an edge applied records it does not hold. A bundle without one leaves it out of the report.
+- The agent's report confirms removals (edge protocol 1.4, the leaver proof): once a lease it applied is no longer
+  live and the bastion is seen no longer holding its role, the report carries the lease, the bastion and the time.
+  Confirmations survive a restart and are dropped once delivered.
+- The agent reports a role a live lease grants that someone else removed before the lease ends, such as Warpgate's
+  single sign-on role sync at a login whose roles claim lacks the role (warp-tech/warpgate#2785): a drift line per
+  role, counted in the status as `roles_removed_outside`. Enforce mode grants the role again, as before.
+
+### Changed
+- The core runs KeyClerk 0.28.0 (was 0.26.3), built from its signed tag v0.28.0 (ee84b45). From 0.27.0: edge protocol
+  1.4 on the desk side, backup and restore with a drill, signed snapshots, SIEM and SOAR; approvals need a passkey
+  sign-in (the realm names the passkey sign-in as the level `passkey` and KeyClerk's `approvals.acr` requires it, so
+  the first sign-in's temporary password can no longer approve); the reconciler signs the identity broker's
+  high-water mark with its own key, which the installer creates. From 0.28.0: high availability for edges and the
+  core signer, and an edge's trusted time (edge protocol 1.5, which the agent adopts in the next release). Nothing
+  new is required to start the services; reinstalling with the same arguments rebuilds the image from the new tag.
+- The agent's KeyClerk conformance vectors are regenerated from the signed 0.27.0 tag (f8dd982), edge protocol
+  1.4. The bundle verifier now refuses a bundle whose `records_head` is present but malformed or null, and the
+  hours the ceiling judges a lease by are checked against KeyClerk's recorded cases.
+- The release steps (`release`, `smoke`, `vex`, `dist`) moved from `agent/build.py` to `agent/release.py`; the
+  commands stay `python agent/build.py ...`. build.py is the mutants' harness, so a change to the release steps no
+  longer runs every mutant on a pull request and again in the merge queue.
+
+### Fixed
+- An enrolment-key rotation can now finish in the edge pod. The pod mounted the key read-only as a single file, so
+  the staged key could not be placed beside it and nothing could be renamed over it. The key now lives in a writable
+  directory (`deploy/secrets/keys`, at `/etc/relikey/keys`), and the agent refuses at start a staged rotation it could
+  not finish, with the fix, instead of failing after the desk has taken the new key. Upgrading an installed edge:
+  `python deploy/edge/install.py move-keys`, then recreate the agent.
+
+### Security
+- The edge runs Warpgate 0.30.4 (was 0.30.2), which fixes three advisories: GHSA-hhq8-x2xc-95qx (High, the HTTP
+  proxy followed cross-host redirects from a target), GHSA-fxfw-2m4j-xmc8 and GHSA-r7rf-j762-2xxv. The agent's
+  Warpgate adapter passes a new live test against the real 0.30.2 and 0.30.4 (`tools/warpgate_live.py`).
+- Enforce mode refuses to start in a Linux time namespace that offsets the boot or monotonic clock
+  (`/proc/self/timens_offsets`): the boot clock bounds a lease's time, and an offset one would let a lease outlive
+  it. A kernel without time namespaces counts as no offset; a file it cannot read refuses.
+- The ceiling judges a lease's length in whole hours rounded up, as KeyClerk does. Rounded down, a lease up to
+  59 minutes longer than `max_lease_hours` or `max_offline_hours` was still admitted.
+
 ## [0.2.1] - 2026-11-04
 
 ### Added
