@@ -31,3 +31,4 @@ ReliKey's own design decisions. Open questions live in `model/open-decisions.yam
 | [0025](0025-relikey-as-a-trust-sensor.md) | ReliKey as a trust sensor: OCSF events, an evidence log, a downgrade feed and FTEF evidence | accepted |
 | [0026](0026-federated-observability-and-fleet-management.md) | Federated observability and fleet management: ReliKey's own, tiered, tighten-only below the parent | accepted |
 | [0027](0027-public-engine-source-on-github.md) | The engine's source of record is its public repository; a private companion keeps the rest | accepted |
+| [0028](0028-two-node-edge-election-and-fencing.md) | A second edge node: a cold spare now; two whole edges designed and kept ready; no replicated database | accepted |

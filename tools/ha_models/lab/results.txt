@@ -1,0 +1,44 @@
+== crash-normal: events [(0.0, 'kill A'), (30.1, 'A back')]
+   gaps (start s after the first event, length s): [(0.1, 14.4)]
+   answers in order: Ax1 -x72 Bx158 Ax1 Bx249; direct A/B flips: 2
+   arbiter: [(-6.9, 'A', 'TAKE'), (14.3, 'B', 'TAKE'), (30.3, 'A', 'TAKE'), (30.4, 'A', 'RELEASE')]
+== crash-static: events [(0.0, 'kill A'), (30.1, 'A back')]
+   gaps (start s after the first event, length s): [(0.1, 'until the end')]
+   answers in order: Ax1 -x274; direct A/B flips: 0
+   arbiter: [(-7.1, 'A', 'TAKE'), (14.1, 'B', 'TAKE'), (30.3, 'A', 'TAKE'), (31.2, 'A', 'RELEASE')]
+== crash-vmac: events [(0.0, 'kill A'), (30.1, 'A back')]
+   gaps (start s after the first event, length s): [(0.1, 14.3)]
+   answers in order: Ax1 -x72 Bx159 Ax2 Bx248; direct A/B flips: 2
+   arbiter: [(-6.8, 'A', 'TAKE'), (14.4, 'B', 'TAKE'), (30.4, 'A', 'TAKE'), (30.5, 'A', 'RELEASE')]
+== cut-normal: events [(0.0, 'cut A-B'), (30.3, 'heal A-B')]
+   gaps (start s after the first event, length s): []
+   answers in order: Ax556; direct A/B flips: 0
+   arbiter: [(-6.9, 'A', 'TAKE')]
+== cut-static: events [(0.0, 'cut A-B'), (30.3, 'heal A-B')]
+   gaps (start s after the first event, length s): []
+   answers in order: Ax556; direct A/B flips: 0
+   arbiter: [(-7.1, 'A', 'TAKE')]
+== cut-vmac: events [(0.0, 'cut A-B'), (30.2, 'heal A-B')]
+   gaps (start s after the first event, length s): []
+   answers in order: Ax556; direct A/B flips: 0
+   arbiter: [(-6.8, 'A', 'TAKE')]
+== freeze-normal: events [(0.0, 'freeze A'), (30.0, 'thaw A')]
+   gaps (start s after the first event, length s): [(0.1, 14.2)]
+   answers in order: Ax1 -x71 Bx408; direct A/B flips: 0
+   arbiter: [(-6.9, 'A', 'TAKE'), (14.4, 'B', 'TAKE'), (30.1, 'A', 'RELEASE')]
+== freeze-static: events [(0.0, 'freeze A'), (30.1, 'thaw A')]
+   gaps (start s after the first event, length s): [(0.1, 30.1)]
+   answers in order: Ax1 -x150 Bx250; direct A/B flips: 0
+   arbiter: [(-7.2, 'A', 'TAKE'), (14.1, 'B', 'TAKE'), (30.1, 'A', 'RELEASE')]
+== freeze-vmac: events [(0.0, 'freeze A'), (30.1, 'thaw A')]
+   gaps (start s after the first event, length s): [(0.1, 14.3), (20.7, 7.2)]
+   answers in order: Ax1 -x71 Bx63 -x36 Bx273; direct A/B flips: 0
+   arbiter: [(-6.9, 'A', 'TAKE'), (14.3, 'B', 'TAKE'), (30.1, 'A', 'RELEASE')]
+== nowit-normal: events [(0.0, 'witness down'), (6.1, 'kill A')]
+   gaps (start s after the first event, length s): [(6.2, 'until the end')]
+   answers in order: Ax62 -x125; direct A/B flips: 0
+   arbiter: [(-6.9, 'A', 'TAKE')]
+== nowit-static: events [(0.0, 'witness down'), (6.1, 'kill A')]
+   gaps (start s after the first event, length s): [(6.2, 'until the end')]
+   answers in order: Ax62 -x125; direct A/B flips: 0
+   arbiter: [(-7.1, 'A', 'TAKE')]
