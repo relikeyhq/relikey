@@ -11,8 +11,9 @@ and cannot be withdrawn. `tools/public_text_check.py` scans that text: identity 
 attack detail and infrastructure are flags a human reads. It runs in three places:
 
 - **The pre-push hook** (`hooks/pre-push`, installed with `git config core.hooksPath hooks`) checks each range pushed to
-  a github.com remote: added lines, commit messages and gitleaks. A hard failure stops the push. Flags stop it too
-  until read: run the check with `--flags-ok` on that range, then push with `RELIKEY_FLAGS_READ=1`.
+  a github.com remote: added lines, commit messages and gitleaks (`public_text` in `.github/kit.yaml`, run by the
+  maintainers' estate gate, or by the hook itself without it). A hard failure stops the push. Flags stop it too until
+  read: run the check with `--flags-ok` on that range, then push with `RELIKEY_FLAGS_READ=1`.
 - **By hand, before posting:** `python tools/public_text_check.py --text body.md` for every issue, pull request or
   comment text a maintainer writes.
 - **The Public text workflow** (`.github/workflows/public-text.yml`) checks every pull request, issue, discussion,

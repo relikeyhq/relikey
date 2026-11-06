@@ -45,6 +45,10 @@ markdown_extensions:
 nav:
   - Home: index.md
   - Run it:
+      - Operator overview: guides/overview.md
+      - Install at a site: guides/install.md
+      - Operations: guides/operations.md
+      - Troubleshooting: guides/troubleshooting.md
       - Installation checklist: installation-checklist.md
       - Publishing: publishing.md
   - Understand it:

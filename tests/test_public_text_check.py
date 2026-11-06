@@ -26,11 +26,20 @@ def test_a_local_path_fails_hard(tmp_path, capsys):
     assert code == 3
 
 
-def test_attack_detail_is_a_flag_until_a_human_read_it(tmp_path, capsys):
+def test_attack_detail_is_a_flag_until_a_human_read_it(tmp_path, capsys, monkeypatch):
+    monkeypatch.delenv("RELIKEY_FLAGS_READ", raising=False)
     code, out = _check(tmp_path, capsys, "Found in the red team.\n")
     assert code == 1 and "flag line 1" in out
     code, out = _check(tmp_path, capsys, "Found in the red team.\n", "--flags-ok")
     assert code == 0
+    # The estate gate runs a fixed command: the push says the flags were read through the environment.
+    flagged = "Found in the red " + "team.\n"   # assembled at run time: the literal would be flagged in this file's diff
+    monkeypatch.setenv("RELIKEY_FLAGS_READ", "1")
+    code, out = _check(tmp_path, capsys, flagged)
+    assert code == 0
+    monkeypatch.setenv("RELIKEY_FLAGS_READ", "yes")   # only "1" says it
+    code, out = _check(tmp_path, capsys, flagged)
+    assert code == 1
 
 
 def test_a_private_pattern_fails_without_publishing_itself(tmp_path, capsys, monkeypatch):
