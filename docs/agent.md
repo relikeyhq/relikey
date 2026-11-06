@@ -185,11 +185,20 @@ agent follows without a command after the approval:
    the old key is deleted at the swap.
 Crash safety: the old key is written to its own file before the swap; a restart in between finds it equal to the key
 in use, removes it and starts over, and a restart after the swap starts with the new key and the handover pending.
-Refused at start, each with the next step: a staged key outside the key's directory, a staged key without its
-statement or the reverse, a staged key equal to the one in use, a statement for another edge or key or not a
-rotation, a second rotation staged while the fleet has not taken the first, and a rotation that also changes the
-edge's officer: the agent verifies the ceiling with `pins.officer_key`, so a new officer needs the edge enrolled again
-(not in #26). The settings may stay in `agent.json` after the rotation; with the staged file gone they do nothing.
+Refused at start, each with the next step: a staged key outside the key's directory, a key directory the agent
+cannot write or a key mounted as a file of its own (the rename could not happen; without a staged rotation this is a
+warning, #134), a staged key without its statement or the reverse, a staged key equal to the one in use, a statement
+for another edge or key or not a rotation, a second rotation staged while the fleet has not taken the first, and a
+rotation that also changes the edge's officer: the agent verifies the ceiling with `pins.officer_key`, so a new
+officer needs the edge enrolled again (not in #26). The settings may stay in `agent.json` after the rotation; with the
+staged file gone they do nothing.
+
+In the edge pod the key directory is `deploy/secrets/keys` on the host, mounted writable at `/etc/relikey/keys`:
+stage the next key and the statement there (host `deploy/secrets/keys/enrolment.next.key`, in `agent.json`
+`/etc/relikey/keys/enrolment.next.key`), owned by the agent's uid 65532 like the key. An edge installed before #134
+kept the key as a single read-only file mount, where no rotation could finish: `python deploy/edge/install.py
+move-keys` moves it and updates `agent.json`, then `podman compose -f deploy/edge/compose.yaml up -d --force-recreate
+agent`.
 
 `governed_roles_file` (optional) is a SCIM list of the groups only leases grant, written by `deploy/edge/targets.py`
 from the edge's targets. With it, or with `governed_roles` in the signed bundle (KeyClerk 0.25.0, its decision 0025),
@@ -348,6 +357,8 @@ KeyClerk 0.22.0 sends the verified e-mail on each lease (KC-10) and a stable `fr
 `ceiling.rego` meanwhile), the LDAP facade and lease credentials, offline levels, evidence, TPM. Not yet run: armv7 on real hardware (qemu-user only so far).
 
 ## Changelog
+- 2026-11-06: a rotation that could not finish where the key is kept is refused at start (#134); the edge pod keeps
+  the key in a writable directory, `install.py move-keys` for older installs; 4 mutants.
 - 2026-11-03: enrolment-key rotation (#26): the staged next key, the 401 retry and crash-safe promotion, the handover
   to the fleet and the old key's deletion once the fleet takes the new one; 12 mutants on the agent's side.
 - 2026-10-28: the event chain (decision 0025 point 2, first part): sequence numbers and the previous record's hash in

@@ -146,6 +146,11 @@ officer. Nothing is admitted until an officer approves with their passkey. To pr
 
     python deploy/edge/install.py enrol --code-file <the code's file>
 
+The enrolment key lives in deploy/secrets/keys/, mounted writable at /etc/relikey/keys, because a key rotation renames
+the staged key over it there (#134). An edge installed before that moves its key once, then recreates the agent:
+
+    python deploy/edge/install.py move-keys
+
 options:
   -h, --help            show this help message and exit
   --edge EDGE
