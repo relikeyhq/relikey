@@ -103,6 +103,37 @@ corosync-qdevice gives a two-node cluster a third vote that only breaks ties (`f
 qdevice's counting and client-go's timing; a lease alone would take the site's address down whenever the witness is
 unreachable, which here buys no safety.
 
+## Evidence (gathered after draft 3, on the maintainer's request)
+- **E2, KeyClerk's position (2026-11-06):** prefers B on footprint, no objection to A, and the promotion statement's
+  validity window in both. A costs the desk lasting per-node bookkeeping that only two-node edges use (removals,
+  comparisons and evidence chains per node, a decommission path, an edge protocol 1.6 change for evidence), against
+  the rule that KeyClerk stays small; B keeps the desk as built. KeyClerk adds the validity window regardless, and
+  fixed the two node-2 bugs both options needed (the ended notice, phoned unlock) for 0.28.0.
+- **E3, one SSH host key on two Warpgate 0.30.4 nodes: works.** With `ssh.keys: /data/keys` in the configuration and
+  a `host-ed25519` file owned by Warpgate's user placed before the first start, both nodes import it into their
+  database and present the same fingerprint, kept after a restart. Without `ssh.keys` the file is ignored and each
+  node generates its own. Warpgate marks the file import deprecated ("in the future Warpgate will stop reading these
+  files"); once imported the file can go, and a later release needs another way to set the key.
+- **E1, the address arbiter on an emulated site network (2026-11-06).** A prototype of point 2 (UDP heartbeats, an
+  HTTP compare-and-swap witness, retry 2 s, renew deadline 8 s, lease 15 s) in containers on one rootless bridge, a
+  client connecting to the site's address every 100 ms; each scenario with a normal client, a client that never
+  learns a new MAC for the address (as industrial clients that ignore gratuitous ARP), and a virtual MAC that moves
+  with the address. Prototype and results in `tools/ha_models/lab/`.
+
+  | Scenario | normal client | client ignoring gratuitous ARP | virtual MAC |
+  |---|---|---|---|
+  | the holder dies | 14.4 s, then B | never recovers | 14.3 s |
+  | the holder freezes 30 s | 14.2 s | 30.1 s (unexplained recovery, unverified) | 14.3 s, then 7.2 s more while the frozen node still holds the MAC |
+  | the nodes stop hearing each other | no gap: the witness keeps A | no gap | no gap |
+  | the witness is down, then the holder dies | the address stays down (no majority, by design) | same | not finished |
+
+  Findings: a move costs about the lease (15 s) at these timings; a client that ignores gratuitous ARP needs the
+  virtual MAC, and then a frozen holder flaps the MAC on the switch (the review's port-security caveat), so a site
+  with such clients needs a watchdog that resets a frozen node; and a returning node took the address for 0.1 s
+  before hearing its peer (the prototype started it as holder): the rule is that a starting node holds nothing until
+  it has heard its peer or the witness. Not covered: real switches and PLCs (port security, ARP caches kept for
+  hours); those need the target hardware or the vendors' documentation.
+
 ## Consequences
 - The 0012/0013 Warpgate cluster on PostgreSQL is withdrawn; the two-node profile is two single-node pods, the
   arbiter in the agent, shared client-facing keys, and the witness (a compare-and-swap record at the core or on site).
@@ -114,3 +145,5 @@ unreachable, which here buys no safety.
 - 2026-11-06: draft 2: shared nothing; the election only for the site's address.
 - 2026-11-06: draft 3 after the second review, code checks of the agent, Warpgate and KeyClerk, prior art in code,
   and a message-level model of the arbiter.
+- 2026-11-06: evidence E1 to E3 on the maintainer's request: the arbiter on an emulated site network, KeyClerk's
+  position, one host key on two Warpgate nodes.
