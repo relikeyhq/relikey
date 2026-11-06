@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: EUPL-1.2
 """Lab witness: one compare-and-swap record {holder, version}, no clock. POST /cas {expect, holder}: when expect equals
 the version (or -1 for "my renew"), the holder is set and the version rises. GET /read."""
-import json, threading
+import json
+import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 rec = {"holder": "A", "version": 0}

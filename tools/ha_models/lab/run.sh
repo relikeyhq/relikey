@@ -1,4 +1,5 @@
 #!/bin/bash
+# SPDX-License-Identifier: EUPL-1.2
 # ReliKey 0028 evidence E1: the address arbiter on an emulated site network (rootless podman bridge on the hub).
 # Containers relikey-arb-* on network relikey-arb only; all removed at the end. Writes ~/arblab/results/*.
 set -u

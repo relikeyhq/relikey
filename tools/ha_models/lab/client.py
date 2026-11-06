@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: EUPL-1.2
 """Lab client: connects to the site address every 100 ms (200 ms timeout) and logs which node answered."""
-import os, socket, sys, time
+import os
+import socket
+import time
 VIP = os.environ["VIP"]
 while True:
     t = time.time()

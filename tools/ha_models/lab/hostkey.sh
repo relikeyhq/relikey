@@ -1,4 +1,5 @@
 #!/bin/bash
+# SPDX-License-Identifier: EUPL-1.2
 # ReliKey 0028 evidence E3: do two Warpgate 0.30.4 instances given one SSH host key file before their first start
 # present the same host key? Two podman volumes, unattended setup in each, the same host-ed25519 placed in each
 # keys path, both run on loopback ports, ssh-keyscan both. Only relikey-hk-* containers and volumes; removed at the end.

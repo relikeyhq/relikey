@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: EUPL-1.2
 """Timed model of the two-node edge election (decision 0028 draft 1), checked over every fault scenario in a small scope.
 
 Nodes A (primary at t=0) and B (standby), monitor M. Time in seconds. One or two faults per scenario, each with a
@@ -17,7 +18,8 @@ Invariants:
      could reach each other.
 Usage: python hamodel.py [--no-watchdog] [--softdog]
 """
-import itertools, sys
+import itertools
+import sys
 from collections import Counter
 
 PROMOTE_WAIT, PARTITION_TIMEOUT, HEALTH_PERIOD = 90, 20, 5
@@ -38,7 +40,7 @@ def run(faults, watchdog="hardware"):
     unhealthy_since = None
     isolated_since = {"A": None, "B": None}
     silent_since = {"A": None, "B": None}           # keeper not reporting (frozen)
-    writes_on = Counter()
+    Counter()
     monitor_primary = "A"
     two_writers, down = [], 0
     for t in range(HORIZON):
@@ -66,13 +68,13 @@ def run(faults, watchdog="hardware"):
             if role[n] == "frozen-wake":
                 role[n] = "primary" if believes_primary[n] else "standby"
 
-        def reach(x, y):
+        def reach(x, y, t=t):
             if x == "M" or y == "M":
                 n = x if y == "M" else y
                 return not active(f"link {n}M", t)
             return not active("link AB", t)
 
-        def healthy(n):                                 # running, not frozen, not crashed
+        def healthy(n, t=t):                            # running, not frozen, not crashed
             return up[n] and not active(f"freeze {n}", t) and not active(f"machine {n}", t) and role[n] != "down"
 
         # a node acting as primary that reaches the monitor learns at its next health check who the monitor's

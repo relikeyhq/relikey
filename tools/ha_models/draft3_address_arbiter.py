@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: EUPL-1.2
 """Model of the site-address arbiter of decision 0028 draft 3, with messages, local clocks, freezes and loss.
 
 Two nodes A and B and a witness W. Time in seconds; every message takes DELAY seconds and is lost while its link is
@@ -27,10 +28,14 @@ FAULTS = ("link AB", "link AW", "link BW", "freeze A", "freeze B", "crash A", "c
 
 
 def run(faults):
-    act = lambda k, t: any(f == k and s <= t < s + d for f, s, d in faults)
-    alive = lambda n, t: not act(f"crash {n}", t)
-    frozen = lambda n, t: act(f"freeze {n}", t)
-    link = lambda x, y, t: not act("link " + "".join(sorted(x + y)), t)
+    def act(k, t):
+        return any(f == k and s <= t < s + d for f, s, d in faults)
+    def alive(n, t):
+        return not act(f"crash {n}", t)
+    def frozen(n, t):
+        return act(f"freeze {n}", t)
+    def link(x, y, t):
+        return not act("link " + "".join(sorted(x + y)), t)
     other = {"A": "B", "B": "A"}
     holds = {"A": True, "B": False}
     heard = {"A": 0, "B": 0}

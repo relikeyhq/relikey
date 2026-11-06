@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: EUPL-1.2
 """Reads ~/arblab/results (fetched): per scenario, the client's gaps (consecutive failed connects), which node answered
 over time, both nodes' TAKE/RELEASE lines, and whether the address was ever answered by both within one second."""
-import sys, re
+import sys
+import re
 from pathlib import Path
 
 R = Path(sys.argv[1])
 for name in sorted({p.stem for p in R.glob("*.client")}):
-    cl = [l.split() for l in (R / f"{name}.client").read_text().splitlines() if re.match(r"^\d", l)]
-    ev = [l.split(None, 2) for l in (R / f"{name}.events").read_text().splitlines()] if (R / f"{name}.events").exists() else []
+    cl = [line.split() for line in (R / f"{name}.client").read_text().splitlines() if re.match(r"^\d", line)]
+    ev = [line.split(None, 2) for line in (R / f"{name}.events").read_text().splitlines()] if (R / f"{name}.events").exists() else []
     t0 = float(ev[0][0]) if ev else float(cl[0][0])
     gaps, start, prev = [], None, None
     for t, who in ((float(a), b) for a, b in cl):
@@ -30,8 +32,8 @@ for name in sorted({p.stem for p in R.glob("*.client")}):
     for n in "ab":
         f = R / f"{name}.{n}"
         if f.exists():
-            for l in f.read_text().splitlines():
-                m = re.match(r"^(\d+\.\d+) (\w) (TAKE|RELEASE)", l)
+            for line in f.read_text().splitlines():
+                m = re.match(r"^(\d+\.\d+) (\w) (TAKE|RELEASE)", line)
                 if m:
                     acts.append((round(float(m.group(1)) - t0, 1), m.group(2), m.group(3)))
     print(f"== {name}: events {[(round(float(e[0]) - t0, 1), e[2]) for e in ev]}")

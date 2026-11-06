@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: EUPL-1.2
 """Prototype of the 0028 draft 3 address arbiter (lab only). One process per node.
 
 Peers heartbeat over UDP every HB s; the witness is an HTTP compare-and-swap record. Rules as in the decision:
@@ -8,7 +9,12 @@ accepted renew (monotonic clock); a challenger takes only after seeing the recor
 Holding = the site address on this node (ip addr add) plus gratuitous ARP; with VMAC=1 the address lives on a
 macvlan with a fixed MAC, so the same MAC moves. A file /tmp/cut-peer drops peer heartbeats (a cut between nodes).
 """
-import json, os, socket, subprocess, sys, time, urllib.request
+import json
+import os
+import socket
+import subprocess
+import time
+import urllib.request
 
 ME, PEER, PEER_IP, WIT = os.environ["ME"], os.environ["PEER"], os.environ["PEER_IP"], os.environ["WITNESS"]
 VIP, DEV, VMAC = os.environ["VIP"], os.environ.get("DEV", "eth0"), os.environ.get("VMAC") == "1"

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: EUPL-1.2
 """Model of decision 0028 draft 2: two whole edges sharing nothing, a third vote only for the site's address.
 
 Nodes A and B (each a single-node edge: own agent, own Warpgate), witness W, the core (desk). A lease L for person P is
@@ -31,12 +32,13 @@ FAULTS = ("crash A", "crash B", "link AC", "link BC", "link AB", "link AW", "lin
 
 
 def run(faults, rule):
-    act = lambda k, t: any(f == k and s <= t < s + d for f, s, d in faults)
-    up = lambda n, t: not act(f"crash {n}", t)
+    def act(k, t):
+        return any(f == k and s <= t < s + d for f, s, d in faults)
+    def up(n, t):
+        return not act(f"crash {n}", t)
     holds_role = {"A": True, "B": True}
     pulled_after = {"A": False, "B": False}
     confirmed = set()
-    desk_removed_at = None
     holder = {"A": True, "B": False}
     w_vote, w_seen = "A", 0
     p1 = p2 = two = none = 0
@@ -66,8 +68,10 @@ def run(faults, rule):
         if desk_removed and any(holds_role[n] and up(n, t) for n in "AB"):
             p2 += 1
         # address arbiter
-        reach = lambda x, y: up(x, t) and up(y, t) and not act(f"link {''.join(sorted(x + y))}", t)
-        reach_w = lambda n: up(n, t) and not act(f"link {n}W", t)
+        def reach(x, y, t=t):
+            return up(x, t) and up(y, t) and not act(f"link {''.join(sorted(x + y))}", t)
+        def reach_w(n, t=t):
+            return up(n, t) and not act(f"link {n}W", t)
         if w_vote is not None and (not reach_w(w_vote) or t - w_seen > WTTL):
             if not reach_w(w_vote):
                 if t - w_seen > WTTL:
