@@ -212,7 +212,7 @@ def main() -> int:
     # DESK_ORIGIN: what a browser's Origin header carries (host:port off 443); the desk checks it on every POST
     write("core.env", f"BROKER_HOST={hosts[0]}\nDESK_HOST={hosts[1]}\nEDGE_HOST={hosts[2]}\nREALM={o.realm}\n"
                       f"BROKER_URL=https://{hosts[0]}{suffix}\nDESK_URL=https://{hosts[1]}{suffix}\n"
-                      f"DESK_ORIGIN={hosts[1]}{suffix}\n", owner=None, keep=False)
+                      f"DESK_ORIGIN={hosts[1]}{suffix}\nFRONT_PORT={port}\n", owner=None, keep=False)
     db = secrets.token_urlsafe(32)
     if not (SECRETS / "broker-db.env").exists():
         write("broker-db.env", f"POSTGRES_DB=keycloak\nPOSTGRES_USER=keycloak\nPOSTGRES_PASSWORD={db}\n", owner=None)
