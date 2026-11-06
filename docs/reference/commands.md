@@ -121,7 +121,8 @@ usage: install.py [-h] --edge EDGE --desk DESK [--desk-ca DESK_CA] [--desk-pin D
                   --officer-key OFFICER_KEY [--sso-provider SSO_PROVIDER] [--engine ENGINE]
                   [--enrolment-seed-file ENROLMENT_SEED_FILE] [--re-key] [--sso-issuer SSO_ISSUER]
                   [--sso-secret-file SSO_SECRET_FILE] [--sso-client SSO_CLIENT] [--sso-ca SSO_CA]
-                  [--ca-bundle CA_BUNDLE] [--warpgate-url WARPGATE_URL] [--enrol-code-file ENROL_CODE_FILE] [--lab]
+                  [--ca-bundle CA_BUNDLE] [--warpgate-url WARPGATE_URL] [--enrol-code-file ENROL_CODE_FILE]
+                  [--site-keys SITE_KEYS] [--lab]
 
 Prepare a ReliKey edge pod: secrets, the enrolment key, Warpgate's first setup and the agent's configuration.
 
@@ -180,6 +181,9 @@ options:
   --enrol-code-file ENROL_CODE_FILE
                         the fleet's one-time enrolment code, in a file (QR or USB stick, never typed): the edge also
                         presents its key to its fleet (decision 0026)
+  --site-keys SITE_KEYS
+                        install this node with the edge's site keys (a directory made by site-keys --out on the active
+                        node): the cold spare of decision 0028
   --lab                 the pod on the host network (compose.lab.yaml), to reach a core installed with --lab on the
                         same box. Never in production
 ```

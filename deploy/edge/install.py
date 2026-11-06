@@ -283,6 +283,83 @@ def enrol_main(argv: list[str]) -> int:
     return 0
 
 
+SITE_FILES = ("host-ed25519", "site.crt", "site.key")   # what people's clients see, the same on an edge's nodes
+
+
+def site_host_key() -> tuple[str, str]:
+    """A new Ed25519 SSH host key for the site: the OpenSSH private key and its SHA256 fingerprint."""
+    import base64
+    import hashlib
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+    from cryptography.hazmat.primitives.serialization import Encoding, NoEncryption, PrivateFormat, PublicFormat
+    k = Ed25519PrivateKey.generate()
+    pem = k.private_bytes(Encoding.PEM, PrivateFormat.OpenSSH, NoEncryption()).decode()
+    blob = base64.b64decode(k.public_key().public_bytes(Encoding.OpenSSH, PublicFormat.OpenSSH).split()[1])
+    return pem, "SHA256:" + base64.b64encode(hashlib.sha256(blob).digest()).decode().rstrip("=")
+
+
+def with_site_keys(wg: dict) -> dict:
+    """Warpgate's configuration reading its SSH host key from /data/keys, where apply_site_keys puts the site's key:
+    Warpgate imports a host-ed25519 file found there into its database at start (0028, evidence E3)."""
+    wg.setdefault("ssh", {})["keys"] = "/data/keys"
+    return wg
+
+
+def apply_site_keys(engine: str, d: Path) -> None:
+    """The site's SSH host key into Warpgate's volume (owned as Warpgate's own key) and its configuration; the site's
+    certificate and key for the front. Warpgate's own certificate stays the front's root towards Warpgate."""
+    missing = [f for f in SITE_FILES if not (d / f).is_file()]
+    if missing:
+        sys.exit(f"--site-keys {d}: {', '.join(missing)} missing; make the set on the active node with "
+                 f"python deploy/edge/install.py site-keys --out DIR and carry DIR here whole")
+    import yaml
+    busybox = [engine, "run", "--rm", "-i", "-v", "relikey-edge_warpgate:/data", BUSYBOX]
+    own = "chown $(stat -c %u:%g /data/tls.key.pem)"
+    subprocess.run(busybox + ["sh", "-c", f"umask 077 && mkdir -p /data/keys && cat > /data/keys/host-ed25519 && "
+                              f"{own} /data/keys /data/keys/host-ed25519"],
+                   input=(d / "host-ed25519").read_bytes(), check=True)
+    wg = yaml.safe_load(subprocess.run(busybox + ["cat", "/data/warpgate.yaml"], capture_output=True, check=True).stdout)
+    subprocess.run(busybox + ["sh", "-c", f"umask 077 && cat > /data/warpgate.yaml.new && {own} /data/warpgate.yaml.new"
+                              " && mv /data/warpgate.yaml.new /data/warpgate.yaml"],
+                   input=yaml.safe_dump(with_site_keys(wg)).encode(), check=True)
+    write("front.crt", (d / "site.crt").read_text(encoding="utf-8"), owner=None)
+    (SECRETS / "front.crt").chmod(0o644)
+    write("front.key", (d / "site.key").read_text(encoding="utf-8"), owner=None)
+
+
+def site_keys_main(argv: list[str]) -> int:
+    """What people's clients see of an edge (its SSH host key and the front's certificate), the same on its nodes, so
+    a cold spare that takes over (decision 0028) shows no new host key and no new certificate."""
+    a = argparse.ArgumentParser(prog="install.py site-keys", description=site_keys_main.__doc__)
+    g = a.add_mutually_exclusive_group(required=True)
+    g.add_argument("--out", help="make the set here on the active node: a new site host key and the front's "
+                                 "certificate and key (a directory that does not exist yet)")
+    g.add_argument("--apply", help="put a set made with --out on this installed node")
+    a.add_argument("--engine", default="podman")
+    o = a.parse_args(argv)
+    if o.out:
+        d = Path(o.out)
+        if d.exists():
+            sys.exit(f"--out {d}: exists; give a new directory, so no older set is mixed in")
+        if not ((SECRETS / "front.crt").is_file() and (SECRETS / "front.key").is_file()):
+            sys.exit(f"{SECRETS}: no front certificate and key; run this on an installed node (the active one)")
+        d.mkdir(mode=0o700, parents=True)
+        pem, fp = site_host_key()
+        for name, text in (("host-ed25519", pem), ("site.crt", (SECRETS / "front.crt").read_text(encoding="utf-8")),
+                           ("site.key", (SECRETS / "front.key").read_text(encoding="utf-8"))):
+            fd = os.open(d / name, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(text)
+        print(f"site keys in {d} (secret: keep it as the enrolment key is kept). The site's SSH host key is {fp}.\n"
+              f"then: install.py site-keys --apply {d} on this node (clients see the host key change this once), and "
+              f"--site-keys {d} when installing the spare")
+        return 0
+    apply_site_keys(o.engine, Path(o.apply))
+    print(f"site keys applied; then: {o.engine} compose -f {COMPOSE.relative_to(ROOT).as_posix()} up -d "
+          "--force-recreate warpgate front")
+    return 0
+
+
 def move_keys_main(argv: list[str]) -> int:
     """An edge installed before #134 keeps its key in deploy/secrets/enrolment.key, mounted as a single read-only file
     where a rotation cannot finish. This moves it into deploy/secrets/keys and points agent.json there."""
@@ -321,6 +398,8 @@ def main() -> int:
         return enrol_main(sys.argv[2:])
     if sys.argv[1:2] == ["move-keys"]:
         return move_keys_main(sys.argv[2:])
+    if sys.argv[1:2] == ["site-keys"]:
+        return site_keys_main(sys.argv[2:])
     a = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     a.add_argument("--edge", required=True)
     a.add_argument("--desk", required=True, help="KeyClerk base URL (https)")
@@ -343,6 +422,8 @@ def main() -> int:
                                           "cookie domain)")
     a.add_argument("--enrol-code-file", help="the fleet's one-time enrolment code, in a file (QR or USB stick, never "
                                              "typed): the edge also presents its key to its fleet (decision 0026)")
+    a.add_argument("--site-keys", help="install this node with the edge's site keys (a directory made by site-keys "
+                                       "--out on the active node): the cold spare of decision 0028")
     a.add_argument("--lab", action="store_true", help="the pod on the host network (compose.lab.yaml), to reach a core "
                                                       "installed with --lab on the same box. Never in production")
     o = a.parse_args()
@@ -371,6 +452,11 @@ def main() -> int:
     if o.sso_issuer and not o.warpgate_url:
         sys.exit("--sso-issuer needs --warpgate-url: Warpgate builds its sign-in return URL from it, and the broker only "
                  "accepts the URL the core registered with add_edge.py (--warpgate-url there); give the same one here")
+    if o.site_keys:   # checked before anything is written
+        missing = [f for f in SITE_FILES if not (Path(o.site_keys) / f).is_file()]
+        if missing:
+            sys.exit(f"--site-keys {o.site_keys}: {', '.join(missing)} missing; make the set on the active node with "
+                     "python deploy/edge/install.py site-keys --out DIR and carry DIR here whole")
     external_host = urlparse(o.warpgate_url).hostname if o.warpgate_url else o.edge   # full-stack run: never a bare id
     installed = next((SECRETS / k for k in (KEY, LEGACY_KEY) if (SECRETS / k).exists()), None)
     if installed and not (o.re_key or o.enrolment_seed_file):
@@ -462,6 +548,8 @@ def main() -> int:
                  "relikey-edge_warpgate so its setup makes a new certificate, then run again with "
                  f"--enrolment-seed-file {SECRETS / 'enrolment.key'} to keep the enrolment key made here")
     write("front.env", f"WARPGATE_TLS_NAME={tls_name}\n", owner=None)
+    if o.site_keys:   # the spare shows people what the active node shows (decision 0028)
+        apply_site_keys(o.engine, Path(o.site_keys))
     keyclerk = {"url": o.desk}
     if o.desk_ca:
         keyclerk["ca_file"] = "/etc/relikey/desk-ca.pem"
