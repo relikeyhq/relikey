@@ -73,17 +73,23 @@ def write(name: str, text: str, owner: int | None = KEYCLERK_UID, keep: bool = T
 def fix_owners(engine: str) -> None:
     """Rootful docker run by a non-root user: every container drops all capabilities, so its root cannot read a 0600
     file the installing user owns, and the chowns above need root (full-stack run 2). The edge's pinned busybox sets
-    them. The front's files go to root with the installer's group (0640), so the pin below can still be read."""
+    them. The front's files go to root with the installer's group (0640), so the pin below can still be read. Rootless
+    podman maps the installing user to the containers' root and KeyClerk's uid to a subuid: `podman unshare` sets the
+    same owners in that mapping, where the user's own group is 0 (fresh-install walk of v0.3.0-rc.2, F3)."""
     if not hasattr(os, "geteuid") or os.geteuid() == 0:
         return                  # root: write() set the owners itself
-    if engine != "docker":
-        print(f"note: the files KeyClerk reads in {SECRETS} need owner {KEYCLERK_UID}: rootless podman's subuid mapping"
-              " (podman unshare chown), or run as root", file=sys.stderr)
-        return
+    rootless = engine == "podman"
+    group = 0 if rootless else os.getgid()
     todo = [(f, f"{KEYCLERK_UID}:{KEYCLERK_UID}", "600") for f in CLERK_READS if (SECRETS / f).exists()
             and f != "people.json"]
-    todo += [("people.json", f"{KEYCLERK_UID}:{os.getgid()}", "640")]   # the operator reads the first passwords
-    todo += [(f, f"0:{os.getgid()}", "640") for f in ("front.crt", "front.key")]
+    if (SECRETS / "people.json").exists():   # deleted once the first people have signed in
+        todo += [("people.json", f"{KEYCLERK_UID}:{group}", "640")]   # the operator reads the first passwords
+    todo += [(f, f"0:{group}", "640") for f in ("front.crt", "front.key")]
+    if rootless:
+        script = " && ".join(f"chown {owner} '{SECRETS / name}' && chmod {mode} '{SECRETS / name}'"
+                             for name, owner, mode in todo)
+        subprocess.run([engine, "unshare", "sh", "-c", script], check=True)
+        return
     script = " && ".join(f"chown {owner} /s/{name} && chmod {mode} /s/{name}" for name, owner, mode in todo)
     subprocess.run([engine, "run", "--rm", "-v", f"{SECRETS}:/s", BUSYBOX, "sh", "-c", script],
                    check=True)

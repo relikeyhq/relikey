@@ -111,16 +111,41 @@ def replace_text(p: Path, text: str) -> None:
 def fix_owners(engine: str) -> None:
     """Rootful docker run by a non-root user: the agent (AGENT_UID) cannot read the 0600 files the installing user
     owns, and chown needs root (full-stack run 2; the core's install.py has the same pass). The pinned busybox sets
-    them; rootless podman maps the user to the container's root instead."""
+    them. Rootless podman maps the user to the containers' root and AGENT_UID to a subuid: `podman unshare` sets the
+    same owners in that mapping, and makes the agent's state volume the agent's, 0700, before compose first mounts it
+    (a new podman volume does not take the image directory's owner and mode, and the agent refuses a state directory
+    others can read: fresh-install walk of v0.3.0-rc.2, F11 and F13)."""
     if not hasattr(os, "geteuid") or os.geteuid() == 0:
         return                  # root: write() set the owners itself
-    if engine != "docker":
-        print(f"note: {', '.join(AGENT_READS)} in {SECRETS} need owner {AGENT_UID}: rootless podman's subuid mapping"
-              " (podman unshare chown), or run as root", file=sys.stderr)
+    if engine == "podman":
+        script = " && ".join([f"chown -R {AGENT_UID}:{AGENT_UID} '{SECRETS / f}'" for f in AGENT_READS
+                              if (SECRETS / f).exists()] +
+                             [f"chown 0:0 '{SECRETS / f}' && chmod 600 '{SECRETS / f}'" for f in FRONT_READS
+                              if (SECRETS / f).exists()])
+        if script:
+            subprocess.run([engine, "unshare", "sh", "-c", script], check=True)
+        state_volume(engine)
         return
     script = " && ".join([f"chown {AGENT_UID}:{AGENT_UID} /s/{f}" for f in AGENT_READS] +
                          [f"chown 0:0 /s/{f} && chmod 600 /s/{f}" for f in FRONT_READS])
     subprocess.run([engine, "run", "--rm", "-v", f"{SECRETS}:/s", BUSYBOX, "sh", "-c", script],
+                   check=True)
+
+
+STATE_VOLUME = ("relikey-edge", "agent")   # compose.yaml: name: relikey-edge, the volume `agent` at /var/lib/relikey
+
+
+def state_volume(engine: str) -> None:
+    """Rootless podman: the agent's state volume, created here with compose's own labels when it does not exist yet,
+    owned by the agent and 0700 (F13). An existing volume keeps its contents; only its owner and mode are set."""
+    project, vol = STATE_VOLUME
+    name = f"{project}_{vol}"
+    if subprocess.run([engine, "volume", "exists", name]).returncode != 0:
+        subprocess.run([engine, "volume", "create", "--label", f"com.docker.compose.project={project}",
+                        "--label", f"com.docker.compose.volume={vol}", name], check=True, capture_output=True)
+    mount = subprocess.run([engine, "volume", "inspect", "--format", "{{.Mountpoint}}", name], check=True,
+                           capture_output=True, text=True).stdout.strip()
+    subprocess.run([engine, "unshare", "sh", "-c", f"chown {AGENT_UID}:{AGENT_UID} '{mount}' && chmod 0700 '{mount}'"],
                    check=True)
 
 

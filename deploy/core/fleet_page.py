@@ -144,9 +144,9 @@ def page(o) -> None:
     elif o.engine == "docker":
         subprocess.run([o.engine, "run", "--rm", "-v", f"{d}:/d", BUSYBOX, "sh", "-c",
                         f"chown {FLEET_UID}:{FLEET_UID} /d/page.secret && chmod 0400 /d/page.secret"], check=True)
-    else:
-        print(f"note: deploy/secrets/fleet/page.secret needs owner {FLEET_UID}, mode 0400 (podman unshare chown, or "
-              "run as root)", file=sys.stderr)
+    else:   # rootless podman: the fleet's uid is a subuid, set in the user's mapping (fresh-install walk, F6)
+        subprocess.run([o.engine, "unshare", "sh", "-c", f"chown {FLEET_UID}:{FLEET_UID} '{secret}' && chmod 0400 "
+                        f"'{secret}'"], check=True)
     subprocess.run(compose(o) + ["run", "--rm", "--no-deps", "-T", "setup", "fleet", page_url],
                    input=_read_secret(o, d), text=True, check=True)
     ca_pem, why = issuing_ca((SECRETS / "front.crt").read_text(encoding="utf-8"))

@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 import pytest
+import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = sorted((ROOT / "deploy").glob("*/*.py"))
@@ -201,3 +202,87 @@ def test_site_keys_refusals_say_why_and_what_to_do_next(args, why, nxt, tmp_path
         mod.main()
     message = str(refused.value.code)
     assert why in message and nxt in message, message
+
+
+class _Ran:
+    """Records the commands an installer runs, answering `volume exists` with no and `inspect` with a path."""
+    def __init__(self):
+        self.calls = []
+
+    def __call__(self, cmd, *a, **kw):
+        import subprocess as sp
+        self.calls.append(list(cmd))
+        if cmd[1:3] == ["volume", "exists"]:
+            return sp.CompletedProcess(cmd, 1, "", "")
+        if cmd[1:3] == ["volume", "inspect"]:
+            return sp.CompletedProcess(cmd, 0, "/vol/relikey-edge_agent/_data\n", "")
+        return sp.CompletedProcess(cmd, 0, "", "")
+
+
+def test_rootless_podman_sets_the_core_owners(tmp_path, monkeypatch):
+    """F3 of the fresh-install walk of v0.3.0-rc.2: the installer only printed a note and KeyClerk's setup then failed
+    reading its secret. Under rootless podman it sets the owners through `podman unshare`, as the docker branch does."""
+    secrets = tmp_path / "secrets"
+    secrets.mkdir()
+    for f in ("keyclerk-writer.secret", "records.key", "people.json", "front.crt", "front.key"):
+        (secrets / f).write_text("x", encoding="utf-8")
+    mod = installer("core", secrets, monkeypatch)
+    ran = _Ran()
+    monkeypatch.setattr(mod.subprocess, "run", ran)
+    monkeypatch.setattr(mod.os, "geteuid", lambda: 1001, raising=False)
+    mod.fix_owners("podman")
+    assert len(ran.calls) == 1 and ran.calls[0][:3] == ["podman", "unshare", "sh"]
+    script = ran.calls[0][-1]
+    assert f"chown 10001:10001 '{secrets / 'keyclerk-writer.secret'}' && chmod 600" in script
+    assert f"chown 10001:0 '{secrets / 'people.json'}' && chmod 640" in script
+    assert f"chown 0:0 '{secrets / 'front.key'}' && chmod 640" in script
+
+
+def test_a_rerun_after_the_first_sign_ins_does_not_chown_a_deleted_people_file(tmp_path, monkeypatch):
+    secrets = tmp_path / "secrets"
+    secrets.mkdir()
+    for f in ("records.key", "front.crt", "front.key"):
+        (secrets / f).write_text("x", encoding="utf-8")
+    mod = installer("core", secrets, monkeypatch)
+    for engine in ("podman", "docker"):
+        ran = _Ran()
+        monkeypatch.setattr(mod.subprocess, "run", ran)
+        monkeypatch.setattr(mod.os, "geteuid", lambda: 1001, raising=False)
+        monkeypatch.setattr(mod.os, "getgid", lambda: 1001, raising=False)
+        mod.fix_owners(engine)
+        assert "people.json" not in ran.calls[0][-1], engine
+
+
+def test_rootless_podman_sets_the_edge_owners_and_the_state_volume(tmp_path, monkeypatch):
+    """F11 and F13: the agent's files and its state volume, the agent's and 0700, before compose first mounts them;
+    the volume carries compose's own labels."""
+    secrets = tmp_path / "secrets"
+    (secrets / "keys").mkdir(parents=True)
+    for f in ("agent.json", "warpgate.token", "front.key", "keys/enrolment.key"):
+        (secrets / f).write_text("x", encoding="utf-8")
+    mod = installer("edge", secrets, monkeypatch)
+    ran = _Ran()
+    monkeypatch.setattr(mod.subprocess, "run", ran)
+    monkeypatch.setattr(mod.os, "geteuid", lambda: 1001, raising=False)
+    mod.fix_owners("podman")
+    owners = ran.calls[0][-1]
+    assert ran.calls[0][:2] == ["podman", "unshare"]
+    for f in ("agent.json", "warpgate.token", "keys"):
+        assert f"chown -R 65532:65532 '{secrets / f}'" in owners
+    assert f"chown 0:0 '{secrets / 'front.key'}' && chmod 600" in owners
+    create = next(c for c in ran.calls if c[1:3] == ["volume", "create"])
+    assert "com.docker.compose.project=relikey-edge" in create and "com.docker.compose.volume=agent" in create
+    assert create[-1] == "relikey-edge_agent"
+    assert ran.calls[-1][:2] == ["podman", "unshare"]
+    assert ran.calls[-1][-1] == "chown 65532:65532 '/vol/relikey-edge_agent/_data' && chmod 0700 '/vol/relikey-edge_agent/_data'"
+
+
+def test_the_state_volume_name_is_the_one_compose_makes():
+    compose = yaml.safe_load((ROOT / "deploy" / "edge" / "compose.yaml").read_text(encoding="utf-8"))
+    assert compose["name"] == "relikey-edge" and "agent" in compose["volumes"]
+    assert any(str(v).startswith("agent:/var/lib/relikey") for v in compose["services"]["agent"]["volumes"])
+
+
+def test_rootless_podman_sets_the_fleet_page_secret():
+    src = (ROOT / "deploy" / "core" / "fleet_page.py").read_text(encoding="utf-8")
+    assert '[o.engine, "unshare", "sh", "-c", f"chown {FLEET_UID}:{FLEET_UID}' in src
