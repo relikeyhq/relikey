@@ -54,9 +54,12 @@ type Agent struct {
 	decl     *keyclerk.BastionDeclaration // the last declaration read (edge protocol 1.4), nil until one is
 	declAt   time.Time
 	// System names the bastion in removal confirmations (edge protocol 1.4): its adapter kind, "warpgate" by default.
-	System  string
-	Mode    Mode
-	Version string
+	System string
+	// ActivationFile holds how this node became active (relikey-agent promote writes it; edge protocol 1.5 section
+	// 7.3); read at each report, so a promotion is reported without a restart. Empty or absent: no activation.
+	ActivationFile string
+	Mode           Mode
+	Version        string
 	// Release is the bare version the fleet report carries ("v0.27.0", "dev-26734a855cd6"); Version is the display
 	// string with the program, commit and Go (full-stack run 5: the display string failed the report's format).
 	Release string
@@ -967,7 +970,7 @@ func (a *Agent) report(ctx context.Context, rec state.Record) {
 	defer cancel()
 	removals := rec.Removals[:min(len(rec.Removals), kcedge.MaxRemovals)]
 	err := a.Clerk.SendReport(rctx, keyclerk.Report{AppliedSerial: rec.AppliedSerial, RecordsHead: rec.AppliedHead, Drift: drift,
-		Removals: removals, Bastion: a.declaration(rctx),
+		Removals: removals, Bastion: a.declaration(rctx), Activation: a.activation(),
 		Attestation: keyclerk.Attestation{Profile: kcedge.AttestedProfile, AgentVersion: a.Version, Mode: string(a.Mode)}})
 	if err != nil {
 		if !errors.Is(err, context.Canceled) {

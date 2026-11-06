@@ -215,6 +215,17 @@ type Report struct {
 	Removals []kcedge.Removal `json:"removals,omitempty"`
 	// Bastion declares what the bastion enforces by itself (edge protocol 1.4); left out when unknown.
 	Bastion *BastionDeclaration `json:"bastion,omitempty"`
+	// Activation says how this node became the active one (edge protocol 1.5 section 7.3); left out when it was not
+	// made active by an election or by hand.
+	Activation *Activation `json:"activation,omitempty"`
+}
+
+// Activation is the report's activation member: {by, at, statement?}. by is witness, local_witness or break_glass;
+// only break_glass carries the site key's promotion statement, whole, as the operator gave it.
+type Activation struct {
+	By        string         `json:"by"`
+	At        string         `json:"at"`
+	Statement jsontext.Value `json:"statement,omitempty"`
 }
 
 // BastionDeclaration is the report's bastion member: {product, version, capabilities [token], adapter? [token]}.

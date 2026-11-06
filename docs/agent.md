@@ -108,6 +108,7 @@ relikey-agent statement -in st1.json                          # what the officer
 relikey-agent cosign -in st1.json -out st2.json -key /var/lib/relikey/enrolment.key -unlock-key /var/lib/relikey/unlock.key
 relikey-agent unlock-code -unlock-key ... -key ... -desk-unlock-key B64 -edge E -person P -fingerprint F -target T -nonce N -minutes M
 relikey-agent pin -cert /etc/warpgate/tls.certificate.pem     # the Warpgate pin for agent.json
+relikey-agent promote -statement promotion.json               # a spare made active by hand (decision 0028)
 relikey-agent run -config /etc/relikey/agent.json
 relikey-agent plan -config /etc/relikey/agent.json            # one shadow reconcile, the plan as JSON
 relikey-agent status -file /var/lib/relikey/status.json       # exit 1 when unhealthy
@@ -116,7 +117,8 @@ relikey-agent status -file /var/lib/relikey/status.json       # exit 1 when unhe
 ```json
 {"edge": "edge-a", "mode": "enforce", "state_dir": "/var/lib/relikey",
  "enrolment_key_file": "/var/lib/relikey/enrolment.key",
- "pins": {"bundle_key": "<64 hex, read out by the desk operator>", "officer_key": "<64 hex>", "release_key": null},
+ "pins": {"bundle_key": "<64 hex, read out by the desk operator>", "officer_key": "<64 hex>", "release_key": null,
+          "site_key": "<64 hex, optional: the site's physical key, for promote>"},
  "clerk": {"url": "https://keyclerk.example", "ca_file": "/etc/relikey/keyclerk-ca.pem"},
  "bastion": {"kind": "warpgate", "url": "https://127.0.0.1:8899/@warpgate/admin/api", "token_file": "/var/lib/relikey/warpgate.token",
               "pin_sha256": "<from relikey-agent pin>", "sso_provider": "keycloak",

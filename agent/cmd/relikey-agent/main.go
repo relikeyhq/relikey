@@ -28,6 +28,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"runtime/debug"
 	"strings"
 	"syscall"
@@ -79,6 +80,9 @@ type Config struct {
 		OfficerKey string `json:"officer_key"`
 		// Optional. KeyClerk's release key (hex); with it, policy modules must be the ones its signed manifest names.
 		ReleaseKey *string `json:"release_key"`
+		// Optional. The site's physical key (hex), the one the desk holds as the edge's site_key (edge protocol 1.5
+		// section 14): relikey-agent promote checks a promotion statement against it (decision 0028, a spare node).
+		SiteKey string `json:"site_key"`
 	} `json:"pins"`
 	// The clerk role (decision 0023): how the agent reaches the clerk's edge routes, which speak the edge protocol
 	// (outbound only; the core never connects in). KeyClerk is the reference clerk.
@@ -158,6 +162,8 @@ func main() {
 		err = unlockKeygen(args)
 	case "unlock-code":
 		err = unlockCode(args)
+	case "promote":
+		err = promote(args)
 	case "version":
 		fmt.Println(versionString())
 	default:
@@ -170,7 +176,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: relikey-agent run|plan|status|keygen|pin|statement|cosign|unlock-keygen|unlock-code|version [flags]")
+	fmt.Fprintln(os.Stderr, "usage: relikey-agent run|plan|status|keygen|pin|statement|cosign|unlock-keygen|unlock-code|promote|version [flags]")
 	os.Exit(2)
 }
 
@@ -258,6 +264,15 @@ func loadConfig(path string) (*Config, error) {
 		if _, err := kcedge.PublicKey(k); err != nil {
 			return nil, fmt.Errorf("%s: %w; give the key as the desk operator read it out (the bundle key) or as the "+
 				"edge officer gave it (the officer key)", name, err)
+		}
+	}
+	if c.Pins.SiteKey != "" {
+		if _, err := kcedge.PublicKey(c.Pins.SiteKey); err != nil {
+			return nil, fmt.Errorf("pins.site_key: %w; give the site key's public half as the officer recorded it at the desk", err)
+		}
+		if c.Pins.SiteKey == c.Pins.OfficerKey || c.Pins.SiteKey == c.Pins.BundleKey {
+			return nil, errors.New("pins.site_key: the site key is a key of its own, never the officer's or the bundle " +
+				"key (KeyClerk decision 0027); give the site's physical key")
 		}
 	}
 	return &c, nil
@@ -371,6 +386,7 @@ func run(args []string, once bool) error {
 	a := &agent.Agent{
 		Pins:     kcedge.Pins{Edge: c.Edge, BundleKey: c.Pins.BundleKey, OfficerKey: c.Pins.OfficerKey, ReleaseKey: c.Pins.ReleaseKey},
 		Provider: c.Bastion.SSOProvider, System: c.Bastion.Kind, Mode: c.Mode, Version: versionString(), Release: releaseString(), Store: store, Clock: clk, Log: log,
+		ActivationFile: filepath.Join(c.StateDir, agent.ActivationName),
 		// The composition root is the one place that names products: the clerk speaks the edge protocol (KeyClerk is the
 		// reference clerk), the bastion is the Warpgate adapter (bastion.kind checked above).
 		Clerk: &keyclerk.Client{Base: strings.TrimRight(c.Clerk.URL, "/"), Edge: c.Edge,

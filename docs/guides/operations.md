@@ -185,7 +185,9 @@ automatic failover is designed (0028 option A) and built only when a site needs 
 2. Install the spare as any edge (the install guide), with the same `--edge`, `--warpgate-url` and SSO client secret,
    and `--site-keys <dir>`: it then shows people the same host key and certificate. Its enrolment key is its own.
 3. Enrol the spare's enrolment key at the desk as the edge's second node (KeyClerk: the officer's statement names two
-   nodes). Do not add it to the fleet yet: the fleet takes one key per edge (decision 0026 point 15).
+   nodes), with the site's physical key on record as the edge's `site_key`. Do not add it to the fleet yet: the fleet
+   takes one key per edge (decision 0026 point 15). Pin the site key in the spare's `agent.json`:
+   `"pins": {..., "site_key": "<the site key's public half, 64 hex>"}`.
 4. Put the spare's agent in shadow mode (`"mode": "shadow"` in its `agent.json`) and start the pod without the site's
    address: it pulls and verifies the edge's bundles and keeps its floors, and changes nothing in its Warpgate. A
    spare kept switched off instead grants nothing at takeover until it reaches the desk once, so on a site that can be
@@ -193,7 +195,14 @@ automatic failover is designed (0028 option A) and built only when a site needs 
 
 **Take over**
 1. Power the failed node off, or take it off the network. It must not come back beside the spare.
-2. On the spare: set `"mode": "enforce"` in `agent.json`, give it the site's address, and restart the agent
+2. With the site key, sign a promotion statement for the spare (KeyClerk's `edge_cli site-statement --purpose
+   promotion`, cosigned by the site key and the spare's enrolment key) and put it in the spare's key directory as
+   `deploy/secrets/keys/promotion.json`. Record the promotion on the spare:
+   `podman compose -f deploy/edge/compose.yaml run --rm --no-deps agent promote -config /etc/relikey/agent.json
+   -statement /etc/relikey/keys/promotion.json`. It refuses a statement for another edge or node, one the site key did
+   not sign, and one no newer than the last promotion, each with the next step; the agent then reports a break-glass
+   activation and the desk raises its incident.
+3. On the spare: set `"mode": "enforce"` in `agent.json`, give it the site's address, and restart the agent
    (`podman compose -f deploy/edge/compose.yaml up -d --force-recreate agent`). It applies the leases of the bundle it
    holds at its first tick and pulls a newer one when it reaches the desk.
    Announce the address so clients find the spare at once: for IPv4 a gratuitous ARP (`arping -U -c 3 -I <interface>
@@ -202,13 +211,12 @@ automatic failover is designed (0028 option A) and built only when a site needs 
    answers for the address (duplicate address detection) and marks it `dadfailed` if the failed node is still on the
    network: take that as the sign to finish step 1, not as a fault to work around. IPv6 is not yet walked end to end
    (see the issue on IPv6 support).
-3. On the core: `python deploy/core/fleet_edge.py --edge <name> --key <the spare's enrolment public key>`, so the fleet
+4. On the core: `python deploy/core/fleet_edge.py --edge <name> --key <the spare's enrolment public key>`, so the fleet
    takes its reports.
-4. The failed node, once repaired, returns only as the spare: shadow mode, without the site's address.
+5. The failed node, once repaired, returns only as the spare: shadow mode, without the site's address.
 
-Not covered yet: the takeover's report to the desk. The agent's `promote` command, which checks the site key's
-promotion statement and reports a break-glass activation (edge protocol 1.5), comes with the agent's protocol 1.5
-release. Until then the desk sees the spare's node start reporting, and the takeover is recorded by the operator.
+From KeyClerk 0.29.0 (edge protocol 1.6) a promotion statement carries an expiry of at most a day
+(`kc-edge-site-v2`); the agent follows with that release.
 
 ## Stop and start
 Stopping an edge makes the system behind it unreachable. Stopping the core leaves open leases running to the bundle's

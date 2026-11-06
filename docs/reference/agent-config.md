@@ -17,6 +17,7 @@ The edge agent's configuration (`relikey-agent run -config /etc/relikey/agent.js
 | `pins.bundle_key` | string | Required. KeyClerk's bundle signing key (hex), from the enrolment. |
 | `pins.officer_key` | string | Required. The edge officer's key (hex), from the officer's own console; it seals the edge's ceiling. |
 | `pins.release_key` | string | Optional. KeyClerk's release key (hex); with it, policy modules must be the ones its signed manifest names. |
+| `pins.site_key` | string | Optional. The site's physical key (hex), the one the desk holds as the edge's site_key (edge protocol 1.5 section 14): relikey-agent promote checks a promotion statement against it (decision 0028, a spare node). |
 | `clerk` | object | The clerk role (decision 0023): how the agent reaches the clerk's edge routes, which speak the edge protocol (outbound only; the core never connects in). KeyClerk is the reference clerk. |
 | `clerk.url` | string | Required. The desk's edge-facing base URL, https. |
 | `clerk.ca_file` | string | Optional. A PEM file with the CA that signs the desk's certificate, when it is not a public one. |

@@ -1,0 +1,261 @@
+{
+ "format": "relikey-site-vectors-v1",
+ "source": "keyclerk.edge_relay.verify_site",
+ "edge": "plant-a",
+ "site_key": "d54207da194977dcf46adbfec2bc2e75b52d5a8a42184fedfdc00024f0e3e8da",
+ "node_key": "511c34a1a2cb521df16bb246b8de8e7997ce235c7e76b22a3d7503a24819dd8a",
+ "cases": [
+  {
+   "name": "a promotion signed by the site key and the node it names",
+   "purpose": "promotion",
+   "statement": {
+    "bytes": "eyJhdCI6IjIwMjYtMTEtMDZUMTI6MDA6MDBaIiwiZWRnZSI6InBsYW50LWEiLCJmb3JtYXQiOiJrYy1lZGdlLXNpdGUtdjEiLCJub2RlX2tleSI6IjUxMWMzNGExYTJjYjUyMWRmMTZiYjI0NmI4ZGU4ZTc5OTdjZTIzNWM3ZTc2YjIyYTNkNzUwM2EyNDgxOWRkOGEiLCJwdXJwb3NlIjoicHJvbW90aW9uIiwicmVhc29uIjoibm9kZSAxIGlzIGRvd24sIG5vZGUgMiB0YWtlcyBvdmVyIiwic2l0ZV9rZXkiOiJkNTQyMDdkYTE5NDk3N2RjZjQ2YWRiZmVjMmJjMmU3NWI1MmQ1YThhNDIxODRmZWRmZGMwMDAyNGYwZTNlOGRhIn0=",
+    "signatures": [
+     {
+      "key": "511c34a1a2cb521df16bb246b8de8e7997ce235c7e76b22a3d7503a24819dd8a",
+      "key_id": "168c59a54a0d5b6c",
+      "signature": "5909188d598a1a01c603b772e9d20625cb2b9f954c1d313cf36703a469b78fc800d0e66dbb4204c154e84577eec36f0a06f1558fb02a7996b759794787db630e"
+     },
+     {
+      "key": "d54207da194977dcf46adbfec2bc2e75b52d5a8a42184fedfdc00024f0e3e8da",
+      "key_id": "d7e1e084be213b01",
+      "signature": "8788d6e48edbf78b999e033d655a9d5d5056e6aa09339eed768c52f369b67d20c1d54594c7d342b7c26af5dc3b0acc7162712e6ae9d45d94edcc82194b18a405"
+     }
+    ]
+   },
+   "expected": {
+    "ok": true,
+    "node_key": "511c34a1a2cb521df16bb246b8de8e7997ce235c7e76b22a3d7503a24819dd8a",
+    "at": "2026-11-06T12:00:00Z",
+    "reason": "node 1 is down, node 2 takes over"
+   }
+  },
+  {
+   "name": "a provisional statement",
+   "purpose": "provisional",
+   "statement": {
+    "bytes": "eyJhdCI6IjIwMjYtMTEtMDZUMTI6MDA6MDBaIiwiZWRnZSI6InBsYW50LWEiLCJmb3JtYXQiOiJrYy1lZGdlLXNpdGUtdjEiLCJub2RlX2tleSI6IjUxMWMzNGExYTJjYjUyMWRmMTZiYjI0NmI4ZGU4ZTc5OTdjZTIzNWM3ZTc2YjIyYTNkNzUwM2EyNDgxOWRkOGEiLCJwdXJwb3NlIjoicHJvdmlzaW9uYWwiLCJyZWFzb24iOiJub2RlIDEgaXMgZG93biwgbm9kZSAyIHRha2VzIG92ZXIiLCJzaXRlX2tleSI6ImQ1NDIwN2RhMTk0OTc3ZGNmNDZhZGJmZWMyYmMyZTc1YjUyZDVhOGE0MjE4NGZlZGZkYzAwMDI0ZjBlM2U4ZGEifQ==",
+    "signatures": [
+     {
+      "key": "511c34a1a2cb521df16bb246b8de8e7997ce235c7e76b22a3d7503a24819dd8a",
+      "key_id": "168c59a54a0d5b6c",
+      "signature": "82589c8a99fa48b813ef3f737169c75e471f68e191e49aa5eda1cd6df6c0b7ce2c40d651fa2f4fdcf5bf8cfd25015d737af82238475aa1fe5112453dbe3b4f0e"
+     },
+     {
+      "key": "d54207da194977dcf46adbfec2bc2e75b52d5a8a42184fedfdc00024f0e3e8da",
+      "key_id": "d7e1e084be213b01",
+      "signature": "097534ecb50be8d1edf72c36cc1bc197d2f6d6072db46c5a543300b50af8edd04e231ecb744e63072681234a03f284f55ad8b488fe40ff2f778e8b614f0f9d0c"
+     }
+    ]
+   },
+   "expected": {
+    "ok": true,
+    "node_key": "511c34a1a2cb521df16bb246b8de8e7997ce235c7e76b22a3d7503a24819dd8a",
+    "at": "2026-11-06T12:00:00Z",
+    "reason": "node 1 is down, node 2 takes over"
+   }
+  },
+  {
+   "name": "a provisional statement is not a promotion",
+   "purpose": "promotion",
+   "statement": {
+    "bytes": "eyJhdCI6IjIwMjYtMTEtMDZUMTI6MDA6MDBaIiwiZWRnZSI6InBsYW50LWEiLCJmb3JtYXQiOiJrYy1lZGdlLXNpdGUtdjEiLCJub2RlX2tleSI6IjUxMWMzNGExYTJjYjUyMWRmMTZiYjI0NmI4ZGU4ZTc5OTdjZTIzNWM3ZTc2YjIyYTNkNzUwM2EyNDgxOWRkOGEiLCJwdXJwb3NlIjoicHJvdmlzaW9uYWwiLCJyZWFzb24iOiJub2RlIDEgaXMgZG93biwgbm9kZSAyIHRha2VzIG92ZXIiLCJzaXRlX2tleSI6ImQ1NDIwN2RhMTk0OTc3ZGNmNDZhZGJmZWMyYmMyZTc1YjUyZDVhOGE0MjE4NGZlZGZkYzAwMDI0ZjBlM2U4ZGEifQ==",
+    "signatures": [
+     {
+      "key": "511c34a1a2cb521df16bb246b8de8e7997ce235c7e76b22a3d7503a24819dd8a",
+      "key_id": "168c59a54a0d5b6c",
+      "signature": "82589c8a99fa48b813ef3f737169c75e471f68e191e49aa5eda1cd6df6c0b7ce2c40d651fa2f4fdcf5bf8cfd25015d737af82238475aa1fe5112453dbe3b4f0e"
+     },
+     {
+      "key": "d54207da194977dcf46adbfec2bc2e75b52d5a8a42184fedfdc00024f0e3e8da",
+      "key_id": "d7e1e084be213b01",
+      "signature": "097534ecb50be8d1edf72c36cc1bc197d2f6d6072db46c5a543300b50af8edd04e231ecb744e63072681234a03f284f55ad8b488fe40ff2f778e8b614f0f9d0c"
+     }
+    ]
+   },
+   "expected": {
+    "ok": false,
+    "error": "a statement for provisional is not one for promotion"
+   }
+  },
+  {
+   "name": "for another edge",
+   "purpose": "promotion",
+   "statement": {
+    "bytes": "eyJhdCI6IjIwMjYtMTEtMDZUMTI6MDA6MDBaIiwiZWRnZSI6InBsYW50LWIiLCJmb3JtYXQiOiJrYy1lZGdlLXNpdGUtdjEiLCJub2RlX2tleSI6IjUxMWMzNGExYTJjYjUyMWRmMTZiYjI0NmI4ZGU4ZTc5OTdjZTIzNWM3ZTc2YjIyYTNkNzUwM2EyNDgxOWRkOGEiLCJwdXJwb3NlIjoicHJvbW90aW9uIiwicmVhc29uIjoibm9kZSAxIGlzIGRvd24sIG5vZGUgMiB0YWtlcyBvdmVyIiwic2l0ZV9rZXkiOiJkNTQyMDdkYTE5NDk3N2RjZjQ2YWRiZmVjMmJjMmU3NWI1MmQ1YThhNDIxODRmZWRmZGMwMDAyNGYwZTNlOGRhIn0=",
+    "signatures": [
+     {
+      "key": "511c34a1a2cb521df16bb246b8de8e7997ce235c7e76b22a3d7503a24819dd8a",
+      "key_id": "168c59a54a0d5b6c",
+      "signature": "1498ac90fd8d5163c4df76ae20df90d55db5a626933153d194379fb5b97c77e06fa491b99c25c6640abe76a49a3f30759f4148d73a95bc56c79922b477595e04"
+     },
+     {
+      "key": "d54207da194977dcf46adbfec2bc2e75b52d5a8a42184fedfdc00024f0e3e8da",
+      "key_id": "d7e1e084be213b01",
+      "signature": "609f992974466532dc2edcb70b6c81ef65b72cc3ed8a54c5bc1042392db3bd7580bce09ff0ce3e644b770ca98147c341e8df852b61ea1caa0116d56ec040020d"
+     }
+    ]
+   },
+   "expected": {
+    "ok": false,
+    "error": "a site statement for another edge"
+   }
+  },
+  {
+   "name": "signed by the site key alone",
+   "purpose": "promotion",
+   "statement": {
+    "bytes": "eyJhdCI6IjIwMjYtMTEtMDZUMTI6MDA6MDBaIiwiZWRnZSI6InBsYW50LWEiLCJmb3JtYXQiOiJrYy1lZGdlLXNpdGUtdjEiLCJub2RlX2tleSI6IjUxMWMzNGExYTJjYjUyMWRmMTZiYjI0NmI4ZGU4ZTc5OTdjZTIzNWM3ZTc2YjIyYTNkNzUwM2EyNDgxOWRkOGEiLCJwdXJwb3NlIjoicHJvbW90aW9uIiwicmVhc29uIjoibm9kZSAxIGlzIGRvd24sIG5vZGUgMiB0YWtlcyBvdmVyIiwic2l0ZV9rZXkiOiJkNTQyMDdkYTE5NDk3N2RjZjQ2YWRiZmVjMmJjMmU3NWI1MmQ1YThhNDIxODRmZWRmZGMwMDAyNGYwZTNlOGRhIn0=",
+    "signatures": [
+     {
+      "key": "d54207da194977dcf46adbfec2bc2e75b52d5a8a42184fedfdc00024f0e3e8da",
+      "key_id": "d7e1e084be213b01",
+      "signature": "8788d6e48edbf78b999e033d655a9d5d5056e6aa09339eed768c52f369b67d20c1d54594c7d342b7c26af5dc3b0acc7162712e6ae9d45d94edcc82194b18a405"
+     }
+    ]
+   },
+   "expected": {
+    "ok": false,
+    "error": "signed by exactly 2 keys: 168c59a54a0d5b6c, d7e1e084be213b01"
+   }
+  },
+  {
+   "name": "signed by the node alone",
+   "purpose": "promotion",
+   "statement": {
+    "bytes": "eyJhdCI6IjIwMjYtMTEtMDZUMTI6MDA6MDBaIiwiZWRnZSI6InBsYW50LWEiLCJmb3JtYXQiOiJrYy1lZGdlLXNpdGUtdjEiLCJub2RlX2tleSI6IjUxMWMzNGExYTJjYjUyMWRmMTZiYjI0NmI4ZGU4ZTc5OTdjZTIzNWM3ZTc2YjIyYTNkNzUwM2EyNDgxOWRkOGEiLCJwdXJwb3NlIjoicHJvbW90aW9uIiwicmVhc29uIjoibm9kZSAxIGlzIGRvd24sIG5vZGUgMiB0YWtlcyBvdmVyIiwic2l0ZV9rZXkiOiJkNTQyMDdkYTE5NDk3N2RjZjQ2YWRiZmVjMmJjMmU3NWI1MmQ1YThhNDIxODRmZWRmZGMwMDAyNGYwZTNlOGRhIn0=",
+    "signatures": [
+     {
+      "key": "511c34a1a2cb521df16bb246b8de8e7997ce235c7e76b22a3d7503a24819dd8a",
+      "key_id": "168c59a54a0d5b6c",
+      "signature": "5909188d598a1a01c603b772e9d20625cb2b9f954c1d313cf36703a469b78fc800d0e66dbb4204c154e84577eec36f0a06f1558fb02a7996b759794787db630e"
+     }
+    ]
+   },
+   "expected": {
+    "ok": false,
+    "error": "signed by exactly 2 keys: 168c59a54a0d5b6c, d7e1e084be213b01"
+   }
+  },
+  {
+   "name": "signed by another node than it names",
+   "purpose": "promotion",
+   "statement": {
+    "bytes": "eyJhdCI6IjIwMjYtMTEtMDZUMTI6MDA6MDBaIiwiZWRnZSI6InBsYW50LWEiLCJmb3JtYXQiOiJrYy1lZGdlLXNpdGUtdjEiLCJub2RlX2tleSI6IjUxMWMzNGExYTJjYjUyMWRmMTZiYjI0NmI4ZGU4ZTc5OTdjZTIzNWM3ZTc2YjIyYTNkNzUwM2EyNDgxOWRkOGEiLCJwdXJwb3NlIjoicHJvbW90aW9uIiwicmVhc29uIjoibm9kZSAxIGlzIGRvd24sIG5vZGUgMiB0YWtlcyBvdmVyIiwic2l0ZV9rZXkiOiJkNTQyMDdkYTE5NDk3N2RjZjQ2YWRiZmVjMmJjMmU3NWI1MmQ1YThhNDIxODRmZWRmZGMwMDAyNGYwZTNlOGRhIn0=",
+    "signatures": [
+     {
+      "key": "31debe55d37c722768b137131caa6087080b2e0b60b94bd785d14575cfa498bc",
+      "key_id": "e37abcd79efd08db",
+      "signature": "ec60a6fe8a2cfc705de00aaf19d6cb5a81a549d24188a88397d476a291e9878e28d5162665209cf646412169aad1dbc3f7a7bfac28c77dee56f4b8e33c64c009"
+     },
+     {
+      "key": "d54207da194977dcf46adbfec2bc2e75b52d5a8a42184fedfdc00024f0e3e8da",
+      "key_id": "d7e1e084be213b01",
+      "signature": "8788d6e48edbf78b999e033d655a9d5d5056e6aa09339eed768c52f369b67d20c1d54594c7d342b7c26af5dc3b0acc7162712e6ae9d45d94edcc82194b18a405"
+     }
+    ]
+   },
+   "expected": {
+    "ok": false,
+    "error": "signed by exactly 2 keys: 168c59a54a0d5b6c, d7e1e084be213b01"
+   }
+  },
+  {
+   "name": "signed by another site key",
+   "purpose": "promotion",
+   "statement": {
+    "bytes": "eyJhdCI6IjIwMjYtMTEtMDZUMTI6MDA6MDBaIiwiZWRnZSI6InBsYW50LWEiLCJmb3JtYXQiOiJrYy1lZGdlLXNpdGUtdjEiLCJub2RlX2tleSI6IjUxMWMzNGExYTJjYjUyMWRmMTZiYjI0NmI4ZGU4ZTc5OTdjZTIzNWM3ZTc2YjIyYTNkNzUwM2EyNDgxOWRkOGEiLCJwdXJwb3NlIjoicHJvbW90aW9uIiwicmVhc29uIjoibm9kZSAxIGlzIGRvd24sIG5vZGUgMiB0YWtlcyBvdmVyIiwic2l0ZV9rZXkiOiI1MzQ3MDk2MjU1OGE2ZTA4MzkwMjJhZTY1YzZiMjcyM2IzMjc3MmU1YzBjNWY0Nzc2Y2I4ZTZhM2UxMGJhMmYzIn0=",
+    "signatures": [
+     {
+      "key": "511c34a1a2cb521df16bb246b8de8e7997ce235c7e76b22a3d7503a24819dd8a",
+      "key_id": "168c59a54a0d5b6c",
+      "signature": "7e3bf99029688ffe5d7d30e16828a9f23bf47f2bfb868f4791fd82ede3a0fa7005133c1ef97951dfaa623854e48cb0933b197a963c1842973c02af9b1a79de02"
+     },
+     {
+      "key": "53470962558a6e0839022ae65c6b2723b32772e5c0c5f4776cb8e6a3e10ba2f3",
+      "key_id": "59b2ad6131a74d03",
+      "signature": "c5e6c13c27a224603b12321fc260972a91fe10ff48c9a8d049f78a973cce7cfb54af65ee107ec5ad7d6277806d6ec9e36646e92510db0c9b09585534ada1480a"
+     }
+    ]
+   },
+   "expected": {
+    "ok": false,
+    "error": "signed by exactly 2 keys: 168c59a54a0d5b6c, d7e1e084be213b01"
+   }
+  },
+  {
+   "name": "a third signature",
+   "purpose": "promotion",
+   "statement": {
+    "bytes": "eyJhdCI6IjIwMjYtMTEtMDZUMTI6MDA6MDBaIiwiZWRnZSI6InBsYW50LWEiLCJmb3JtYXQiOiJrYy1lZGdlLXNpdGUtdjEiLCJub2RlX2tleSI6IjUxMWMzNGExYTJjYjUyMWRmMTZiYjI0NmI4ZGU4ZTc5OTdjZTIzNWM3ZTc2YjIyYTNkNzUwM2EyNDgxOWRkOGEiLCJwdXJwb3NlIjoicHJvbW90aW9uIiwicmVhc29uIjoibm9kZSAxIGlzIGRvd24sIG5vZGUgMiB0YWtlcyBvdmVyIiwic2l0ZV9rZXkiOiJkNTQyMDdkYTE5NDk3N2RjZjQ2YWRiZmVjMmJjMmU3NWI1MmQ1YThhNDIxODRmZWRmZGMwMDAyNGYwZTNlOGRhIn0=",
+    "signatures": [
+     {
+      "key": "31debe55d37c722768b137131caa6087080b2e0b60b94bd785d14575cfa498bc",
+      "key_id": "e37abcd79efd08db",
+      "signature": "ec60a6fe8a2cfc705de00aaf19d6cb5a81a549d24188a88397d476a291e9878e28d5162665209cf646412169aad1dbc3f7a7bfac28c77dee56f4b8e33c64c009"
+     },
+     {
+      "key": "511c34a1a2cb521df16bb246b8de8e7997ce235c7e76b22a3d7503a24819dd8a",
+      "key_id": "168c59a54a0d5b6c",
+      "signature": "5909188d598a1a01c603b772e9d20625cb2b9f954c1d313cf36703a469b78fc800d0e66dbb4204c154e84577eec36f0a06f1558fb02a7996b759794787db630e"
+     },
+     {
+      "key": "d54207da194977dcf46adbfec2bc2e75b52d5a8a42184fedfdc00024f0e3e8da",
+      "key_id": "d7e1e084be213b01",
+      "signature": "8788d6e48edbf78b999e033d655a9d5d5056e6aa09339eed768c52f369b67d20c1d54594c7d342b7c26af5dc3b0acc7162712e6ae9d45d94edcc82194b18a405"
+     }
+    ]
+   },
+   "expected": {
+    "ok": false,
+    "error": "signed by exactly 2 keys: 168c59a54a0d5b6c, d7e1e084be213b01"
+   }
+  },
+  {
+   "name": "a reason too short",
+   "purpose": "promotion",
+   "statement": {
+    "bytes": "eyJhdCI6IjIwMjYtMTEtMDZUMTI6MDA6MDBaIiwiZWRnZSI6InBsYW50LWEiLCJmb3JtYXQiOiJrYy1lZGdlLXNpdGUtdjEiLCJub2RlX2tleSI6IjUxMWMzNGExYTJjYjUyMWRmMTZiYjI0NmI4ZGU4ZTc5OTdjZTIzNWM3ZTc2YjIyYTNkNzUwM2EyNDgxOWRkOGEiLCJwdXJwb3NlIjoicHJvbW90aW9uIiwicmVhc29uIjoibm8iLCJzaXRlX2tleSI6ImQ1NDIwN2RhMTk0OTc3ZGNmNDZhZGJmZWMyYmMyZTc1YjUyZDVhOGE0MjE4NGZlZGZkYzAwMDI0ZjBlM2U4ZGEifQ==",
+    "signatures": [
+     {
+      "key": "511c34a1a2cb521df16bb246b8de8e7997ce235c7e76b22a3d7503a24819dd8a",
+      "key_id": "168c59a54a0d5b6c",
+      "signature": "6cc1ad259f15ba0850ce214b180a184699fe2d9a5a17e61b066d123ffff79e266bf2aa6f4bab03c7361a6b0299345388fc0338c872bf52f1b0b77caa8b1b2901"
+     },
+     {
+      "key": "d54207da194977dcf46adbfec2bc2e75b52d5a8a42184fedfdc00024f0e3e8da",
+      "key_id": "d7e1e084be213b01",
+      "signature": "2d3cc42032785921b7460db1cf9348537b910e0d21d91308881a390c2256cb1fae078ea4f666f21d8bd476422ad3de9ce1bc79ab7bf1598a3be56975c050f20f"
+     }
+    ]
+   },
+   "expected": {
+    "ok": false,
+    "error": "reason: 3 to 300 characters"
+   }
+  },
+  {
+   "name": "an extra field",
+   "purpose": "promotion",
+   "statement": {
+    "bytes": "eyJhdCI6IjIwMjYtMTEtMDZUMTI6MDA6MDBaIiwiZWRnZSI6InBsYW50LWEiLCJmb3JtYXQiOiJrYy1lZGdlLXNpdGUtdjEiLCJub2RlX2tleSI6IjUxMWMzNGExYTJjYjUyMWRmMTZiYjI0NmI4ZGU4ZTc5OTdjZTIzNWM3ZTc2YjIyYTNkNzUwM2EyNDgxOWRkOGEiLCJwdXJwb3NlIjoicHJvbW90aW9uIiwicmVhc29uIjoibm9kZSAxIGlzIGRvd24sIG5vZGUgMiB0YWtlcyBvdmVyIiwic2l0ZV9rZXkiOiJkNTQyMDdkYTE5NDk3N2RjZjQ2YWRiZmVjMmJjMmU3NWI1MmQ1YThhNDIxODRmZWRmZGMwMDAyNGYwZTNlOGRhIiwidW50aWwiOiIyMDI2LTExLTA3VDEyOjAwOjAwWiJ9",
+    "signatures": [
+     {
+      "key": "511c34a1a2cb521df16bb246b8de8e7997ce235c7e76b22a3d7503a24819dd8a",
+      "key_id": "168c59a54a0d5b6c",
+      "signature": "09d9fa7e559d613589cc680c43a66d56aa8e0517b0f58c2261badf0616ff098daefdfadf2db43116de2558faf88308ee4ea455a256e309ef1d07f0fe58c85009"
+     },
+     {
+      "key": "d54207da194977dcf46adbfec2bc2e75b52d5a8a42184fedfdc00024f0e3e8da",
+      "key_id": "d7e1e084be213b01",
+      "signature": "dd3662242a9b0dbe729b86fc84f0bc4dbfa5d695e3badfa46cc60946b326f8ea424197f59d52fbcc21716237aa92af2094a67ce24e5412e2ea255f2c03db8b0d"
+     }
+    ]
+   },
+   "expected": {
+    "ok": false,
+    "error": "a site statement is exactly {at, edge, format, node_key, purpose, reason, site_key}, naming the pinned site key"
+   }
+  }
+ ]
+}

@@ -3,8 +3,10 @@
 package agent
 
 import (
+	"encoding/json/jsontext"
 	"encoding/json/v2"
 	"fmt"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -163,4 +165,25 @@ func TestAnEndedLeaseIsConfirmedInTheReport(t *testing.T) {
 	if _, ok := r.roles("ann")["plc-operator"]; ok {
 		t.Fatal("ann still holds the role")
 	}
+}
+
+// decision 0028: a node promoted by hand reports how it became active (edge protocol 1.5 section 7.3), read from its
+// activation file at each report, so the promotion reaches the desk without a restart.
+func TestAPromotedNodeReportsItsActivation(t *testing.T) {
+	file := filepath.Join(t.TempDir(), ActivationName)
+	r := newRigTuned(t, func(a *Agent) { a.ActivationFile = file })
+	r.eventually("a report without an activation", func() bool {
+		var rep keyclerk.Report
+		return json.Unmarshal(r.kc.LastReport(), &rep) == nil && rep.AppliedSerial > 0 && rep.Activation == nil
+	})
+	stmt := jsontext.Value(`{"bytes":"e30=","signatures":[]}`)
+	if err := WriteActivation(file, keyclerk.Activation{By: "break_glass", At: "2026-11-06T15:00:00Z", Statement: stmt}); err != nil {
+		t.Fatal(err)
+	}
+	r.eventually("the activation is reported, the statement whole", func() bool {
+		var rep keyclerk.Report
+		return json.Unmarshal(r.kc.LastReport(), &rep) == nil && rep.Activation != nil &&
+			rep.Activation.By == "break_glass" && rep.Activation.At == "2026-11-06T15:00:00Z" &&
+			string(rep.Activation.Statement) == string(stmt)
+	})
 }
