@@ -103,7 +103,8 @@ func (o Options) optional(path string) (ed25519.PrivateKey, error) {
 func hexPub(k ed25519.PrivateKey) string { return hex.EncodeToString(k.Public().(ed25519.PublicKey)) }
 
 // Load reads the keys and checks a staged rotation. It refuses, with what completes the task: a next key outside the
-// enrolment key's directory (the swap must be one rename), a next key without its statement or the reverse, a next
+// enrolment key's directory (the swap must be one rename), a key directory the swap could not rename in (#134; a
+// warning only when nothing is staged), a next key without its statement or the reverse, a next
 // key equal to the one in use, a statement that does not rotate this edge to the staged key, one that changes the
 // edge's officer, and a second rotation staged before the fleet took the first.
 func Load(o Options) (*Keys, error) {
@@ -113,6 +114,11 @@ func Load(o Options) (*Keys, error) {
 	k := &Keys{o: o}
 	var err error
 	if k.current, err = o.read(o.Current); err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, fmt.Errorf("enrolment_key_file %s does not exist: an edge pod installed before #134 keeps the "+
+				"key in deploy/secrets/enrolment.key; move it with python deploy/edge/install.py move-keys. Otherwise "+
+				"restore the enrolment key from the edge's backup (%w)", o.Current, err)
+		}
 		return nil, err
 	}
 	if k.old, err = o.optional(o.old()); err != nil {
@@ -133,12 +139,20 @@ func Load(o Options) (*Keys, error) {
 		return nil, errors.New("next_enrolment_key_file and rotation_statement_file go together: the staged key and " +
 			"the desk's rotation statement co-signed with it (relikey-agent cosign -key NEXT); set both, or neither")
 	}
+	swapErr := swappable(o.Current) // #134: known at start, not after the desk has taken the new key
 	if o.Next == "" {
+		if swapErr != nil {
+			o.Log.Warn("the enrolment key is kept where a rotation could not finish; nothing is staged, so the agent "+
+				"runs on", "err", swapErr)
+		}
 		return k, nil
 	}
 	if filepath.Clean(filepath.Dir(o.Next)) != filepath.Clean(filepath.Dir(o.Current)) {
 		return nil, fmt.Errorf("next_enrolment_key_file %s: put it in the directory of enrolment_key_file (%s), so the "+
 			"key swap is one atomic rename", o.Next, filepath.Dir(o.Current))
+	}
+	if swapErr != nil {
+		return nil, swapErr
 	}
 	if k.next, err = o.optional(o.Next); err != nil {
 		return nil, err

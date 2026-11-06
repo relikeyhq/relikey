@@ -15,6 +15,7 @@ Each mutant names the file, the exact text and its replacement; the file is rest
     python mutants.py --shard 2/4       the second of four deterministic parts of the list (CI runs them in parallel)
 """
 import argparse
+import json
 import os
 import posixpath
 import subprocess
@@ -126,6 +127,16 @@ MUTANTS = [
      "if f.OfficerKey != o.OfficerKey {", "if false {"),
     ("a second rotation is staged before the fleet took the first", Path("internal/enrolkey") / "enrolkey.go",
      "case k.next != nil && k.old != nil:", "case false:"),
+    # a rotation that could not finish where the key is kept (#134)
+    ("a staged rotation is taken where the swap cannot rename", Path("internal/enrolkey") / "enrolkey.go",
+     "\tif swapErr != nil {\n\t\treturn nil, swapErr", "\tif false {\n\t\treturn nil, swapErr"),
+    ("a key mounted as a file of its own passes", Path("internal/enrolkey") / "swappable.go",
+     "\tif own {", "\tif own && false {"),   # `own` stays used: "if false" alone fails to build on Linux
+    ("an unwritable key directory passes", Path("internal/enrolkey") / "swappable.go",
+     "probe, err := os.CreateTemp(dir, \".relikey-swap-probe-*\")",
+     "probe, err := os.CreateTemp(os.TempDir(), \".relikey-swap-probe-*\")"),
+    ("the mount table is never matched", Path("internal/enrolkey") / "swappable.go",
+     "if unescapeMount(f[4]) == want {", "if f[4] == want+\"!\" {"),
     ("a handover's old key need not be the one the fleet holds", Path("pkg/fleetproto") / "handover.go",
      "case h.OldKey != hex.EncodeToString(key):", "case false:"),
     ("a handover without the old key's signature is taken", Path("pkg/fleetproto") / "handover.go",
@@ -465,7 +476,22 @@ def changed_files(base: str) -> list[str]:
     return [f for f in r.stdout.splitlines() if f]
 
 
+PENDING = Path(".mutant-pending.json")   # the file under mutation and its source, while a mutant is in place
+
+
+def restore_pending() -> None:
+    """A run killed while a mutant was in place (a stopped job: `finally` never ran) left the mutant in the source,
+    where the next test run fails for no visible reason. The pending record holds the original: put it back."""
+    if not PENDING.exists():
+        return
+    rec = json.loads(PENDING.read_text(encoding="utf-8"))
+    Path(rec["path"]).write_text(rec["src"], encoding="utf-8", newline="\n")
+    PENDING.unlink()
+    print(f"restored {rec['path']}: a previous run was stopped with a mutant in place")
+
+
 def main(argv=None) -> int:
+    restore_pending()
     ap = argparse.ArgumentParser(description="Remove one guard at a time; the tests must fail every time.")
     ap.add_argument("--changed", metavar="BASE", help="only the mutants a change since BASE can affect")
     ap.add_argument("--shard", type=parse_shard, metavar="I/N", help="run part I of N of the (selected) mutants")
@@ -485,6 +511,7 @@ def main(argv=None) -> int:
             print(f"STALE  {name}: the text to mutate is not found exactly once in {path}")
             survived.append(name)
             continue
+        PENDING.write_text(json.dumps({"path": str(path), "src": src}), encoding="utf-8")
         try:
             path.write_text(src.replace(old, new), encoding="utf-8", newline="\n")
             cwd, pkg = Path("."), path.parent
@@ -494,6 +521,7 @@ def main(argv=None) -> int:
                                capture_output=True, text=True)
         finally:
             path.write_text(src, encoding="utf-8", newline="\n")
+            PENDING.unlink(missing_ok=True)
         killed = r.returncode != 0 and "build failed" not in r.stdout + r.stderr
         print(("killed " if killed else "ALIVE  ") + name + ("" if killed or r.returncode == 0 else " (build failed)"))
         if not killed:

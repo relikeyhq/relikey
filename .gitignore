@@ -9,3 +9,4 @@ agent/dist/
 build/
 deploy/edge/targets.yaml
 _site/
+agent/.mutant-pending.json
