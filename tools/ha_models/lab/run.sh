@@ -18,11 +18,11 @@ CAP="--cap-add NET_ADMIN --cap-add NET_RAW"
 start(){ # $1 mode (normal|static|vmac)
   cleanup
   local v=0; [ "$1" = vmac ] && v=1
-  podman run -d --name relikey-arb-w --network $NET --ip $SUB.10 -v "$L:/l:ro" $IMG python3 /l/witness.py >/dev/null
+  podman run -d --name relikey-arb-w --network $NET --ip $SUB.10 -e MY_IP=$SUB.10 -v "$L:/l:ro" $IMG python3 /l/witness.py >/dev/null
   for n in A B; do
     lc=$(echo $n | tr A-Z a-z); ip=$SUB.2$([ $n = A ] && echo 1 || echo 2); pip=$SUB.2$([ $n = A ] && echo 2 || echo 1)
     podman run -d --name relikey-arb-$lc --network $NET --ip $ip $CAP -v "$L:/l:ro" \
-      -e ME=$n -e PEER=$([ $n = A ] && echo B || echo A) -e PEER_IP=$pip -e WITNESS=$SUB.10 -e VIP=$VIP -e VMAC=$v \
+      -e ME=$n -e MY_IP=$ip -e PEER=$([ $n = A ] && echo B || echo A) -e PEER_IP=$pip -e WITNESS=$SUB.10 -e VIP=$VIP -e VMAC=$v \
       -e START_HOLD=$([ $n = A ] && echo 1 || echo 0) $IMG sh -c "python3 /l/serve.py & exec python3 -u /l/arb.py" >/dev/null
   done
   sleep 3

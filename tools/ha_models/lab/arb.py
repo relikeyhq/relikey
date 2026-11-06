@@ -61,7 +61,7 @@ def witness(path, body=None):
 
 def main():
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    s.bind(("0.0.0.0", 7700))
+    s.bind((os.environ["MY_IP"], 7700))   # the node's own address on the site network, never all interfaces
     s.setblocking(False)
     holds = os.environ.get("START_HOLD") == "1"
     if holds:

@@ -3,6 +3,7 @@
 """Lab witness: one compare-and-swap record {holder, version}, no clock. POST /cas {expect, holder}: when expect equals
 the version (or -1 for "my renew"), the holder is set and the version rises. GET /read."""
 import json
+import os
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -31,4 +32,4 @@ class H(BaseHTTPRequestHandler):
             self.reply({"ok": ok, "record": dict(rec)})
 
 
-ThreadingHTTPServer(("0.0.0.0", 8080), H).serve_forever()
+ThreadingHTTPServer((os.environ["MY_IP"], 8080), H).serve_forever()   # its own address, never all interfaces
