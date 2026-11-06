@@ -50,9 +50,15 @@ jobs:
           version="${GITHUB_REF_NAME#v}"
           mkdir notes
           if [[ "$version" == *-* ]]; then
-            # a release candidate (X.Y.Z-rc.N) has no section of its own: the changes not yet released
-            { echo "Release candidate for ${version%%-*}, not a release. Changes since the last release:"; echo
-              python tools/changelog.py show; } > notes/notes.md
+            # a release candidate (X.Y.Z-rc.N) has no section of its own: the changes of X.Y.Z, from its section when
+            # the release pull request has folded the fragments, else from the fragments not yet released
+            final="${version%%-*}"
+            { echo "Release candidate for ${final}, not a release. Changes since the last release:"; echo
+              if grep -q "^## \[${final}\]" CHANGELOG.md; then
+                awk -v v="## [${final}]" 'index($0, v) == 1 {on = 1; next} /^## / {on = 0} on' CHANGELOG.md
+              else
+                python tools/changelog.py show
+              fi; } > notes/notes.md
           else
             awk -v v="## [${version}]" 'index($0, v) == 1 {on = 1; next} /^## / {on = 0} on' CHANGELOG.md > notes/notes.md
           fi
