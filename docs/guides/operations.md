@@ -45,11 +45,12 @@ Removed. Check the release as the README's "Verifying a release" shows, and use 
    A later plain `up -d` may fail with "has dependent containers": use `up -d --no-recreate`. This is from
    [the core's README](../../deploy/core/README.md#on-podman), measured on podman 4.8.
 
-**The core onto KeyClerk 0.29.0.** From 0.29.0 KeyClerk's checking signer holds the edges' bundle key and builds every
-bundle, and leases name a bastion account only from the reconciler's sealed identity map. After step 3, run
-`python deploy/core/install.py upgrade-0.29` once. It derives the signer's pin of the map (`identity.pub`, the public
-half of `mark.key`), stops the desk, moves the desk's `bundle.key` into the signer (enrolled edges keep the key they
-pinned) and removes the desk's copy, then starts the reconciler, the signer and the desk in that order. Until the
+**The core onto KeyClerk 0.29.0.** From 0.29.0 KeyClerk's checking signer holds the edges' bundle key and unlock key,
+builds every bundle and computes every phoned unlock code, and leases name a bastion account only from the
+reconciler's sealed identity map. After step 3, run `python deploy/core/install.py upgrade-0.29` once. It derives the
+signer's pin of the map (`identity.pub`, the public half of `mark.key`), stops the desk, moves the desk's `bundle.key`
+and `unlock-v2.key` into the signer in one step (enrolled edges keep the keys they pinned) and removes the desk's
+copies, then starts the reconciler, the signer and the desk in that order. Until the
 reconciler's next run writes the map, leases name no bastion account and the desk raises `identity_map_missing` per
 edge; bundles and revocations keep flowing.
 5. Check: `ps` shows every service up, the edge-facing name still answers

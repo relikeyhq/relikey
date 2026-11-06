@@ -174,8 +174,8 @@ def write_identity_key() -> Path:
 def upgrade_029_main(argv: list[str]) -> int:
     """An installed core moves to KeyClerk 0.29.0: the checking signer builds every edge bundle and pins the
     reconciler's identity map. Run it after updating the checkout, before starting the new images: the identity key
-    is derived, the desk's bundle.key is imported into the signer (enrolled edges keep their pin) and removed from the
-    desk, then the reconciler, the signer and the desk start in that order."""
+    is derived, the desk's bundle.key and unlock-v2.key are imported into the signer (enrolled edges keep their pins)
+    and removed from the desk, then the reconciler, the signer and the desk start in that order."""
     a = argparse.ArgumentParser(prog="install.py upgrade-0.29", description=upgrade_029_main.__doc__.splitlines()[0])
     a.add_argument("--engine", default="podman")
     o = a.parse_args(argv)
@@ -187,17 +187,32 @@ def upgrade_029_main(argv: list[str]) -> int:
     compose = [o.engine, "compose", "--env-file", str(SECRETS / "core.env"), "-f", str(CORE / "compose.yaml")]
     busybox = [o.engine, "run", "--rm", "-v", "relikey-core_desk:/s", BUSYBOX]
     subprocess.run(compose + ["stop", "desk"], check=True)
-    held = subprocess.run(busybox + ["test", "-f", "/s/bundle.key"], check=False).returncode == 0
-    if held:
-        # the signer's own command, in its own volume; the desk's copy read from the desk's volume
-        subprocess.run(compose + ["run", "--rm", "--no-deps", "-v", "relikey-core_desk:/srv/old-desk:ro", "signer",
-                                  "keyclerk.signer", "import-bundle-key", "--state", "/var/lib/keyclerk",
-                                  "--from", "/srv/old-desk/bundle.key"], check=True)
-        subprocess.run(busybox + ["rm", "/s/bundle.key"], check=True)
-        print("the signer holds the edges' bundle key now; the desk's copy is removed")
+    def held(name: str) -> bool:
+        return subprocess.run(busybox + ["test", "-f", f"/s/{name}"], check=False).returncode == 0
+    bundle, unlock = held("bundle.key"), held("unlock-v2.key")
+    if unlock and not bundle:
+        sys.exit("the desk still holds unlock-v2.key but no bundle.key: an earlier upgrade moved the bundle key alone. "
+                 "KeyClerk's import takes the unlock key beside the bundle key: copy the signer's bundle.key out of its "
+                 "volume (relikey-core_signer) and run keyclerk.signer import-bundle-key --state /var/lib/keyclerk "
+                 "--from <that copy> --unlock-from <the desk's unlock-v2.key> in the signer, then remove the desk's copy")
+    if bundle:
+        # the signer's own command, in its own volume, the desk's copies read from the desk's volume: both keys in one
+        # step (KeyClerk 0.29.0: the signer holds the bundle key and computes every phoned unlock code)
+        cmd = ["keyclerk.signer", "import-bundle-key", "--state", "/var/lib/keyclerk"]
+        if bundle:
+            cmd += ["--from", "/srv/old-desk/bundle.key"]
+        if unlock:
+            cmd += ["--unlock-from", "/srv/old-desk/unlock-v2.key"]
+        subprocess.run(compose + ["run", "--rm", "--no-deps", "-v", "relikey-core_desk:/srv/old-desk:ro", "signer"] + cmd,
+                       check=True)
+        for name, kept in (("bundle.key", bundle), ("unlock-v2.key", unlock)):
+            if kept:
+                subprocess.run(busybox + ["rm", f"/s/{name}"], check=True)
+        print("the signer holds the edges' keys now (" + ", ".join(n for n, k in (("bundle", bundle), ("unlock", unlock))
+                                                                    if k) + "); the desk's copies are removed")
     else:
-        print("the desk holds no bundle.key: nothing to import (a core whose signer already holds it, or that never "
-              "enrolled an edge)")
+        print("the desk holds no bundle.key or unlock-v2.key: nothing to import (a core whose signer already holds "
+              "them, or that never enrolled an edge)")
     for svc in ("reconcile", "signer", "desk"):   # KeyClerk 0.29.0's order: the map first, then its pin, then the desk
         subprocess.run(compose + ["up", "-d", "--force-recreate", "--no-deps", svc], check=True)
     print("upgraded: the reconciler writes the identity map at its next run; until then leases name no bastion account "

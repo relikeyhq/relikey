@@ -194,8 +194,10 @@ def test_upgrade_029_moves_the_bundle_key_into_the_signer_then_starts_in_order(t
     flat = [" ".join(c) for c in calls]
     assert any("stop desk" in c for c in flat), "the desk stops first: it refuses edges while it holds a bundle.key"
     imp = next(i for i, c in enumerate(flat) if "import-bundle-key" in c)
-    rm = next(i for i, c in enumerate(flat) if c.endswith("rm /s/bundle.key"))
-    assert imp < rm, "the desk's copy goes only after the signer took it"
+    both = "--from /srv/old-desk/bundle.key" in flat[imp] and "--unlock-from /srv/old-desk/unlock-v2.key" in flat[imp]
+    assert both, "both keys in one import (KeyClerk 0.29.0: the signer computes every phoned unlock code)"
+    rms = [i for i, c in enumerate(flat) if c.endswith(("rm /s/bundle.key", "rm /s/unlock-v2.key"))]
+    assert len(rms) == 2 and all(imp < i for i in rms), "the desk's copies go only after the signer took them"
     ups = [c.split()[-1] for c in flat if "up -d --force-recreate" in c]
     assert ups == ["reconcile", "signer", "desk"], "KeyClerk 0.29.0's order: the map, its pin, then the desk"
     assert (secrets / "identity.pub").exists()
@@ -209,3 +211,23 @@ def test_upgrade_029_refuses_a_core_without_a_mark_key(tmp_path, monkeypatch):
         mod.upgrade_029_main([])
     message = str(refused.value.code)
     assert "predates KeyClerk 0.27.0" in message and "then this" in message
+
+
+def test_upgrade_029_refuses_an_unlock_key_without_its_bundle_key(tmp_path, monkeypatch):
+    secrets = tmp_path / "secrets"
+    secrets.mkdir()
+    (secrets / "mark.key").write_text("11" * 32 + "\n", encoding="utf-8")
+    mod = installer("core", secrets, monkeypatch)
+
+    class Ran:
+        def __init__(self, rc):
+            self.returncode = rc
+
+    def run(cmd, **kw):   # the desk's volume holds unlock-v2.key only
+        return Ran(0 if cmd[-1] == "/s/unlock-v2.key" or "test" not in cmd else 1)
+    monkeypatch.setattr(mod.subprocess, "run", run)
+    monkeypatch.setattr(mod, "fix_owners", lambda engine: None)
+    with pytest.raises(SystemExit) as refused:
+        mod.upgrade_029_main([])
+    message = str(refused.value.code)
+    assert "but no bundle.key" in message and "--unlock-from" in message
