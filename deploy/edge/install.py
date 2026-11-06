@@ -23,6 +23,11 @@ code pins (this needs Python 3.13 or later), and prints the key's fingerprint fo
 officer. Nothing is admitted until an officer approves with their passkey. To present again for an installed edge (the fleet was unreachable, say):
 
     python deploy/edge/install.py enrol --code-file <the code's file>
+
+The enrolment key lives in deploy/secrets/keys/, mounted writable at /etc/relikey/keys, because a key rotation renames
+the staged key over it there (#134). An edge installed before that moves its key once, then recreates the agent:
+
+    python deploy/edge/install.py move-keys
 """
 import argparse
 import base64
@@ -41,6 +46,9 @@ from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parents[2]
 SECRETS = ROOT / "deploy" / "secrets"
+KEYS = "keys"                  # deploy/secrets/keys: the agent's writable key directory, /etc/relikey/keys (#134)
+KEY = f"{KEYS}/enrolment.key"
+LEGACY_KEY = "enrolment.key"   # before #134: a single read-only file mount, where a rotation could not finish
 COMPOSE = ROOT / "deploy" / "edge" / "compose.yaml"
 COMPOSE_LAB = ROOT / "deploy" / "edge" / "compose.lab.yaml"
 AGENT_UID = 65532
@@ -73,8 +81,31 @@ def write(name: str, text: str, owner: int | None = AGENT_UID) -> Path:
     return p
 
 
-AGENT_READS = ("agent.json", "enrolment.key", "warpgate.token")   # compose.yaml: mounted into the agent (AGENT_UID)
+AGENT_READS = ("agent.json", KEYS, KEY, "warpgate.token")   # compose.yaml: mounted into the agent (AGENT_UID)
 FRONT_READS = ("front.key",)   # the front's key: root in the front's container (Caddy's image runs as root, no caps)
+
+
+def keys_dir() -> Path:
+    """deploy/secrets/keys, 0700 and the agent's: a rotation writes the old key and renames the next one there."""
+    d = SECRETS / KEYS
+    d.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if hasattr(os, "chown"):
+        try:
+            os.chown(d, AGENT_UID, AGENT_UID)
+        except PermissionError:
+            pass                # fix_owners
+    return d
+
+
+def replace_text(p: Path, text: str) -> None:
+    """Write p whole through a temporary file in its directory: fsync, then one rename (never truncated in place)."""
+    tmp = p.with_name(p.name + ".tmp")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write(text)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, p)
 
 
 def fix_owners(engine: str) -> None:
@@ -240,7 +271,7 @@ def enrol_main(argv: list[str]) -> int:
     a = argparse.ArgumentParser(prog="install.py enrol", description="present this installed edge's key to its fleet")
     a.add_argument("--code-file", required=True, help="the file holding the enrolment code from the fleet page")
     o = a.parse_args(argv)
-    keyfile = SECRETS / "enrolment.key"
+    keyfile = SECRETS / KEY if (SECRETS / KEY).exists() else SECRETS / LEGACY_KEY
     try:
         seed = bytes.fromhex(keyfile.read_text().strip())
     except (OSError, ValueError):
@@ -252,9 +283,44 @@ def enrol_main(argv: list[str]) -> int:
     return 0
 
 
+def move_keys_main(argv: list[str]) -> int:
+    """An edge installed before #134 keeps its key in deploy/secrets/enrolment.key, mounted as a single read-only file
+    where a rotation cannot finish. This moves it into deploy/secrets/keys and points agent.json there."""
+    a = argparse.ArgumentParser(prog="install.py move-keys", description=move_keys_main.__doc__)
+    a.add_argument("--engine", default="podman")
+    o = a.parse_args(argv)
+    old, new, cfg_file = SECRETS / LEGACY_KEY, SECRETS / KEY, SECRETS / "agent.json"
+    if new.exists() and not old.exists():
+        print(f"{new}: the key is already in the key directory; nothing to move")
+        return 0
+    if not old.exists():
+        sys.exit(f"{old}: no enrolment key to move; install the edge first (python deploy/edge/install.py ...)")
+    if new.exists():
+        sys.exit(f"both {old} and {new} exist: keep the one the desk knows (compare its public key with the desk's "
+                 f"edge record), move the other out of deploy/secrets, and run this again")
+    try:
+        cfg = json.loads(cfg_file.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        sys.exit(f"{cfg_file}: {e}; the agent's configuration is needed to point it at the moved key")
+    staged = [k for k in ("next_enrolment_key_file", "rotation_statement_file") if cfg.get(k)]
+    if staged:
+        sys.exit(f"agent.json stages a rotation ({', '.join(staged)}): remove both settings first (it could not "
+                 f"finish from the old place), run this again, then stage the rotation in /etc/relikey/keys")
+    keys_dir()
+    os.replace(old, new)
+    cfg["enrolment_key_file"] = "/etc/relikey/" + KEY
+    replace_text(cfg_file, json.dumps(cfg, indent=1) + "\n")
+    fix_owners(o.engine)
+    print(f"moved the enrolment key to {new} and pointed agent.json at it; then: {o.engine} compose -f "
+          f"{COMPOSE.relative_to(ROOT).as_posix()} up -d --force-recreate agent")
+    return 0
+
+
 def main() -> int:
     if sys.argv[1:2] == ["enrol"]:
         return enrol_main(sys.argv[2:])
+    if sys.argv[1:2] == ["move-keys"]:
+        return move_keys_main(sys.argv[2:])
     a = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     a.add_argument("--edge", required=True)
     a.add_argument("--desk", required=True, help="KeyClerk base URL (https)")
@@ -306,8 +372,9 @@ def main() -> int:
         sys.exit("--sso-issuer needs --warpgate-url: Warpgate builds its sign-in return URL from it, and the broker only "
                  "accepts the URL the core registered with add_edge.py (--warpgate-url there); give the same one here")
     external_host = urlparse(o.warpgate_url).hostname if o.warpgate_url else o.edge   # full-stack run: never a bare id
-    if (SECRETS / "enrolment.key").exists() and not (o.re_key or o.enrolment_seed_file):
-        sys.exit(f"this edge is already installed ({SECRETS / 'enrolment.key'} exists). Running again would make a new "
+    installed = next((SECRETS / k for k in (KEY, LEGACY_KEY) if (SECRETS / k).exists()), None)
+    if installed and not (o.re_key or o.enrolment_seed_file):
+        sys.exit(f"this edge is already installed ({installed} exists). Running again would make a new "
                  "enrolment key, and the desk would refuse the edge until an officer enrols it again. To change the "
                  "agent's settings, edit agent.json; to re-key on purpose, add --re-key (full-stack run 2)")
     SECRETS.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -324,7 +391,9 @@ def main() -> int:
     write("lldap.env", f"LLDAP_JWT_SECRET={secrets.token_urlsafe(32)}\nLLDAP_KEY_SEED={secrets.token_urlsafe(32)}\n"
                        f"LLDAP_LDAP_USER_PASS={secrets.token_urlsafe(24)}\n", owner=None)
     seed = bytes.fromhex(Path(o.enrolment_seed_file).read_text().strip()) if o.enrolment_seed_file else secrets.token_bytes(32)
-    write("enrolment.key", seed.hex() + "\n")
+    keys_dir()
+    (SECRETS / LEGACY_KEY).unlink(missing_ok=True)   # --re-key over an install from before #134
+    write(KEY, seed.hex() + "\n")
     # Warpgate's first setup, in its own volume; its certificate becomes the agent's pin.
     # The built-in admin's password goes through the environment, never argv (any local user reads /proc/*/cmdline:
     # stack attack 2026-10-25, E2). It is random and kept nowhere: the agent works with the admin token.
@@ -400,7 +469,7 @@ def main() -> int:
     else:
         keyclerk["pin_sha256"] = o.desk_pin
     cfg = {"edge": o.edge, "mode": "enforce", "state_dir": "/var/lib/relikey",
-           "enrolment_key_file": "/etc/relikey/enrolment.key",
+           "enrolment_key_file": "/etc/relikey/" + KEY,   # a writable directory: a rotation renames in it (#134)
            "pins": {"bundle_key": o.bundle_key, "officer_key": o.officer_key, "release_key": None},
            "clerk": keyclerk,                      # the clerk role (decision 0023)
            "bastion": {"kind": "warpgate", "url": "https://127.0.0.1:8899/@warpgate/admin/api", "token_file": "/etc/relikey/warpgate.token",

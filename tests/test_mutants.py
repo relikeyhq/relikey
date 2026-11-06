@@ -150,3 +150,17 @@ def test_main_runs_nothing_when_nothing_is_selected(monkeypatch, capsys):
     assert mutants.main(["--changed", "origin/main", "--shard", "1/4"]) == 0
     out = capsys.readouterr().out
     assert "no mutant to run" in out and "0/0 mutants killed" in out
+
+
+def test_a_run_stopped_with_a_mutant_in_place_is_restored_by_the_next(tmp_path, monkeypatch):
+    """A stopped job never runs `finally`, so the mutant stayed in the source and the next test run failed for no
+    visible reason (2026-11-06). The pending record puts the original back before anything else runs."""
+    src = tmp_path / "guard.go"
+    src.write_text("if ok {\n", encoding="utf-8")
+    monkeypatch.setattr(mutants, "PENDING", tmp_path / ".mutant-pending.json")
+    mutants.PENDING.write_text(mutants.json.dumps({"path": str(src), "src": "if ok {\n"}), encoding="utf-8")
+    src.write_text("if false {\n", encoding="utf-8")   # the mutant the stopped run left
+    mutants.restore_pending()
+    assert src.read_text(encoding="utf-8") == "if ok {\n"
+    assert not mutants.PENDING.exists()
+    mutants.restore_pending()                         # nothing pending: nothing happens

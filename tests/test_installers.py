@@ -88,14 +88,64 @@ def test_a_refusal_says_why_and_what_to_do_next(which, args, why, nxt, tmp_path,
     assert why in message and nxt in message, message
 
 
-def test_an_installed_edge_is_not_re_keyed_in_passing(tmp_path, monkeypatch):
+@pytest.mark.parametrize("where", ["keys/enrolment.key", "enrolment.key"], ids=["key directory", "before #134"])
+def test_an_installed_edge_is_not_re_keyed_in_passing(where, tmp_path, monkeypatch):
     secrets = tmp_path / "secrets"
-    secrets.mkdir()
-    (secrets / "enrolment.key").write_text("d" * 64, encoding="utf-8")
+    (secrets / where).parent.mkdir(parents=True)
+    (secrets / where).write_text("d" * 64, encoding="utf-8")
     mod = installer("edge", secrets, monkeypatch)
     monkeypatch.setattr(sys, "argv", ["install.py"] + EDGE)
     with pytest.raises(SystemExit) as refused:
         mod.main()
     message = str(refused.value.code)
     assert "the desk would refuse the edge until an officer enrols it again" in message and "--re-key" in message
-    assert (secrets / "enrolment.key").read_text(encoding="utf-8") == "d" * 64
+    assert (secrets / where).read_text(encoding="utf-8") == "d" * 64
+
+
+# #134: the pod mounts a writable key directory, where a rotation can rename; the agent's configuration points there.
+def test_the_pod_keeps_the_enrolment_key_in_a_writable_directory():
+    compose = (ROOT / "deploy" / "edge" / "compose.yaml").read_text(encoding="utf-8")
+    assert "../secrets/keys:/etc/relikey/keys " in compose, "the key directory is mounted writable (no :ro)"
+    assert "enrolment.key:/etc/relikey" not in compose, "the key is never a single-file mount: nothing renames over it"
+    src = (ROOT / "deploy" / "edge" / "install.py").read_text(encoding="utf-8")
+    assert '"enrolment_key_file": "/etc/relikey/" + KEY' in src
+
+
+def legacy_edge(secrets: Path, cfg: dict) -> None:
+    import json
+    secrets.mkdir()
+    (secrets / "enrolment.key").write_text("d" * 64 + "\n", encoding="utf-8")
+    (secrets / "agent.json").write_text(json.dumps(cfg), encoding="utf-8")
+
+
+def test_move_keys_moves_an_older_installs_key_and_points_the_agent_there(tmp_path, monkeypatch):
+    import json
+    secrets = tmp_path / "secrets"
+    legacy_edge(secrets, {"edge": "plant-a", "enrolment_key_file": "/etc/relikey/enrolment.key"})
+    mod = installer("edge", secrets, monkeypatch)
+    monkeypatch.setattr(mod, "fix_owners", lambda engine: None)
+    assert mod.move_keys_main([]) == 0
+    assert not (secrets / "enrolment.key").exists()
+    assert (secrets / "keys" / "enrolment.key").read_text(encoding="utf-8") == "d" * 64 + "\n"
+    cfg = json.loads((secrets / "agent.json").read_text(encoding="utf-8"))
+    assert cfg == {"edge": "plant-a", "enrolment_key_file": "/etc/relikey/keys/enrolment.key"}
+    assert mod.move_keys_main([]) == 0, "a second run finds the key moved and does nothing"
+    assert not list(secrets.glob("*.tmp")), "agent.json is replaced whole, no temporary file left"
+
+
+@pytest.mark.parametrize("setup,why,nxt", [
+    (lambda s: (s / "keys").mkdir() or (s / "keys" / "enrolment.key").write_text("e" * 64), "both", "keep the one the desk knows"),
+    (lambda s: (s / "agent.json").write_text('{"next_enrolment_key_file": "/etc/relikey/n.key", '
+                                             '"rotation_statement_file": "/etc/relikey/r.json"}'),
+     "stages a rotation", "remove both settings first"),
+], ids=["two keys", "a staged rotation"])
+def test_move_keys_refuses_what_it_cannot_settle(setup, why, nxt, tmp_path, monkeypatch):
+    secrets = tmp_path / "secrets"
+    legacy_edge(secrets, {"edge": "plant-a", "enrolment_key_file": "/etc/relikey/enrolment.key"})
+    setup(secrets)
+    mod = installer("edge", secrets, monkeypatch)
+    with pytest.raises(SystemExit) as refused:
+        mod.move_keys_main([])
+    message = str(refused.value.code)
+    assert why in message and nxt in message, message
+    assert (secrets / "enrolment.key").exists(), "nothing moved"

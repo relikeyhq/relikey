@@ -61,7 +61,7 @@ services:
     volumes:
       - agent:/var/lib/relikey                   # floors, the verified bundle, status.json and status.html
       - ../secrets/agent.json:/etc/relikey/agent.json:ro
-      - ../secrets/enrolment.key:/etc/relikey/enrolment.key:ro
+      - ../secrets/keys:/etc/relikey/keys        # the enrolment key, writable: a rotation renames in it (#134)
       - ../secrets/warpgate.token:/etc/relikey/warpgate.token:ro
       - ../secrets/governed-roles.json:/etc/relikey/governed-roles.json:ro   # targets.py writes it; not secret (0644)
     restart: unless-stopped
