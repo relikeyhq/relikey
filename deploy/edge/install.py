@@ -553,6 +553,8 @@ def main() -> int:
     keyclerk = {"url": o.desk}
     if o.desk_ca:
         keyclerk["ca_file"] = "/etc/relikey/desk-ca.pem"
+        if (SECRETS / "desk-ca.pem").is_dir():   # the empty directory compose made for a pin install
+            (SECRETS / "desk-ca.pem").rmdir()
         write("desk-ca.pem", Path(o.desk_ca).read_text(encoding="utf-8"))
     else:
         keyclerk["pin_sha256"] = o.desk_pin
