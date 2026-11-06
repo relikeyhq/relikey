@@ -11,7 +11,7 @@ What ReliKey composes. Each is an upstream image or binary pinned by version (an
 | broker | Keycloak | 26.8.1 | Apache-2.0 | appliance | Identity broker. Holds credentials, passkeys and sessions; brokers to the organisation's IdP when there is one. |
 | broker-db | Broker database | 16.8-alpine | PostgreSQL | appliance | Keycloak's PostgreSQL, in the core pod on loopback only; nothing else reads or writes it (decision 0015). |
 | front | Front proxy | 2.11.7-alpine | Apache-2.0 | appliance | The core's one published port: terminates TLS and routes by hostname to the broker's sign-in, the desk, and an edge-facing name that serves only what an edge needs (the desk's edge routes and the mirror's read API); the broker's admin console only on a host-loopback listener. Holds the TLS key and no other secret (decision 0015). |
-| clerk | KeyClerk | 0.27.0 | EUPL-1.2 | appliance | Governance engine. Decides who may reach what, until when, with whose second key; issues signed lease bundles. |
+| clerk | KeyClerk | 0.28.0 | EUPL-1.2 | appliance | Governance engine. Decides who may reach what, until when, with whose second key; issues signed lease bundles. |
 | vault | OpenBao |  |  | appliance | The organisation's own OpenBao or Vault, when it runs one, read by Warpgate's secret backend for target credentials; ReliKey ships none (decision 0012, R-01: gaps go upstream, not into a new component). |
 | fleet | ReliKey fleet service |  |  | appliance | Fleet management, ReliKey's own (decision 0026): receives each edge's signed report (outbound from the edge, through the front's edge-facing name), keeps the inventory - last seen, release, applied serial, drift, attested profile, link crypto - serves the fleet view, and raises the silence alarm. Works with any clerk or none; a clerk adds its governance facts. Evidence and governance events only, never device telemetry (0021). |
 | mirror | Update mirror | v2.1.22 | Apache-2.0 | appliance | The image registry mirror in the core that edges pull from, serving only digests named in a signed update manifest whose key is separate from the lease-signing key (decision 0009, RT-19). zot, syncing only the pinned digests; edges never pull from the internet (decision 0012, R-20). |
@@ -44,7 +44,7 @@ What ReliKey composes. Each is an upstream image or binary pinned by version (an
 | broker | `quay.io/keycloak/keycloak:26.8.1` | `sha256:a78d6b795721...` |
 | broker-db | `docker.io/library/postgres:16.8-alpine` | `sha256:3b057e1c2c6d...` |
 | front | `docker.io/library/caddy:2.11.7-alpine` | `sha256:eb4d35b7452d...` |
-| clerk | `localhost/keyclerk:0.27.0` | not pinned yet |
+| clerk | `localhost/keyclerk:0.28.0` | not pinned yet |
 | bastion | `ghcr.io/warp-tech/warpgate:0.30.4` | `sha256:c81537790bd3...` |
 | proxy | `docker.io/library/caddy:2.11.7-alpine` | `sha256:eb4d35b7452d...` |
 | facade | `docker.io/lldap/lldap:v0.6.3-alpine-rootless` | `sha256:ba2c50930ea9...` |

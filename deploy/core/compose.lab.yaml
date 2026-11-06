@@ -7,10 +7,10 @@ services:
     network_mode: host
     ports: !reset []
   signer:
-    image: ${KEYCLERK_IMAGE:-localhost/keyclerk:0.27.0}   # lab only: install.py --keyclerk-ref
+    image: ${KEYCLERK_IMAGE:-localhost/keyclerk:0.28.0}   # lab only: install.py --keyclerk-ref
   desk:
-    image: ${KEYCLERK_IMAGE:-localhost/keyclerk:0.27.0}   # lab only: install.py --keyclerk-ref
+    image: ${KEYCLERK_IMAGE:-localhost/keyclerk:0.28.0}   # lab only: install.py --keyclerk-ref
   reconcile:
-    image: ${KEYCLERK_IMAGE:-localhost/keyclerk:0.27.0}   # lab only: install.py --keyclerk-ref
+    image: ${KEYCLERK_IMAGE:-localhost/keyclerk:0.28.0}   # lab only: install.py --keyclerk-ref
   setup:
-    image: ${KEYCLERK_IMAGE:-localhost/keyclerk:0.27.0}   # lab only: install.py --keyclerk-ref
+    image: ${KEYCLERK_IMAGE:-localhost/keyclerk:0.28.0}   # lab only: install.py --keyclerk-ref

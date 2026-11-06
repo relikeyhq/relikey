@@ -52,7 +52,7 @@ Early. The edge agent is built and heavily tested (conformance vectors, mutation
 stands up on rootless podman and on rootful docker. Full-stack lab runs on one box have proven passkey sign-in at the
 broker, an edge enrolled with the officer's and the edge's signatures, a lease applied on Warpgate, a recorded session,
 a revoke that cuts a held session, Warpgate's admin interface unreachable on the published port, and signed fleet
-reports over post-quantum hybrid TLS, with the core on KeyClerk 0.27.0 (approvals on a passkey sign-in) and the edge
+reports over post-quantum hybrid TLS, with the core on KeyClerk 0.28.0 (approvals on a passkey sign-in) and the edge
 on Warpgate 0.30.4. The fleet's enrolment by code and its officer anchor ceremony are built and
 tested, not yet walked on a deployed box. The decision records and model are the design of record. What is **not**
 done: production networking, high availability, fleet-enforced signed releases (decision 0026, slice 3), and several
