@@ -3,8 +3,8 @@
 FROM docker.io/library/debian:bookworm-slim@sha256:734a72b3d6142a71993b4bc580ca01d8ca687f77a2c422d96a961d3376b179bc
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
       xrdp xorgxrdp xserver-xorg-core openbox ssl-cert dbus-x11 x11-xserver-utils && rm -rf /var/lib/apt/lists/* \
- && useradd -m -s /bin/bash rk && adduser xrdp ssl-cert \
- && printf '#!/bin/sh\nexec openbox-session\n' > /home/rk/.xsession && chown rk /home/rk/.xsession
+ && useradd -m -d /srv/rk -s /bin/bash rk && adduser xrdp ssl-cert \
+ && printf '#!/bin/sh\nexec openbox-session\n' > /srv/rk/.xsession && chown rk /srv/rk/.xsession
 COPY start.sh /start.sh
 EXPOSE 3389
 ENTRYPOINT ["/bin/sh", "/start.sh"]
