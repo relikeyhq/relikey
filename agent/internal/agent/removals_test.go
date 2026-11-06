@@ -164,3 +164,42 @@ func TestAnEndedLeaseIsConfirmedInTheReport(t *testing.T) {
 		t.Fatal("ann still holds the role")
 	}
 }
+
+// The drift line for a role removed behind the agent names the user, the role, the lease's end and what happens next,
+// and the leases that granted it; a role still active, a lease already ended and an unreadable user are not reported.
+// Deterministic: removedOutside is called directly, with no ticks to race (TestARoleRemovedOutsideTheAgentIsReported
+// checks the running agent counts it and grants it again).
+func TestTheRemovalSaysWhoAndWhat(t *testing.T) {
+	now := time.Date(2026, 11, 6, 12, 0, 0, 0, time.UTC)
+	end := now.Add(time.Hour)
+	desired := apply.Desired{Now: now, Users: map[string]*apply.DesiredUser{
+		"ann": {Roles: map[string]time.Time{"plc-operator": end, "viewer": end, "old": now.Add(-time.Minute)}},
+		"bob": {Roles: map[string]time.Time{"plc-operator": end}},
+	}}
+	observed := &apply.Observed{
+		Managed: map[string]*apply.ObservedUser{
+			"ann": {Roles: map[string]bastion.Grant{"viewer": {Role: "viewer", Active: true}}},
+			"bob": {Roles: map[string]bastion.Grant{}},
+		},
+		Unreadable: map[string]bool{"bob": true},
+	}
+	l := live{leases: []kcedge.Lease{{LeaseID: "L-1", Username: "ann", Role: "plc-operator"},
+		{LeaseID: "L-2", Username: "ann", Role: "viewer"}, {LeaseID: "L-3", Username: "bob", Role: "plc-operator"}}}
+	held := map[string]map[string]bool{"ann": {"plc-operator": true, "viewer": true, "old": true},
+		"bob": {"plc-operator": true}}
+	for _, tc := range []struct {
+		mode Mode
+		what string
+	}{{Enforce, "the plan grants it again"}, {Shadow, "not restored in shadow mode"}} {
+		a := &Agent{Mode: tc.mode, held: held}
+		out, early := a.removedOutside(desired, observed, l)
+		want := fmt.Sprintf("user ann lost role plc-operator before its lease ends (%s), not by the agent (an SSO roles "+
+			"claim without role_mappings does this at login): %s", end.Format(time.RFC3339), tc.what)
+		if len(out) != 1 || out[0] != want {
+			t.Fatalf("%v: drift %q, want only %q", tc.mode, out, want)
+		}
+		if len(early) != 1 || early[0] != "L-1" || a.st.RemovedOutside != 1 {
+			t.Fatalf("%v: early %v, counted %d: want L-1, counted once", tc.mode, early, a.st.RemovedOutside)
+		}
+	}
+}
