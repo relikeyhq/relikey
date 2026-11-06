@@ -127,6 +127,11 @@ MUTANTS = [
      "if f.OfficerKey != o.OfficerKey {", "if false {"),
     ("a second rotation is staged before the fleet took the first", Path("internal/enrolkey") / "enrolkey.go",
      "case k.next != nil && k.old != nil:", "case false:"),
+    # a role removed behind the agent (edge protocol 1.4 lease_ended_early; TestTheRemovalSaysWhoAndWhat)
+    ("a role still held is reported as removed outside", Path("internal/agent") / "agent.go",
+     "if g, ok := ou.Roles[role]; ok && g.Active {", "if g, ok := ou.Roles[role]; ok && g.Active && false {"),
+    ("a lease already ended is reported as a removal", Path("internal/agent") / "agent.go",
+     "if !live || (!d.Now.IsZero() && !end.After(d.Now)) {", "if !live {"),
     # a rotation that could not finish where the key is kept (#134)
     ("a staged rotation is taken where the swap cannot rename", Path("internal/enrolkey") / "enrolkey.go",
      "\tif swapErr != nil {\n\t\treturn nil, swapErr", "\tif false {\n\t\treturn nil, swapErr"),
