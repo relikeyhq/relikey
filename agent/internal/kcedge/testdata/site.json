@@ -1,5 +1,5 @@
 {
- "format": "relikey-site-vectors-v1",
+ "format": "relikey-site-vectors-v2",
  "source": "keyclerk.edge_relay.verify_site",
  "edge": "plant-a",
  "site_key": "d54207da194977dcf46adbfec2bc2e75b52d5a8a42184fedfdc00024f0e3e8da",
@@ -8,6 +8,131 @@
   {
    "name": "a promotion signed by the site key and the node it names",
    "purpose": "promotion",
+   "now": "2026-11-06T13:00:00Z",
+   "statement": {
+    "bytes": "eyJhdCI6IjIwMjYtMTEtMDZUMTI6MDA6MDBaIiwiZWRnZSI6InBsYW50LWEiLCJmb3JtYXQiOiJrYy1lZGdlLXNpdGUtdjIiLCJub2RlX2tleSI6IjUxMWMzNGExYTJjYjUyMWRmMTZiYjI0NmI4ZGU4ZTc5OTdjZTIzNWM3ZTc2YjIyYTNkNzUwM2EyNDgxOWRkOGEiLCJub3RfYWZ0ZXIiOiIyMDI2LTExLTA3VDEyOjAwOjAwWiIsInB1cnBvc2UiOiJwcm9tb3Rpb24iLCJyZWFzb24iOiJub2RlIDEgaXMgZG93biwgbm9kZSAyIHRha2VzIG92ZXIiLCJzaXRlX2tleSI6ImQ1NDIwN2RhMTk0OTc3ZGNmNDZhZGJmZWMyYmMyZTc1YjUyZDVhOGE0MjE4NGZlZGZkYzAwMDI0ZjBlM2U4ZGEifQ==",
+    "signatures": [
+     {
+      "key": "511c34a1a2cb521df16bb246b8de8e7997ce235c7e76b22a3d7503a24819dd8a",
+      "key_id": "168c59a54a0d5b6c",
+      "signature": "6c5d59e3b1b92a4769a5739a65b231386c45018a2ddc380f6fd3b1d3d1f5c0b3d329e9bcad76870dc1d04de4462b1bc4c0403936fffd5fb443a2b14388244905"
+     },
+     {
+      "key": "d54207da194977dcf46adbfec2bc2e75b52d5a8a42184fedfdc00024f0e3e8da",
+      "key_id": "d7e1e084be213b01",
+      "signature": "4e1026864b95fd162141d0edb0fd6435c7b95d12b06d16d0ca6f7c7db7b53decbb4698bc9086a19118f9f81c20489df9c759972872f3e0bb24dea542fc3b8d02"
+     }
+    ]
+   },
+   "expected": {
+    "ok": true,
+    "node_key": "511c34a1a2cb521df16bb246b8de8e7997ce235c7e76b22a3d7503a24819dd8a",
+    "at": "2026-11-06T12:00:00Z",
+    "reason": "node 1 is down, node 2 takes over"
+   }
+  },
+  {
+   "name": "a promotion an hour before its not_after",
+   "purpose": "promotion",
+   "now": "2026-11-07T11:00:00Z",
+   "statement": {
+    "bytes": "eyJhdCI6IjIwMjYtMTEtMDZUMTI6MDA6MDBaIiwiZWRnZSI6InBsYW50LWEiLCJmb3JtYXQiOiJrYy1lZGdlLXNpdGUtdjIiLCJub2RlX2tleSI6IjUxMWMzNGExYTJjYjUyMWRmMTZiYjI0NmI4ZGU4ZTc5OTdjZTIzNWM3ZTc2YjIyYTNkNzUwM2EyNDgxOWRkOGEiLCJub3RfYWZ0ZXIiOiIyMDI2LTExLTA3VDEyOjAwOjAwWiIsInB1cnBvc2UiOiJwcm9tb3Rpb24iLCJyZWFzb24iOiJub2RlIDEgaXMgZG93biwgbm9kZSAyIHRha2VzIG92ZXIiLCJzaXRlX2tleSI6ImQ1NDIwN2RhMTk0OTc3ZGNmNDZhZGJmZWMyYmMyZTc1YjUyZDVhOGE0MjE4NGZlZGZkYzAwMDI0ZjBlM2U4ZGEifQ==",
+    "signatures": [
+     {
+      "key": "511c34a1a2cb521df16bb246b8de8e7997ce235c7e76b22a3d7503a24819dd8a",
+      "key_id": "168c59a54a0d5b6c",
+      "signature": "6c5d59e3b1b92a4769a5739a65b231386c45018a2ddc380f6fd3b1d3d1f5c0b3d329e9bcad76870dc1d04de4462b1bc4c0403936fffd5fb443a2b14388244905"
+     },
+     {
+      "key": "d54207da194977dcf46adbfec2bc2e75b52d5a8a42184fedfdc00024f0e3e8da",
+      "key_id": "d7e1e084be213b01",
+      "signature": "4e1026864b95fd162141d0edb0fd6435c7b95d12b06d16d0ca6f7c7db7b53decbb4698bc9086a19118f9f81c20489df9c759972872f3e0bb24dea542fc3b8d02"
+     }
+    ]
+   },
+   "expected": {
+    "ok": true,
+    "node_key": "511c34a1a2cb521df16bb246b8de8e7997ce235c7e76b22a3d7503a24819dd8a",
+    "at": "2026-11-06T12:00:00Z",
+    "reason": "node 1 is down, node 2 takes over"
+   }
+  },
+  {
+   "name": "a promotion after its not_after",
+   "purpose": "promotion",
+   "now": "2026-11-07T13:00:00Z",
+   "statement": {
+    "bytes": "eyJhdCI6IjIwMjYtMTEtMDZUMTI6MDA6MDBaIiwiZWRnZSI6InBsYW50LWEiLCJmb3JtYXQiOiJrYy1lZGdlLXNpdGUtdjIiLCJub2RlX2tleSI6IjUxMWMzNGExYTJjYjUyMWRmMTZiYjI0NmI4ZGU4ZTc5OTdjZTIzNWM3ZTc2YjIyYTNkNzUwM2EyNDgxOWRkOGEiLCJub3RfYWZ0ZXIiOiIyMDI2LTExLTA3VDEyOjAwOjAwWiIsInB1cnBvc2UiOiJwcm9tb3Rpb24iLCJyZWFzb24iOiJub2RlIDEgaXMgZG93biwgbm9kZSAyIHRha2VzIG92ZXIiLCJzaXRlX2tleSI6ImQ1NDIwN2RhMTk0OTc3ZGNmNDZhZGJmZWMyYmMyZTc1YjUyZDVhOGE0MjE4NGZlZGZkYzAwMDI0ZjBlM2U4ZGEifQ==",
+    "signatures": [
+     {
+      "key": "511c34a1a2cb521df16bb246b8de8e7997ce235c7e76b22a3d7503a24819dd8a",
+      "key_id": "168c59a54a0d5b6c",
+      "signature": "6c5d59e3b1b92a4769a5739a65b231386c45018a2ddc380f6fd3b1d3d1f5c0b3d329e9bcad76870dc1d04de4462b1bc4c0403936fffd5fb443a2b14388244905"
+     },
+     {
+      "key": "d54207da194977dcf46adbfec2bc2e75b52d5a8a42184fedfdc00024f0e3e8da",
+      "key_id": "d7e1e084be213b01",
+      "signature": "4e1026864b95fd162141d0edb0fd6435c7b95d12b06d16d0ca6f7c7db7b53decbb4698bc9086a19118f9f81c20489df9c759972872f3e0bb24dea542fc3b8d02"
+     }
+    ]
+   },
+   "expected": {
+    "ok": false,
+    "error": "the promotion statement expired at 2026-11-07T12:00:00Z"
+   }
+  },
+  {
+   "name": "a promotion valid for more than a day",
+   "purpose": "promotion",
+   "now": "2026-11-06T13:00:00Z",
+   "statement": {
+    "bytes": "eyJhdCI6IjIwMjYtMTEtMDZUMTI6MDA6MDBaIiwiZWRnZSI6InBsYW50LWEiLCJmb3JtYXQiOiJrYy1lZGdlLXNpdGUtdjIiLCJub2RlX2tleSI6IjUxMWMzNGExYTJjYjUyMWRmMTZiYjI0NmI4ZGU4ZTc5OTdjZTIzNWM3ZTc2YjIyYTNkNzUwM2EyNDgxOWRkOGEiLCJub3RfYWZ0ZXIiOiIyMDI2LTExLTA3VDEzOjAwOjAwWiIsInB1cnBvc2UiOiJwcm9tb3Rpb24iLCJyZWFzb24iOiJub2RlIDEgaXMgZG93biwgbm9kZSAyIHRha2VzIG92ZXIiLCJzaXRlX2tleSI6ImQ1NDIwN2RhMTk0OTc3ZGNmNDZhZGJmZWMyYmMyZTc1YjUyZDVhOGE0MjE4NGZlZGZkYzAwMDI0ZjBlM2U4ZGEifQ==",
+    "signatures": [
+     {
+      "key": "511c34a1a2cb521df16bb246b8de8e7997ce235c7e76b22a3d7503a24819dd8a",
+      "key_id": "168c59a54a0d5b6c",
+      "signature": "f77892293a8f754bdb6ebe9919acfc214db1cc8e26059682aa1a65e44896ede26843d0a7ffa4609f7a24d2e73b4077c012051f6ed00b334ed2c42593c150db03"
+     },
+     {
+      "key": "d54207da194977dcf46adbfec2bc2e75b52d5a8a42184fedfdc00024f0e3e8da",
+      "key_id": "d7e1e084be213b01",
+      "signature": "9c0ab88cb459b5c62a0603cc22075324050f80f4ab6bd1a573bef9aa310c0d7df4906b58cc969f59a366f404015dba758dcd0f710ac32ddfa1ddfde415d3ec00"
+     }
+    ]
+   },
+   "expected": {
+    "ok": false,
+    "error": "not_after: after at, and at most 24 hours later"
+   }
+  },
+  {
+   "name": "a promotion whose not_after is its at",
+   "purpose": "promotion",
+   "now": "2026-11-06T13:00:00Z",
+   "statement": {
+    "bytes": "eyJhdCI6IjIwMjYtMTEtMDZUMTI6MDA6MDBaIiwiZWRnZSI6InBsYW50LWEiLCJmb3JtYXQiOiJrYy1lZGdlLXNpdGUtdjIiLCJub2RlX2tleSI6IjUxMWMzNGExYTJjYjUyMWRmMTZiYjI0NmI4ZGU4ZTc5OTdjZTIzNWM3ZTc2YjIyYTNkNzUwM2EyNDgxOWRkOGEiLCJub3RfYWZ0ZXIiOiIyMDI2LTExLTA2VDEyOjAwOjAwWiIsInB1cnBvc2UiOiJwcm9tb3Rpb24iLCJyZWFzb24iOiJub2RlIDEgaXMgZG93biwgbm9kZSAyIHRha2VzIG92ZXIiLCJzaXRlX2tleSI6ImQ1NDIwN2RhMTk0OTc3ZGNmNDZhZGJmZWMyYmMyZTc1YjUyZDVhOGE0MjE4NGZlZGZkYzAwMDI0ZjBlM2U4ZGEifQ==",
+    "signatures": [
+     {
+      "key": "511c34a1a2cb521df16bb246b8de8e7997ce235c7e76b22a3d7503a24819dd8a",
+      "key_id": "168c59a54a0d5b6c",
+      "signature": "686af4b243f0600e1f6fe6225a8ff655468ceaafd2f0f5e9bf6f7c7d99f6567657ab22e7b84ba8c9c896bf9230590b2a9d3b1648265aba7e266cb9ee2cb38903"
+     },
+     {
+      "key": "d54207da194977dcf46adbfec2bc2e75b52d5a8a42184fedfdc00024f0e3e8da",
+      "key_id": "d7e1e084be213b01",
+      "signature": "5f3f4aad7fd99079392fecc4b8397cfa9e883a97ea7c68109fbbe44fe33ac9f28b45007afcfdcd486a8a266eff76766f4a17b48ad176ec7174cebfb8bb35300e"
+     }
+    ]
+   },
+   "expected": {
+    "ok": false,
+    "error": "not_after: after at, and at most 24 hours later"
+   }
+  },
+  {
+   "name": "a 1.5 promotion (kc-edge-site-v1)",
+   "purpose": "promotion",
+   "now": "2026-11-06T13:00:00Z",
    "statement": {
     "bytes": "eyJhdCI6IjIwMjYtMTEtMDZUMTI6MDA6MDBaIiwiZWRnZSI6InBsYW50LWEiLCJmb3JtYXQiOiJrYy1lZGdlLXNpdGUtdjEiLCJub2RlX2tleSI6IjUxMWMzNGExYTJjYjUyMWRmMTZiYjI0NmI4ZGU4ZTc5OTdjZTIzNWM3ZTc2YjIyYTNkNzUwM2EyNDgxOWRkOGEiLCJwdXJwb3NlIjoicHJvbW90aW9uIiwicmVhc29uIjoibm9kZSAxIGlzIGRvd24sIG5vZGUgMiB0YWtlcyBvdmVyIiwic2l0ZV9rZXkiOiJkNTQyMDdkYTE5NDk3N2RjZjQ2YWRiZmVjMmJjMmU3NWI1MmQ1YThhNDIxODRmZWRmZGMwMDAyNGYwZTNlOGRhIn0=",
     "signatures": [
@@ -24,15 +149,38 @@
     ]
    },
    "expected": {
-    "ok": true,
-    "node_key": "511c34a1a2cb521df16bb246b8de8e7997ce235c7e76b22a3d7503a24819dd8a",
-    "at": "2026-11-06T12:00:00Z",
-    "reason": "node 1 is down, node 2 takes over"
+    "ok": false,
+    "error": "a promotion is kc-edge-site-v2 (edge protocol 1.6), with not_after: a statement without one could promote the node again"
+   }
+  },
+  {
+   "name": "a promotion without not_after",
+   "purpose": "promotion",
+   "now": "2026-11-06T13:00:00Z",
+   "statement": {
+    "bytes": "eyJhdCI6IjIwMjYtMTEtMDZUMTI6MDA6MDBaIiwiZWRnZSI6InBsYW50LWEiLCJmb3JtYXQiOiJrYy1lZGdlLXNpdGUtdjIiLCJub2RlX2tleSI6IjUxMWMzNGExYTJjYjUyMWRmMTZiYjI0NmI4ZGU4ZTc5OTdjZTIzNWM3ZTc2YjIyYTNkNzUwM2EyNDgxOWRkOGEiLCJwdXJwb3NlIjoicHJvbW90aW9uIiwicmVhc29uIjoibm9kZSAxIGlzIGRvd24sIG5vZGUgMiB0YWtlcyBvdmVyIiwic2l0ZV9rZXkiOiJkNTQyMDdkYTE5NDk3N2RjZjQ2YWRiZmVjMmJjMmU3NWI1MmQ1YThhNDIxODRmZWRmZGMwMDAyNGYwZTNlOGRhIn0=",
+    "signatures": [
+     {
+      "key": "511c34a1a2cb521df16bb246b8de8e7997ce235c7e76b22a3d7503a24819dd8a",
+      "key_id": "168c59a54a0d5b6c",
+      "signature": "4adf6480477a5190dccf10158c54d12d90cdec7cbd3313adab80960a67781e3427e6bf7eeb6c65dbadad2cb850bf68d41fc0da2e0efbc9035148e20c044f9607"
+     },
+     {
+      "key": "d54207da194977dcf46adbfec2bc2e75b52d5a8a42184fedfdc00024f0e3e8da",
+      "key_id": "d7e1e084be213b01",
+      "signature": "7acfa7b34f57c9e0f9d4e937152764590585bfed6ca8fb6c618728b93b46844591d6aa7a184b37c0d982eb022f9dc9079cfb5a9d984a1a392b62278c76ec3102"
+     }
+    ]
+   },
+   "expected": {
+    "ok": false,
+    "error": "a site statement is exactly {at, edge, format, node_key, not_after, purpose, reason, site_key}, naming the pinned site key"
    }
   },
   {
    "name": "a provisional statement",
    "purpose": "provisional",
+   "now": "2026-11-06T13:00:00Z",
    "statement": {
     "bytes": "eyJhdCI6IjIwMjYtMTEtMDZUMTI6MDA6MDBaIiwiZWRnZSI6InBsYW50LWEiLCJmb3JtYXQiOiJrYy1lZGdlLXNpdGUtdjEiLCJub2RlX2tleSI6IjUxMWMzNGExYTJjYjUyMWRmMTZiYjI0NmI4ZGU4ZTc5OTdjZTIzNWM3ZTc2YjIyYTNkNzUwM2EyNDgxOWRkOGEiLCJwdXJwb3NlIjoicHJvdmlzaW9uYWwiLCJyZWFzb24iOiJub2RlIDEgaXMgZG93biwgbm9kZSAyIHRha2VzIG92ZXIiLCJzaXRlX2tleSI6ImQ1NDIwN2RhMTk0OTc3ZGNmNDZhZGJmZWMyYmMyZTc1YjUyZDVhOGE0MjE4NGZlZGZkYzAwMDI0ZjBlM2U4ZGEifQ==",
     "signatures": [
@@ -58,6 +206,7 @@
   {
    "name": "a provisional statement is not a promotion",
    "purpose": "promotion",
+   "now": "2026-11-06T13:00:00Z",
    "statement": {
     "bytes": "eyJhdCI6IjIwMjYtMTEtMDZUMTI6MDA6MDBaIiwiZWRnZSI6InBsYW50LWEiLCJmb3JtYXQiOiJrYy1lZGdlLXNpdGUtdjEiLCJub2RlX2tleSI6IjUxMWMzNGExYTJjYjUyMWRmMTZiYjI0NmI4ZGU4ZTc5OTdjZTIzNWM3ZTc2YjIyYTNkNzUwM2EyNDgxOWRkOGEiLCJwdXJwb3NlIjoicHJvdmlzaW9uYWwiLCJyZWFzb24iOiJub2RlIDEgaXMgZG93biwgbm9kZSAyIHRha2VzIG92ZXIiLCJzaXRlX2tleSI6ImQ1NDIwN2RhMTk0OTc3ZGNmNDZhZGJmZWMyYmMyZTc1YjUyZDVhOGE0MjE4NGZlZGZkYzAwMDI0ZjBlM2U4ZGEifQ==",
     "signatures": [
@@ -75,24 +224,49 @@
    },
    "expected": {
     "ok": false,
+    "error": "a promotion is kc-edge-site-v2 (edge protocol 1.6), with not_after: a statement without one could promote the node again"
+   }
+  },
+  {
+   "name": "a kc-edge-site-v2 statement whose purpose is provisional",
+   "purpose": "promotion",
+   "now": "2026-11-06T13:00:00Z",
+   "statement": {
+    "bytes": "eyJhdCI6IjIwMjYtMTEtMDZUMTI6MDA6MDBaIiwiZWRnZSI6InBsYW50LWEiLCJmb3JtYXQiOiJrYy1lZGdlLXNpdGUtdjIiLCJub2RlX2tleSI6IjUxMWMzNGExYTJjYjUyMWRmMTZiYjI0NmI4ZGU4ZTc5OTdjZTIzNWM3ZTc2YjIyYTNkNzUwM2EyNDgxOWRkOGEiLCJub3RfYWZ0ZXIiOiIyMDI2LTExLTA3VDEyOjAwOjAwWiIsInB1cnBvc2UiOiJwcm92aXNpb25hbCIsInJlYXNvbiI6Im5vZGUgMSBpcyBkb3duLCBub2RlIDIgdGFrZXMgb3ZlciIsInNpdGVfa2V5IjoiZDU0MjA3ZGExOTQ5NzdkY2Y0NmFkYmZlYzJiYzJlNzViNTJkNWE4YTQyMTg0ZmVkZmRjMDAwMjRmMGUzZThkYSJ9",
+    "signatures": [
+     {
+      "key": "511c34a1a2cb521df16bb246b8de8e7997ce235c7e76b22a3d7503a24819dd8a",
+      "key_id": "168c59a54a0d5b6c",
+      "signature": "a312c03041932b7d224d39a1f2a6458b4f645c41188ad0aa086005afacd0ff54646e338025b529817e92e72bb73d9de47e0c82de9127d88b1309f7ad5d25d70e"
+     },
+     {
+      "key": "d54207da194977dcf46adbfec2bc2e75b52d5a8a42184fedfdc00024f0e3e8da",
+      "key_id": "d7e1e084be213b01",
+      "signature": "03d25058b8a65e9b074419fb4d74e28bf7584669a245d712864cc807f46d2cb6b91a5b6f0fe82f959f992512ba2c8d16574dbaa3691e57107089b1bf143dbc08"
+     }
+    ]
+   },
+   "expected": {
+    "ok": false,
     "error": "a statement for provisional is not one for promotion"
    }
   },
   {
    "name": "for another edge",
    "purpose": "promotion",
+   "now": "2026-11-06T13:00:00Z",
    "statement": {
-    "bytes": "eyJhdCI6IjIwMjYtMTEtMDZUMTI6MDA6MDBaIiwiZWRnZSI6InBsYW50LWIiLCJmb3JtYXQiOiJrYy1lZGdlLXNpdGUtdjEiLCJub2RlX2tleSI6IjUxMWMzNGExYTJjYjUyMWRmMTZiYjI0NmI4ZGU4ZTc5OTdjZTIzNWM3ZTc2YjIyYTNkNzUwM2EyNDgxOWRkOGEiLCJwdXJwb3NlIjoicHJvbW90aW9uIiwicmVhc29uIjoibm9kZSAxIGlzIGRvd24sIG5vZGUgMiB0YWtlcyBvdmVyIiwic2l0ZV9rZXkiOiJkNTQyMDdkYTE5NDk3N2RjZjQ2YWRiZmVjMmJjMmU3NWI1MmQ1YThhNDIxODRmZWRmZGMwMDAyNGYwZTNlOGRhIn0=",
+    "bytes": "eyJhdCI6IjIwMjYtMTEtMDZUMTI6MDA6MDBaIiwiZWRnZSI6InBsYW50LWIiLCJmb3JtYXQiOiJrYy1lZGdlLXNpdGUtdjIiLCJub2RlX2tleSI6IjUxMWMzNGExYTJjYjUyMWRmMTZiYjI0NmI4ZGU4ZTc5OTdjZTIzNWM3ZTc2YjIyYTNkNzUwM2EyNDgxOWRkOGEiLCJub3RfYWZ0ZXIiOiIyMDI2LTExLTA3VDEyOjAwOjAwWiIsInB1cnBvc2UiOiJwcm9tb3Rpb24iLCJyZWFzb24iOiJub2RlIDEgaXMgZG93biwgbm9kZSAyIHRha2VzIG92ZXIiLCJzaXRlX2tleSI6ImQ1NDIwN2RhMTk0OTc3ZGNmNDZhZGJmZWMyYmMyZTc1YjUyZDVhOGE0MjE4NGZlZGZkYzAwMDI0ZjBlM2U4ZGEifQ==",
     "signatures": [
      {
       "key": "511c34a1a2cb521df16bb246b8de8e7997ce235c7e76b22a3d7503a24819dd8a",
       "key_id": "168c59a54a0d5b6c",
-      "signature": "1498ac90fd8d5163c4df76ae20df90d55db5a626933153d194379fb5b97c77e06fa491b99c25c6640abe76a49a3f30759f4148d73a95bc56c79922b477595e04"
+      "signature": "4c4ab6d6176b9288bfd05f6ea0711cda440a47dcdd8d1e5da6fe387ad27038bf44bf1aecf4b653cc13e2e9c85619dfd44f377b95c3e3a266895509d9c4f54102"
      },
      {
       "key": "d54207da194977dcf46adbfec2bc2e75b52d5a8a42184fedfdc00024f0e3e8da",
       "key_id": "d7e1e084be213b01",
-      "signature": "609f992974466532dc2edcb70b6c81ef65b72cc3ed8a54c5bc1042392db3bd7580bce09ff0ce3e644b770ca98147c341e8df852b61ea1caa0116d56ec040020d"
+      "signature": "1c1b353e04fa17bb108fbd735a8eae260cb447f1e92b1486aaaffb42e257bde0a5fb56ac5ca937678a963dd2f09c9a581e6ee48074571d9bcea2c5d380328c0c"
      }
     ]
    },
@@ -104,13 +278,14 @@
   {
    "name": "signed by the site key alone",
    "purpose": "promotion",
+   "now": "2026-11-06T13:00:00Z",
    "statement": {
-    "bytes": "eyJhdCI6IjIwMjYtMTEtMDZUMTI6MDA6MDBaIiwiZWRnZSI6InBsYW50LWEiLCJmb3JtYXQiOiJrYy1lZGdlLXNpdGUtdjEiLCJub2RlX2tleSI6IjUxMWMzNGExYTJjYjUyMWRmMTZiYjI0NmI4ZGU4ZTc5OTdjZTIzNWM3ZTc2YjIyYTNkNzUwM2EyNDgxOWRkOGEiLCJwdXJwb3NlIjoicHJvbW90aW9uIiwicmVhc29uIjoibm9kZSAxIGlzIGRvd24sIG5vZGUgMiB0YWtlcyBvdmVyIiwic2l0ZV9rZXkiOiJkNTQyMDdkYTE5NDk3N2RjZjQ2YWRiZmVjMmJjMmU3NWI1MmQ1YThhNDIxODRmZWRmZGMwMDAyNGYwZTNlOGRhIn0=",
+    "bytes": "eyJhdCI6IjIwMjYtMTEtMDZUMTI6MDA6MDBaIiwiZWRnZSI6InBsYW50LWEiLCJmb3JtYXQiOiJrYy1lZGdlLXNpdGUtdjIiLCJub2RlX2tleSI6IjUxMWMzNGExYTJjYjUyMWRmMTZiYjI0NmI4ZGU4ZTc5OTdjZTIzNWM3ZTc2YjIyYTNkNzUwM2EyNDgxOWRkOGEiLCJub3RfYWZ0ZXIiOiIyMDI2LTExLTA3VDEyOjAwOjAwWiIsInB1cnBvc2UiOiJwcm9tb3Rpb24iLCJyZWFzb24iOiJub2RlIDEgaXMgZG93biwgbm9kZSAyIHRha2VzIG92ZXIiLCJzaXRlX2tleSI6ImQ1NDIwN2RhMTk0OTc3ZGNmNDZhZGJmZWMyYmMyZTc1YjUyZDVhOGE0MjE4NGZlZGZkYzAwMDI0ZjBlM2U4ZGEifQ==",
     "signatures": [
      {
       "key": "d54207da194977dcf46adbfec2bc2e75b52d5a8a42184fedfdc00024f0e3e8da",
       "key_id": "d7e1e084be213b01",
-      "signature": "8788d6e48edbf78b999e033d655a9d5d5056e6aa09339eed768c52f369b67d20c1d54594c7d342b7c26af5dc3b0acc7162712e6ae9d45d94edcc82194b18a405"
+      "signature": "4e1026864b95fd162141d0edb0fd6435c7b95d12b06d16d0ca6f7c7db7b53decbb4698bc9086a19118f9f81c20489df9c759972872f3e0bb24dea542fc3b8d02"
      }
     ]
    },
@@ -122,13 +297,14 @@
   {
    "name": "signed by the node alone",
    "purpose": "promotion",
+   "now": "2026-11-06T13:00:00Z",
    "statement": {
-    "bytes": "eyJhdCI6IjIwMjYtMTEtMDZUMTI6MDA6MDBaIiwiZWRnZSI6InBsYW50LWEiLCJmb3JtYXQiOiJrYy1lZGdlLXNpdGUtdjEiLCJub2RlX2tleSI6IjUxMWMzNGExYTJjYjUyMWRmMTZiYjI0NmI4ZGU4ZTc5OTdjZTIzNWM3ZTc2YjIyYTNkNzUwM2EyNDgxOWRkOGEiLCJwdXJwb3NlIjoicHJvbW90aW9uIiwicmVhc29uIjoibm9kZSAxIGlzIGRvd24sIG5vZGUgMiB0YWtlcyBvdmVyIiwic2l0ZV9rZXkiOiJkNTQyMDdkYTE5NDk3N2RjZjQ2YWRiZmVjMmJjMmU3NWI1MmQ1YThhNDIxODRmZWRmZGMwMDAyNGYwZTNlOGRhIn0=",
+    "bytes": "eyJhdCI6IjIwMjYtMTEtMDZUMTI6MDA6MDBaIiwiZWRnZSI6InBsYW50LWEiLCJmb3JtYXQiOiJrYy1lZGdlLXNpdGUtdjIiLCJub2RlX2tleSI6IjUxMWMzNGExYTJjYjUyMWRmMTZiYjI0NmI4ZGU4ZTc5OTdjZTIzNWM3ZTc2YjIyYTNkNzUwM2EyNDgxOWRkOGEiLCJub3RfYWZ0ZXIiOiIyMDI2LTExLTA3VDEyOjAwOjAwWiIsInB1cnBvc2UiOiJwcm9tb3Rpb24iLCJyZWFzb24iOiJub2RlIDEgaXMgZG93biwgbm9kZSAyIHRha2VzIG92ZXIiLCJzaXRlX2tleSI6ImQ1NDIwN2RhMTk0OTc3ZGNmNDZhZGJmZWMyYmMyZTc1YjUyZDVhOGE0MjE4NGZlZGZkYzAwMDI0ZjBlM2U4ZGEifQ==",
     "signatures": [
      {
       "key": "511c34a1a2cb521df16bb246b8de8e7997ce235c7e76b22a3d7503a24819dd8a",
       "key_id": "168c59a54a0d5b6c",
-      "signature": "5909188d598a1a01c603b772e9d20625cb2b9f954c1d313cf36703a469b78fc800d0e66dbb4204c154e84577eec36f0a06f1558fb02a7996b759794787db630e"
+      "signature": "6c5d59e3b1b92a4769a5739a65b231386c45018a2ddc380f6fd3b1d3d1f5c0b3d329e9bcad76870dc1d04de4462b1bc4c0403936fffd5fb443a2b14388244905"
      }
     ]
    },
@@ -140,18 +316,19 @@
   {
    "name": "signed by another node than it names",
    "purpose": "promotion",
+   "now": "2026-11-06T13:00:00Z",
    "statement": {
-    "bytes": "eyJhdCI6IjIwMjYtMTEtMDZUMTI6MDA6MDBaIiwiZWRnZSI6InBsYW50LWEiLCJmb3JtYXQiOiJrYy1lZGdlLXNpdGUtdjEiLCJub2RlX2tleSI6IjUxMWMzNGExYTJjYjUyMWRmMTZiYjI0NmI4ZGU4ZTc5OTdjZTIzNWM3ZTc2YjIyYTNkNzUwM2EyNDgxOWRkOGEiLCJwdXJwb3NlIjoicHJvbW90aW9uIiwicmVhc29uIjoibm9kZSAxIGlzIGRvd24sIG5vZGUgMiB0YWtlcyBvdmVyIiwic2l0ZV9rZXkiOiJkNTQyMDdkYTE5NDk3N2RjZjQ2YWRiZmVjMmJjMmU3NWI1MmQ1YThhNDIxODRmZWRmZGMwMDAyNGYwZTNlOGRhIn0=",
+    "bytes": "eyJhdCI6IjIwMjYtMTEtMDZUMTI6MDA6MDBaIiwiZWRnZSI6InBsYW50LWEiLCJmb3JtYXQiOiJrYy1lZGdlLXNpdGUtdjIiLCJub2RlX2tleSI6IjUxMWMzNGExYTJjYjUyMWRmMTZiYjI0NmI4ZGU4ZTc5OTdjZTIzNWM3ZTc2YjIyYTNkNzUwM2EyNDgxOWRkOGEiLCJub3RfYWZ0ZXIiOiIyMDI2LTExLTA3VDEyOjAwOjAwWiIsInB1cnBvc2UiOiJwcm9tb3Rpb24iLCJyZWFzb24iOiJub2RlIDEgaXMgZG93biwgbm9kZSAyIHRha2VzIG92ZXIiLCJzaXRlX2tleSI6ImQ1NDIwN2RhMTk0OTc3ZGNmNDZhZGJmZWMyYmMyZTc1YjUyZDVhOGE0MjE4NGZlZGZkYzAwMDI0ZjBlM2U4ZGEifQ==",
     "signatures": [
      {
       "key": "31debe55d37c722768b137131caa6087080b2e0b60b94bd785d14575cfa498bc",
       "key_id": "e37abcd79efd08db",
-      "signature": "ec60a6fe8a2cfc705de00aaf19d6cb5a81a549d24188a88397d476a291e9878e28d5162665209cf646412169aad1dbc3f7a7bfac28c77dee56f4b8e33c64c009"
+      "signature": "98321b1ece44f788940c861d3132b326b25de8ecd889f1ce77c316b06cb8f64bdafe71d617a0dd046fc491c05411d4371fd855af2ae1728b800cc59d80a7e506"
      },
      {
       "key": "d54207da194977dcf46adbfec2bc2e75b52d5a8a42184fedfdc00024f0e3e8da",
       "key_id": "d7e1e084be213b01",
-      "signature": "8788d6e48edbf78b999e033d655a9d5d5056e6aa09339eed768c52f369b67d20c1d54594c7d342b7c26af5dc3b0acc7162712e6ae9d45d94edcc82194b18a405"
+      "signature": "4e1026864b95fd162141d0edb0fd6435c7b95d12b06d16d0ca6f7c7db7b53decbb4698bc9086a19118f9f81c20489df9c759972872f3e0bb24dea542fc3b8d02"
      }
     ]
    },
@@ -163,18 +340,19 @@
   {
    "name": "signed by another site key",
    "purpose": "promotion",
+   "now": "2026-11-06T13:00:00Z",
    "statement": {
-    "bytes": "eyJhdCI6IjIwMjYtMTEtMDZUMTI6MDA6MDBaIiwiZWRnZSI6InBsYW50LWEiLCJmb3JtYXQiOiJrYy1lZGdlLXNpdGUtdjEiLCJub2RlX2tleSI6IjUxMWMzNGExYTJjYjUyMWRmMTZiYjI0NmI4ZGU4ZTc5OTdjZTIzNWM3ZTc2YjIyYTNkNzUwM2EyNDgxOWRkOGEiLCJwdXJwb3NlIjoicHJvbW90aW9uIiwicmVhc29uIjoibm9kZSAxIGlzIGRvd24sIG5vZGUgMiB0YWtlcyBvdmVyIiwic2l0ZV9rZXkiOiI1MzQ3MDk2MjU1OGE2ZTA4MzkwMjJhZTY1YzZiMjcyM2IzMjc3MmU1YzBjNWY0Nzc2Y2I4ZTZhM2UxMGJhMmYzIn0=",
+    "bytes": "eyJhdCI6IjIwMjYtMTEtMDZUMTI6MDA6MDBaIiwiZWRnZSI6InBsYW50LWEiLCJmb3JtYXQiOiJrYy1lZGdlLXNpdGUtdjIiLCJub2RlX2tleSI6IjUxMWMzNGExYTJjYjUyMWRmMTZiYjI0NmI4ZGU4ZTc5OTdjZTIzNWM3ZTc2YjIyYTNkNzUwM2EyNDgxOWRkOGEiLCJub3RfYWZ0ZXIiOiIyMDI2LTExLTA3VDEyOjAwOjAwWiIsInB1cnBvc2UiOiJwcm9tb3Rpb24iLCJyZWFzb24iOiJub2RlIDEgaXMgZG93biwgbm9kZSAyIHRha2VzIG92ZXIiLCJzaXRlX2tleSI6IjUzNDcwOTYyNTU4YTZlMDgzOTAyMmFlNjVjNmIyNzIzYjMyNzcyZTVjMGM1ZjQ3NzZjYjhlNmEzZTEwYmEyZjMifQ==",
     "signatures": [
      {
       "key": "511c34a1a2cb521df16bb246b8de8e7997ce235c7e76b22a3d7503a24819dd8a",
       "key_id": "168c59a54a0d5b6c",
-      "signature": "7e3bf99029688ffe5d7d30e16828a9f23bf47f2bfb868f4791fd82ede3a0fa7005133c1ef97951dfaa623854e48cb0933b197a963c1842973c02af9b1a79de02"
+      "signature": "d6499143d55e57076cbefd4958d41e29a090e1312402a520cbc1519e23685463e2fdcc019de655750ff4db9067f15292c9ca534834b7e81ff11a98aa64973c0d"
      },
      {
       "key": "53470962558a6e0839022ae65c6b2723b32772e5c0c5f4776cb8e6a3e10ba2f3",
       "key_id": "59b2ad6131a74d03",
-      "signature": "c5e6c13c27a224603b12321fc260972a91fe10ff48c9a8d049f78a973cce7cfb54af65ee107ec5ad7d6277806d6ec9e36646e92510db0c9b09585534ada1480a"
+      "signature": "6117350d3f23bb957209a9daea3cc05c26068677c8273a2c9ed7c36701740a169f87801d19f9f042747b66f49fed582fce3b2fee906017209a91669d56e49c02"
      }
     ]
    },
@@ -186,23 +364,24 @@
   {
    "name": "a third signature",
    "purpose": "promotion",
+   "now": "2026-11-06T13:00:00Z",
    "statement": {
-    "bytes": "eyJhdCI6IjIwMjYtMTEtMDZUMTI6MDA6MDBaIiwiZWRnZSI6InBsYW50LWEiLCJmb3JtYXQiOiJrYy1lZGdlLXNpdGUtdjEiLCJub2RlX2tleSI6IjUxMWMzNGExYTJjYjUyMWRmMTZiYjI0NmI4ZGU4ZTc5OTdjZTIzNWM3ZTc2YjIyYTNkNzUwM2EyNDgxOWRkOGEiLCJwdXJwb3NlIjoicHJvbW90aW9uIiwicmVhc29uIjoibm9kZSAxIGlzIGRvd24sIG5vZGUgMiB0YWtlcyBvdmVyIiwic2l0ZV9rZXkiOiJkNTQyMDdkYTE5NDk3N2RjZjQ2YWRiZmVjMmJjMmU3NWI1MmQ1YThhNDIxODRmZWRmZGMwMDAyNGYwZTNlOGRhIn0=",
+    "bytes": "eyJhdCI6IjIwMjYtMTEtMDZUMTI6MDA6MDBaIiwiZWRnZSI6InBsYW50LWEiLCJmb3JtYXQiOiJrYy1lZGdlLXNpdGUtdjIiLCJub2RlX2tleSI6IjUxMWMzNGExYTJjYjUyMWRmMTZiYjI0NmI4ZGU4ZTc5OTdjZTIzNWM3ZTc2YjIyYTNkNzUwM2EyNDgxOWRkOGEiLCJub3RfYWZ0ZXIiOiIyMDI2LTExLTA3VDEyOjAwOjAwWiIsInB1cnBvc2UiOiJwcm9tb3Rpb24iLCJyZWFzb24iOiJub2RlIDEgaXMgZG93biwgbm9kZSAyIHRha2VzIG92ZXIiLCJzaXRlX2tleSI6ImQ1NDIwN2RhMTk0OTc3ZGNmNDZhZGJmZWMyYmMyZTc1YjUyZDVhOGE0MjE4NGZlZGZkYzAwMDI0ZjBlM2U4ZGEifQ==",
     "signatures": [
      {
       "key": "31debe55d37c722768b137131caa6087080b2e0b60b94bd785d14575cfa498bc",
       "key_id": "e37abcd79efd08db",
-      "signature": "ec60a6fe8a2cfc705de00aaf19d6cb5a81a549d24188a88397d476a291e9878e28d5162665209cf646412169aad1dbc3f7a7bfac28c77dee56f4b8e33c64c009"
+      "signature": "98321b1ece44f788940c861d3132b326b25de8ecd889f1ce77c316b06cb8f64bdafe71d617a0dd046fc491c05411d4371fd855af2ae1728b800cc59d80a7e506"
      },
      {
       "key": "511c34a1a2cb521df16bb246b8de8e7997ce235c7e76b22a3d7503a24819dd8a",
       "key_id": "168c59a54a0d5b6c",
-      "signature": "5909188d598a1a01c603b772e9d20625cb2b9f954c1d313cf36703a469b78fc800d0e66dbb4204c154e84577eec36f0a06f1558fb02a7996b759794787db630e"
+      "signature": "6c5d59e3b1b92a4769a5739a65b231386c45018a2ddc380f6fd3b1d3d1f5c0b3d329e9bcad76870dc1d04de4462b1bc4c0403936fffd5fb443a2b14388244905"
      },
      {
       "key": "d54207da194977dcf46adbfec2bc2e75b52d5a8a42184fedfdc00024f0e3e8da",
       "key_id": "d7e1e084be213b01",
-      "signature": "8788d6e48edbf78b999e033d655a9d5d5056e6aa09339eed768c52f369b67d20c1d54594c7d342b7c26af5dc3b0acc7162712e6ae9d45d94edcc82194b18a405"
+      "signature": "4e1026864b95fd162141d0edb0fd6435c7b95d12b06d16d0ca6f7c7db7b53decbb4698bc9086a19118f9f81c20489df9c759972872f3e0bb24dea542fc3b8d02"
      }
     ]
    },
@@ -214,18 +393,19 @@
   {
    "name": "a reason too short",
    "purpose": "promotion",
+   "now": "2026-11-06T13:00:00Z",
    "statement": {
-    "bytes": "eyJhdCI6IjIwMjYtMTEtMDZUMTI6MDA6MDBaIiwiZWRnZSI6InBsYW50LWEiLCJmb3JtYXQiOiJrYy1lZGdlLXNpdGUtdjEiLCJub2RlX2tleSI6IjUxMWMzNGExYTJjYjUyMWRmMTZiYjI0NmI4ZGU4ZTc5OTdjZTIzNWM3ZTc2YjIyYTNkNzUwM2EyNDgxOWRkOGEiLCJwdXJwb3NlIjoicHJvbW90aW9uIiwicmVhc29uIjoibm8iLCJzaXRlX2tleSI6ImQ1NDIwN2RhMTk0OTc3ZGNmNDZhZGJmZWMyYmMyZTc1YjUyZDVhOGE0MjE4NGZlZGZkYzAwMDI0ZjBlM2U4ZGEifQ==",
+    "bytes": "eyJhdCI6IjIwMjYtMTEtMDZUMTI6MDA6MDBaIiwiZWRnZSI6InBsYW50LWEiLCJmb3JtYXQiOiJrYy1lZGdlLXNpdGUtdjIiLCJub2RlX2tleSI6IjUxMWMzNGExYTJjYjUyMWRmMTZiYjI0NmI4ZGU4ZTc5OTdjZTIzNWM3ZTc2YjIyYTNkNzUwM2EyNDgxOWRkOGEiLCJub3RfYWZ0ZXIiOiIyMDI2LTExLTA3VDEyOjAwOjAwWiIsInB1cnBvc2UiOiJwcm9tb3Rpb24iLCJyZWFzb24iOiJubyIsInNpdGVfa2V5IjoiZDU0MjA3ZGExOTQ5NzdkY2Y0NmFkYmZlYzJiYzJlNzViNTJkNWE4YTQyMTg0ZmVkZmRjMDAwMjRmMGUzZThkYSJ9",
     "signatures": [
      {
       "key": "511c34a1a2cb521df16bb246b8de8e7997ce235c7e76b22a3d7503a24819dd8a",
       "key_id": "168c59a54a0d5b6c",
-      "signature": "6cc1ad259f15ba0850ce214b180a184699fe2d9a5a17e61b066d123ffff79e266bf2aa6f4bab03c7361a6b0299345388fc0338c872bf52f1b0b77caa8b1b2901"
+      "signature": "e31cf3c2d7c8c29915320928ab09bba6c9dca305af35a2ad481e18493c89e3892b6b630599f36d77dde9a61f64a483c95c16c6402ef13776e48adf8ca04bdb0f"
      },
      {
       "key": "d54207da194977dcf46adbfec2bc2e75b52d5a8a42184fedfdc00024f0e3e8da",
       "key_id": "d7e1e084be213b01",
-      "signature": "2d3cc42032785921b7460db1cf9348537b910e0d21d91308881a390c2256cb1fae078ea4f666f21d8bd476422ad3de9ce1bc79ab7bf1598a3be56975c050f20f"
+      "signature": "cfa8ce261c7483deff98bf7621bbae4e0ba133c2384d8468fb18cc1c1c0d875b751ac530711f6688c45cae6535d40d55739da799daf3cf4a5e9ac845a99ba005"
      }
     ]
    },
@@ -237,24 +417,25 @@
   {
    "name": "an extra field",
    "purpose": "promotion",
+   "now": "2026-11-06T13:00:00Z",
    "statement": {
-    "bytes": "eyJhdCI6IjIwMjYtMTEtMDZUMTI6MDA6MDBaIiwiZWRnZSI6InBsYW50LWEiLCJmb3JtYXQiOiJrYy1lZGdlLXNpdGUtdjEiLCJub2RlX2tleSI6IjUxMWMzNGExYTJjYjUyMWRmMTZiYjI0NmI4ZGU4ZTc5OTdjZTIzNWM3ZTc2YjIyYTNkNzUwM2EyNDgxOWRkOGEiLCJwdXJwb3NlIjoicHJvbW90aW9uIiwicmVhc29uIjoibm9kZSAxIGlzIGRvd24sIG5vZGUgMiB0YWtlcyBvdmVyIiwic2l0ZV9rZXkiOiJkNTQyMDdkYTE5NDk3N2RjZjQ2YWRiZmVjMmJjMmU3NWI1MmQ1YThhNDIxODRmZWRmZGMwMDAyNGYwZTNlOGRhIiwidW50aWwiOiIyMDI2LTExLTA3VDEyOjAwOjAwWiJ9",
+    "bytes": "eyJhdCI6IjIwMjYtMTEtMDZUMTI6MDA6MDBaIiwiZWRnZSI6InBsYW50LWEiLCJmb3JtYXQiOiJrYy1lZGdlLXNpdGUtdjIiLCJub2RlX2tleSI6IjUxMWMzNGExYTJjYjUyMWRmMTZiYjI0NmI4ZGU4ZTc5OTdjZTIzNWM3ZTc2YjIyYTNkNzUwM2EyNDgxOWRkOGEiLCJub3RfYWZ0ZXIiOiIyMDI2LTExLTA3VDEyOjAwOjAwWiIsInB1cnBvc2UiOiJwcm9tb3Rpb24iLCJyZWFzb24iOiJub2RlIDEgaXMgZG93biwgbm9kZSAyIHRha2VzIG92ZXIiLCJzaXRlX2tleSI6ImQ1NDIwN2RhMTk0OTc3ZGNmNDZhZGJmZWMyYmMyZTc1YjUyZDVhOGE0MjE4NGZlZGZkYzAwMDI0ZjBlM2U4ZGEiLCJ1bnRpbCI6IjIwMjYtMTEtMDdUMTI6MDA6MDBaIn0=",
     "signatures": [
      {
       "key": "511c34a1a2cb521df16bb246b8de8e7997ce235c7e76b22a3d7503a24819dd8a",
       "key_id": "168c59a54a0d5b6c",
-      "signature": "09d9fa7e559d613589cc680c43a66d56aa8e0517b0f58c2261badf0616ff098daefdfadf2db43116de2558faf88308ee4ea455a256e309ef1d07f0fe58c85009"
+      "signature": "9d7e173db27d9b7f0c25838a8567be5c5efb0823914d22d02bf580b544290e0b26e360ab6991180e8f8d70c40f19bb801b12f6c289adefc0f982ff0cba434203"
      },
      {
       "key": "d54207da194977dcf46adbfec2bc2e75b52d5a8a42184fedfdc00024f0e3e8da",
       "key_id": "d7e1e084be213b01",
-      "signature": "dd3662242a9b0dbe729b86fc84f0bc4dbfa5d695e3badfa46cc60946b326f8ea424197f59d52fbcc21716237aa92af2094a67ce24e5412e2ea255f2c03db8b0d"
+      "signature": "6777596190377af48c32f6b7979d4bc010671b6970c8d6508f0c872769b0383cb9d79e352c8b11b5008615016e8b6ac7dce87fd6a58948606c0015aad6e8f009"
      }
     ]
    },
    "expected": {
     "ok": false,
-    "error": "a site statement is exactly {at, edge, format, node_key, purpose, reason, site_key}, naming the pinned site key"
+    "error": "a site statement is exactly {at, edge, format, node_key, not_after, purpose, reason, site_key}, naming the pinned site key"
    }
   }
  ]
