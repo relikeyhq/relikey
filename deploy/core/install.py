@@ -30,8 +30,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 SECRETS = ROOT / "deploy" / "secrets"
 CORE = ROOT / "deploy" / "core"
-KEYCLERK_VERSION = "0.27.0"                      # model/components.yaml, id clerk
-KEYCLERK_COMMIT = "f8dd982f15911fc7617f79c4c2b5232dbb8e0ff1"   # the signed tag v0.27.0 on github.com/keyclerk/keyclerk
+KEYCLERK_VERSION = "0.28.0"                      # model/components.yaml, id clerk
+KEYCLERK_COMMIT = "ee84b45287a37fe2e6bc0f05c2b640d431b5607c"   # the signed tag v0.28.0 on github.com/keyclerk/keyclerk gitleaks:allow (a public git object id)
 KEYCLERK_UID = 10001
 HOST = re.compile(r"^(?=.{1,253}$)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$")
 

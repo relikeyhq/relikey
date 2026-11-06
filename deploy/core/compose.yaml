@@ -14,7 +14,7 @@ x-hardened: &hardened
 
 x-clerk: &clerk
   <<: *hardened
-  image: localhost/keyclerk:0.27.0              # install.py: git archive v0.27.0 | build (KeyClerk's own Containerfile)
+  image: localhost/keyclerk:0.28.0              # install.py: git archive v0.28.0 | build (KeyClerk's own Containerfile)
   pull_policy: never                            # built here, never fetched from a registry by that name
   network_mode: service:front
   read_only: true

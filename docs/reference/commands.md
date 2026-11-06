@@ -79,7 +79,7 @@ options:
                         seed a catalogue entry (risk low|elevated|privileged, default elevated) and a top group
                         carrying it; an edge target names one (repeatable)
   --keyclerk-src KEYCLERK_SRC
-                        a KeyClerk git repository to build v0.27.0 from
+                        a KeyClerk git repository to build v0.28.0 from
   --keyclerk-ref KEYCLERK_REF
                         lab only (with --lab): build KeyClerk from this git ref instead of the pinned tag, tagged
                         localhost/keyclerk:lab-<ref>, to try an unreleased KeyClerk
