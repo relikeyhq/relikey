@@ -131,7 +131,7 @@ MUTANTS = [
     ("a staged rotation is taken where the swap cannot rename", Path("internal/enrolkey") / "enrolkey.go",
      "\tif swapErr != nil {\n\t\treturn nil, swapErr", "\tif false {\n\t\treturn nil, swapErr"),
     ("a key mounted as a file of its own passes", Path("internal/enrolkey") / "swappable.go",
-     "\tif own {", "\tif false {"),
+     "\tif own {", "\tif own && false {"),   # `own` stays used: "if false" alone fails to build on Linux
     ("an unwritable key directory passes", Path("internal/enrolkey") / "swappable.go",
      "probe, err := os.CreateTemp(dir, \".relikey-swap-probe-*\")",
      "probe, err := os.CreateTemp(os.TempDir(), \".relikey-swap-probe-*\")"),
