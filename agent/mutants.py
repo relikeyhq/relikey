@@ -128,6 +128,17 @@ MUTANTS = [
      "if f.OfficerKey != o.OfficerKey {", "if false {"),
     ("a second rotation is staged before the fleet took the first", Path("internal/enrolkey") / "enrolkey.go",
      "case k.next != nil && k.old != nil:", "case false:"),
+    # the site key's promotion statement and the spare's promotion (decision 0028, edge protocol 1.5 section 14)
+    ("a site statement for another edge is taken", Path("internal/kcedge") / "site.go",
+     "\tif st[\"edge\"] != edge {", "\tif false {"),
+    ("a provisional statement serves as a promotion", Path("internal/kcedge") / "site.go",
+     "\tif st[\"purpose\"] != purpose {", "\tif false {"),
+    ("a site statement's reason may be empty", Path("internal/kcedge") / "site.go",
+     "!ok || n < 3 || n > 300", "!ok || n < 0 || n > 300"),
+    ("a statement for another node promotes this one", Path("cmd/relikey-agent") / "promote.go",
+     "\tif st[\"node_key\"] != pub {", "\tif false {"),
+    ("an old promotion statement promotes again", Path("cmd/relikey-agent") / "promote.go",
+     "oa >= st[\"at\"].(string)", "false && oa >= st[\"at\"].(string)"),
     # a rotation that could not finish where the key is kept (#134)
     ("a staged rotation is taken where the swap cannot rename", Path("internal/enrolkey") / "enrolkey.go",
      "\tif swapErr != nil {\n\t\treturn nil, swapErr", "\tif false {\n\t\treturn nil, swapErr"),
@@ -428,6 +439,7 @@ TEST_INPUTS = {
     "agent/internal/apply": ("agent/internal/agent/",),       # seam_test.go: the agent package's imports
     "fleet/internal/fleet": ("deploy/edge/install.py",),      # enrolled_test.go: the edge installer's enrolment
     "agent/internal/clock": ("agent/internal/kcedge/testdata/edge.json",),   # vectors_test.go: KeyClerk's time vectors
+    "agent/cmd/relikey-agent": ("agent/internal/kcedge/testdata/site.json",),   # promote_test.go: the site vectors
 }
 
 

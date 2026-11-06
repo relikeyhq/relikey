@@ -39,7 +39,9 @@ A report carrying every 1.4 member, shaped as the agent sends it, passes KeyCler
 | the ratchet: at least once an hour a new anchor, the later of the wall clock and the anchor plus the boot clock since (#125) | `clock.Ratchet` on the raw readings, kept in the state; the `ratchet` family (4) |
 | a start judged on the earlier reading (`now_start`), from a start anchor set only by verified time | `clock.StartTime`, `LiveAt(now, nowStart)`; the `start_time` family (5) and the three admit cases |
 | the desk's time after a reboot, `GET /api/v1/edge/time`, a sealed `kc-edge-time-v1` bound to the request's nonce | `kcedge.VerifyTime` within 30 s on the boot clock; reductions are stored before it arrives; the `time` family (6) |
-| relay certificates and the site key (section 14) | not read yet: the agent has no relay; the `relays` family (11) waits for it |
+| the site key's statement (section 14): `kc-edge-site-v1`, signed by the pinned site key and the node it names, for one purpose | `kcedge.VerifySite`, the port of `verify_site`; the vectors in `testdata/site.json` come from KeyClerk's own reference at the pinned tag (`gen_site.py`, 11 cases) |
+| a node made active by hand reports `activation {by: break_glass, at, statement}` (section 7.3) | `relikey-agent promote -statement FILE` checks a promotion statement against `pins.site_key`, this edge and this node, refuses one no newer than the last, and records the activation in the state directory; every report carries it from then on (decision 0028, the spare) |
+| relay certificates and tightenings (section 14) | not read yet: the agent has no relay; the `relays` family (11) waits for it |
 
 A Linux agent from 1.5 needs a 1.5 desk (KeyClerk 0.28.0): after a reboot it asks the desk's time before anything is live.
 
