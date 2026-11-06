@@ -10,8 +10,11 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"relikey/agent/internal/agent"
+	"relikey/agent/internal/kcedge"
+	"relikey/agent/internal/state"
 )
 
 // The site-statement vectors (internal/kcedge/testdata/site.json, from KeyClerk's verify_site): seed keys 21 (site),
@@ -26,6 +29,7 @@ type siteVectors struct {
 
 func siteSet(t *testing.T) siteVectors {
 	t.Helper()
+	at(t, "2026-11-06T13:00:00Z") // an hour after the vectors' statements, inside their not_after
 	b, err := os.ReadFile(filepath.Join("..", "..", "internal", "kcedge", "testdata", "site.json"))
 	if err != nil {
 		t.Fatal(err)
@@ -114,7 +118,7 @@ func TestPromoteRefusesWithTheNextStep(t *testing.T) {
 	}{
 		{"no site key pinned", 22, "", good, "pins.site_key is not set", "as the officer recorded it at the desk"},
 		{"another node's statement", 23, v.SiteKey, good, "not this node", "Run promote on the node it names"},
-		{"a provisional statement", 22, v.SiteKey, v.statement(t, "a provisional statement"), "is not one for promotion",
+		{"a provisional statement", 22, v.SiteKey, v.statement(t, "a provisional statement"), "a promotion is kc-edge-site-v2",
 			"Ask the officer for a promotion statement"},
 		{"signed by the site key alone", 22, v.SiteKey, v.statement(t, "signed by the site key alone"), "signed by exactly",
 			"nothing was recorded"},
@@ -138,4 +142,49 @@ func TestASiteKeyEqualToTheOfficersIsRefused(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "a key of its own") {
 		t.Fatalf("got %v", err)
 	}
+}
+
+// at sets the wall clock promote reads for this test.
+func at(t *testing.T, s string) {
+	t.Helper()
+	w, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := wallNow
+	wallNow = func() time.Time { return w }
+	t.Cleanup(func() { wallNow = old })
+}
+
+// edge protocol 1.6: a promotion statement promotes only before its not_after, judged at the later of the wall clock
+// and the newest signed time this edge holds, so a clock set back does not revive an expired statement.
+func TestPromoteRefusesAnExpiredStatement(t *testing.T) {
+	v := siteSet(t)
+	good := v.statement(t, "a promotion signed by the site key and the node it names")
+	t.Run("the wall clock past not_after", func(t *testing.T) {
+		at(t, "2026-11-07T12:00:01Z")
+		cfg, stateDir, stmt := promoteRig(t, 22, v.SiteKey, good)
+		err := promote([]string{"-config", cfg, "-statement", stmt})
+		if err == nil || !strings.Contains(err.Error(), "expired at") || !strings.Contains(err.Error(), "nothing was recorded") {
+			t.Fatalf("got %v, want an expired statement refused", err)
+		}
+		if _, err := os.Stat(filepath.Join(stateDir, agent.ActivationName)); err == nil {
+			t.Fatal("an expired statement recorded an activation")
+		}
+	})
+	t.Run("a clock set back behind the newest signed time", func(t *testing.T) {
+		cfg, stateDir, stmt := promoteRig(t, 22, v.SiteKey, good)
+		st, err := state.Open(stateDir, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := st.Save(state.Record{Floors: kcedge.State{Newest: "2026-11-08T00:00:00Z"}}); err != nil {
+			t.Fatal(err)
+		}
+		_ = st.Close()
+		err = promote([]string{"-config", cfg, "-statement", stmt})
+		if err == nil || !strings.Contains(err.Error(), "expired at") {
+			t.Fatalf("got %v, want the newest signed time to win over the wall clock", err)
+		}
+	})
 }

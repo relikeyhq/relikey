@@ -139,6 +139,15 @@ MUTANTS = [
      "\tif st[\"node_key\"] != pub {", "\tif false {"),
     ("an old promotion statement promotes again", Path("cmd/relikey-agent") / "promote.go",
      "oa >= st[\"at\"].(string)", "false && oa >= st[\"at\"].(string)"),
+    # edge protocol 1.6: a promotion is kc-edge-site-v2 and promotes only before its not_after, in the trusted time
+    ("an expired promotion statement promotes", Path("internal/kcedge") / "site.go",
+     "!now.IsZero() && now.After(na)", "false && now.After(na)"),
+    ("a promotion statement may live longer than a day", Path("internal/kcedge") / "site.go",
+     "|| na.After(at.Add(SiteMaxHours*time.Hour))", "|| false && na.After(at.Add(SiteMaxHours*time.Hour))"),
+    ("a promotion statement may end at its own at", Path("internal/kcedge") / "site.go",
+     "if !at.Before(na) ||", "if false && !at.Before(na) ||"),
+    ("a clock set back revives an expired promotion", Path("cmd/relikey-agent") / "promote.go",
+     "	if newest.After(wall) {", "	if false {"),
     # a rotation that could not finish where the key is kept (#134)
     ("a staged rotation is taken where the swap cannot rename", Path("internal/enrolkey") / "enrolkey.go",
      "\tif swapErr != nil {\n\t\treturn nil, swapErr", "\tif false {\n\t\treturn nil, swapErr"),

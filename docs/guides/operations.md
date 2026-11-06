@@ -197,10 +197,12 @@ automatic failover is designed (0028 option A) and built only when a site needs 
 1. Power the failed node off, or take it off the network. It must not come back beside the spare.
 2. With the site key, sign a promotion statement for the spare (KeyClerk's `edge_cli site-statement --purpose
    promotion`, cosigned by the site key and the spare's enrolment key) and put it in the spare's key directory as
-   `deploy/secrets/keys/promotion.json`. Record the promotion on the spare:
+   `deploy/secrets/keys/promotion.json`. The statement is `kc-edge-site-v2` and valid for at most a day: sign it when
+   you take over, not in advance. Record the promotion on the spare:
    `podman compose -f deploy/edge/compose.yaml run --rm --no-deps agent promote -config /etc/relikey/agent.json
    -statement /etc/relikey/keys/promotion.json`. It refuses a statement for another edge or node, one the site key did
-   not sign, and one no newer than the last promotion, each with the next step; the agent then reports a break-glass
+   not sign, one no newer than the last promotion, and one past its `not_after` (judged at the later of the spare's
+   clock and the newest signed time it holds, so a clock set back does not help), each with the next step; the agent then reports a break-glass
    activation and the desk raises its incident.
 3. On the spare: set `"mode": "enforce"` in `agent.json`, give it the site's address, and restart the agent
    (`podman compose -f deploy/edge/compose.yaml up -d --force-recreate agent`). It applies the leases of the bundle it
@@ -215,8 +217,9 @@ automatic failover is designed (0028 option A) and built only when a site needs 
    takes its reports.
 5. The failed node, once repaired, returns only as the spare: shadow mode, without the site's address.
 
-From KeyClerk 0.29.0 (edge protocol 1.6) a promotion statement carries an expiry of at most a day
-(`kc-edge-site-v2`); the agent follows with that release.
+Promotion statements are `kc-edge-site-v2` (edge protocol 1.6, KeyClerk 0.29.0): a core on KeyClerk 0.28 makes
+`kc-edge-site-v1`, which this agent no longer accepts as a promotion: the core and the agent move to 0.29 in the
+same release, the core first.
 
 ## Stop and start
 Stopping an edge makes the system behind it unreachable. Stopping the core leaves open leases running to the bundle's

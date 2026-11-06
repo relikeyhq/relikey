@@ -140,6 +140,22 @@ func Open(dir string, lab bool) (*Store, error) {
 	return s, nil
 }
 
+// Peek reads the newest valid record without taking the directory's lock, for a command that runs beside the agent
+// (promote reads the newest signed time). It never writes; each slot is written whole and renamed into place, so a
+// read sees an old slot or a new one, never half of one. A fresh install reads as the zero record.
+func Peek(dir string) (Record, error) {
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return Record{}, fmt.Errorf("state directory %s: %w", dir, err)
+	}
+	defer root.Close()
+	s := &Store{root: root, cur: -1}
+	if present, valid := loadPair(s, slots, maxSlot, &s.gen, &s.cur, &s.rec, nil); present && !valid {
+		return Record{}, errors.New("the edge state is unreadable in both slots")
+	}
+	return s.rec, nil
+}
+
 // Close releases the lock and the directory.
 func (s *Store) Close() error {
 	s.unlock()
