@@ -95,6 +95,10 @@ Warpgate's database replicates a cache, and the election exists only to keep tha
    - Without the peer and without the witness a node does not hold the address; it still serves on its own address.
    - Gratuitous ARP on taking the address. Industrial clients that ignore it are measured on the target switches
      before the profile is offered; a virtual MAC is documented with its port-security caveat.
+   - IPv6 alike: an unsolicited neighbour advertisement on taking an IPv6 address (vip-manager sends both), and the
+     duplicate address detection settled on purpose: the arbiter adds the address without it once it holds the vote
+     (the vote is its duplicate check), and the takeover's time budget counts it where it is kept. The lab is run
+     again on IPv6 before the profile is offered.
 3. **The activation report** is the address holder's: `by` from the vote that gave it the address (the witness's
    record, or the peer's agreement, reported as the profile's `witness` or `local_witness`), `at` the moment it took
    it; `break_glass` with the site key's promotion statement when an operator gave it by hand. It claims who serves
@@ -198,3 +202,4 @@ unreachable, which here buys no safety.
 - 2026-11-06: accepted after a prior-art pass on appliances and access gateways: a cold spare now, option A kept
   ready behind a trigger, option B rejected.
 - 2026-11-06: the spare is kept warm (shadow mode), found writing its takeover guide (#138).
+- 2026-11-06: IPv6 for option A's address (neighbour advertisement, duplicate address detection).
