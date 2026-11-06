@@ -54,20 +54,30 @@ Edge protocol 1.4 end to end, and the lab and desk work that needs no new hardwa
 - Each start of the agent is an event, so an idle edge's chain can be checked across a restart ([#129](https://github.com/relikeyhq/relikey/pull/129))
 - The demo as a signed image that runs offline, beside the Codespaces route ([#41](https://github.com/relikeyhq/relikey/issues/41))
 
-Open, suggested order:
-1. End-to-end test of enrolment by code and the officer anchor on a fresh installation ([#23](https://github.com/relikeyhq/relikey/issues/23))
-2. Model: the edge proxy's footprint, measured against the switch profile ([#62](https://github.com/relikeyhq/relikey/issues/62))
-3. Operator guides: install, run, troubleshoot ([#43](https://github.com/relikeyhq/relikey/issues/43))
+- Enrolment-key rotation finishes in the edge pod: the key in a writable directory, `install.py move-keys` for
+  older installs ([#134](https://github.com/relikeyhq/relikey/issues/134))
+- Operator guides: install, run, troubleshoot, overview ([#43](https://github.com/relikeyhq/relikey/issues/43): written; done once walked on a fresh install)
+
+Open:
+1. End-to-end test of enrolment by code and the officer anchor on a fresh installation ([#23](https://github.com/relikeyhq/relikey/issues/23)); the walk
+   that also follows the operator guides once (#43)
 
 ## Then: [0.4.0](https://github.com/relikeyhq/relikey/milestone/4), due 2026-12-17
-The larger and hardware-bound items, and edge protocol 1.5 with KeyClerk 0.28.0, suggested order:
-1. Two-node edge: active/standby with a witness, and the activation report ([#127](https://github.com/relikeyhq/relikey/issues/127))
-2. The trusted time ratchets, so a frozen boot clock and a wall set back cannot stretch a lease ([#125](https://github.com/relikeyhq/relikey/issues/125));
-   ships with edge protocol 1.5, which KeyClerk releases with 0.28.0 once a two-node edge passes its soak
+Edge protocol 1.5 with KeyClerk 0.28.0, a second edge node, and the larger and hardware-bound items. In review:
+- The core on KeyClerk 0.28.0 ([#141](https://github.com/relikeyhq/relikey/pull/141)), then edge protocol 1.5 in the agent: the trusted time ratchets, so a
+  frozen boot clock and a wall clock set back cannot stretch a lease ([#125](https://github.com/relikeyhq/relikey/issues/125), [#142](https://github.com/relikeyhq/relikey/pull/142))
+- A second edge node (decision 0028): a warm spare that shows people the same host key and certificate, taken over by
+  hand with the site key's promotion statement ([#127](https://github.com/relikeyhq/relikey/issues/127); site keys merged, `promote` in [#143](https://github.com/relikeyhq/relikey/pull/143)).
+  Automatic failover with two whole edges is designed and kept ready behind a trigger.
+
+Open, suggested order:
+1. The core ready for KeyClerk 0.29.0: the identity-map pin, the bundle and unlock keys in the signer
+   ([#140](https://github.com/relikeyhq/relikey/pull/140), with KeyClerk's tag); the promotion statement with its expiry (edge protocol 1.6) after it
+2. IPv6: state the support and walk it, dual-stack and IPv6-only ([#139](https://github.com/relikeyhq/relikey/issues/139))
 3. Evidence log: core witness, anchoring, contracts C-12 and C-13 ([#25](https://github.com/relikeyhq/relikey/issues/25))
 4. Open contracts C-02, C-03, C-07, C-08, C-09, C-11 ([#27](https://github.com/relikeyhq/relikey/issues/27))
 5. Carried visit leases on an assured edge ([#128](https://github.com/relikeyhq/relikey/issues/128))
-6. The armv7 agent on real hardware ([#24](https://github.com/relikeyhq/relikey/issues/24))
+6. The armv7 agent on real hardware ([#24](https://github.com/relikeyhq/relikey/issues/24)), and the edge proxy's footprint measured on it ([#62](https://github.com/relikeyhq/relikey/issues/62))
 7. IEC 62443-4-1 self-assessment ([#31](https://github.com/relikeyhq/relikey/issues/31))
 
 ## Later: [deferred](https://github.com/relikeyhq/relikey/milestone/3)
