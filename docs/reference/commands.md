@@ -250,6 +250,35 @@ options:
   --engine ENGINE  podman (default) or docker, as for the edge's installer
 ```
 
+## Write the enrol_edge change for the desk: `deploy/edge/enrol_change.py`
+
+```text
+usage: enrol_change.py [-h] --statement STATEMENT --targets TARGETS --name NAME [--entitlement TARGET=ENTITLEMENT]
+                       [--profile {basic,assured}]
+
+Write the enrol_edge change the desk's Edges page asks for, from the statement the officer and the edge signed and
+the edge's targets file, so every field is what the two signed (rc.4 walk W2, #177: a change written by hand left out
+the unlock key on the rc.3 walk, and the desk refused it as "nodes differ").
+
+    python deploy/edge/enrol_change.py --statement st2.json --targets deploy/edge/targets.yaml \
+        --name "Plant A" [--entitlement plc-ssh=plc-ssh ...] [--profile basic] > enrol.json
+
+Root pastes enrol.json into "Enrol or rotate an edge" on the desk's Edges page and presses Review. The statement is the
+one `relikey-agent cosign` wrote (st2.json): the officer's and the edge's signatures over one statement. Each target's
+entitlement is the catalogue entry that grants it (the core's --entitlement); without --entitlement for a target, its
+name is taken, as the install guide's example does. Nothing is sent anywhere: the desk checks the signatures itself.
+
+options:
+  -h, --help            show this help message and exit
+  --statement STATEMENT
+                        the cosigned statement (relikey-agent cosign -out)
+  --targets TARGETS     the edge's targets.yaml
+  --name NAME           the edge's name as people see it on the desk
+  --entitlement TARGET=ENTITLEMENT
+                        the catalogue entry that grants a target (default: the target's name); repeatable
+  --profile {basic,assured}
+```
+
 ## The broker's realm: `deploy/core/realm.py` (inside the core pod)
 
 ```text
