@@ -92,8 +92,8 @@ def test_the_release_section_is_what_release_yml_reads(tree):
 def test_release_refuses_a_bad_version_an_existing_one_bad_fragments_and_nothing(tree):
     with pytest.raises(SystemExit, match="X.Y.Z"):
         changelog.release(tree, "v0.2.0", "2026-11-01")
-    with pytest.raises(SystemExit, match="already has a section"):
-        changelog.release(tree, "0.1.2", "2026-11-01")
+    with pytest.raises(SystemExit, match="already has a section.*is tagged"):
+        changelog.release(tree, "0.1.2", "2026-11-01", tagged=lambda *a: True)
     frag(tree, "19.fix.md", "- A fix.\n")
     with pytest.raises(SystemExit, match="fix the fragments"):
         changelog.release(tree, "0.2.0", "2026-11-01")
@@ -144,3 +144,21 @@ def test_a_candidate_is_published_as_a_pre_release():
     wf = yaml.safe_load((ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8"))
     run = next(s["run"] for s in wf["jobs"]["github-release"]["steps"] if "gh release create" in s.get("run", ""))
     assert "--prerelease" in run and '*-*' in run
+
+
+def test_an_untagged_section_takes_the_fragments_since(tree):
+    """v0.3.0's section was folded on 2026-11-06, before six release candidates found the bugs the fragments since
+    then fix; untagged, it takes them and the release date, keeping what it held."""
+    frag(tree, "19.fixed.md", "- The new fix.\n")
+    frag(tree, "slug.added.md", "- A new thing.\n")
+    out = changelog.release(tree, "0.1.2", "2026-11-07", tagged=lambda *a: False)
+    text = (tree / "CHANGELOG.md").read_text(encoding="utf-8")
+    assert "folded 2 fragment(s)" in out and "## [0.1.2] - 2026-11-07" in text and "2026-10-27" not in text
+    section = text[text.index("## [0.1.2]"):]
+    assert section.index("### Added") < section.index("### Fixed")
+    assert "- A new thing." in section and "- The old fix." in section and "- The new fix." in section
+    assert "- Already merged." in text[:text.index("## [0.1.2]")]   # [Unreleased] is left alone
+    assert [p.name for p in (tree / "changelog.d").glob("*.md")] == ["README.md"]
+    with pytest.raises(SystemExit, match="nothing to add"):
+        changelog.release(tree, "0.1.2", "2026-11-07", tagged=lambda *a: False)
+
