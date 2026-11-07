@@ -206,6 +206,11 @@ def main() -> int:
                  "administration realm); leave it out for the default relikey")
     if bool(o.cert) != bool(o.key):
         sys.exit("give both --cert and --key, or neither for a local CA")
+    if (SECRETS / "agent.json").exists():   # walk 2026-11-06, F15: an edge's front.crt replaced the core's
+        sys.exit(f"{SECRETS} holds an edge's files (agent.json): the core and an edge use the same file names there "
+                 "(front.crt, front.key), so one would overwrite the other's certificate. Nothing was written. Install "
+                 "the core from its own checkout of the release, and the edge from another (one per host, or a "
+                 "second directory on a one-box lab)")
     port = 8443 if o.lab else o.port
     suffix = "" if port == 443 else f":{port}"
     SECRETS.mkdir(mode=0o700, parents=True, exist_ok=True)

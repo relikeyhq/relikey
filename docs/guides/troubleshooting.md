@@ -25,6 +25,7 @@ Each refusal happens before anything is written, unless it says otherwise.
 | Message starts | What it means and what to do |
 |---|---|
 | `--broker-host, --desk-host and --edge-host (...): each needs a DNS name of its own` | The front tells the three names apart by name. Give three different lower-case names with a dot. |
+| `.../deploy/secrets holds an edge's files (agent.json)` or `holds the core's files (core.env)` | The core and an edge were about to share one `deploy/secrets/`, where both write `front.crt` and `front.key`. Install each from its own checkout of the release; the edge's gets only `warpgate-<edge>.secret` and, with a local CA, `front-ca.crt`. |
 | `give both --cert and --key, or neither for a local CA` | Pass the certificate and its key together, or neither. |
 | `--keyclerk-ref is for a lab only` / `KEYCLERK_IMAGE is set in the environment: unset it` | Only a lab builds another KeyClerk. Unset `KEYCLERK_IMAGE` and drop `--keyclerk-ref`. |
 | `KeyClerk v0.28.0: no good signature from the pinned key` | The KeyClerk clone is not KeyClerk's own repository or lacks its tags. `git fetch --tags` there, then `git tag -v v0.27.0` shows why. |
