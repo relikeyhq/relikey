@@ -111,6 +111,44 @@ def replace_text(p: Path, text: str) -> None:
     os.replace(tmp, p)
 
 
+def is_there(p: Path) -> bool:
+    """Whether a file is there, also when the installing user may no longer look: after fix_owners the key directory is
+    the agent's (0700), and Path.exists() raises there on Python 3.13 (rc.5 check X4, #186)."""
+    try:
+        return p.exists()
+    except PermissionError:
+        return True
+
+
+def read_agent_file(engine: str, p: Path) -> str:
+    """A file fix_owners gave the agent, read without changing its owner: in the user namespace on rootless podman, by
+    the pinned busybox under docker."""
+    try:
+        return p.read_text(encoding="utf-8")
+    except PermissionError:
+        pass
+    if engine == "podman":
+        cmd = [engine, "unshare", "cat", str(p)]
+    else:
+        cmd = [engine, "run", "--rm", "-v", f"{SECRETS}:/s:ro", BUSYBOX, "cat", "/s/" + p.relative_to(SECRETS).as_posix()]
+    return subprocess.run(cmd, capture_output=True, text=True, check=True).stdout
+
+
+def reclaim(engine: str) -> None:
+    """The files fix_owners gave the agent, back to the installing user before a run rewrites them (--re-key): it can
+    neither replace nor remove what the agent owns (rc.5 check X4, #186). fix_owners gives them back at the end."""
+    if not hasattr(os, "geteuid") or os.geteuid() == 0:
+        return
+    names = [f for f in AGENT_READS if "/" not in f and is_there(SECRETS / f)]
+    if not names:
+        return
+    if engine == "podman":
+        subprocess.run([engine, "unshare", "chown", "-R", "0:0"] + [str(SECRETS / f) for f in names], check=True)
+    else:
+        subprocess.run([engine, "run", "--rm", "-v", f"{SECRETS}:/s", BUSYBOX, "chown", "-R",
+                        f"{os.getuid()}:{os.getgid()}"] + [f"/s/{f}" for f in names], check=True)
+
+
 def fix_owners(engine: str) -> None:
     """Rootful docker run by a non-root user: the agent (AGENT_UID) cannot read the 0600 files the installing user
     owns, and chown needs root (full-stack run 2; the core's install.py has the same pass). The pinned busybox sets
@@ -122,7 +160,7 @@ def fix_owners(engine: str) -> None:
         return                  # root: write() set the owners itself
     if engine == "podman":
         script = " && ".join([f"chown -R {AGENT_UID}:{AGENT_UID} '{SECRETS / f}'" for f in AGENT_READS
-                              if (SECRETS / f).exists()] +
+                              if is_there(SECRETS / f)] +
                              [f"chown 0:0 '{SECRETS / f}' && chmod 600 '{SECRETS / f}'" for f in FRONT_READS
                               if (SECRETS / f).exists()])
         if script:
@@ -136,6 +174,30 @@ def fix_owners(engine: str) -> None:
 
 
 STATE_VOLUME = ("relikey-edge", "agent")   # compose.yaml: name: relikey-edge, the volume `agent` at /var/lib/relikey
+
+
+WARPGATE_VOLUME = "relikey-edge_warpgate"
+
+
+def warpgate_setup_needed(engine: str, re_key: bool) -> bool:
+    """Whether Warpgate's first setup must run. Warpgate refuses it over an existing configuration ("Config file
+    already exists"), and --re-key died there with a traceback over every installed edge (rc.5 check X3, #186). An
+    existing configuration is kept with --re-key (its users, targets, recordings; the admin token comes from the
+    environment, so a new one still takes effect), and refused without it, before anything is written."""
+    if subprocess.run([engine, "volume", "exists", WARPGATE_VOLUME], capture_output=True).returncode != 0:
+        return True
+    probe = subprocess.run([engine, "run", "--rm", "-v", f"{WARPGATE_VOLUME}:/data:ro", BUSYBOX, "test", "-f",
+                            "/data/warpgate.yaml"], capture_output=True)
+    if probe.returncode != 0:
+        return True
+    if re_key:
+        print(f"Warpgate's configuration in {WARPGATE_VOLUME} is kept (its users, targets and recordings); "
+              "the edge gets a new enrolment key and admin token")
+        return False
+    sys.exit(f"Warpgate's volume {WARPGATE_VOLUME} already holds a configuration, from an earlier install of an edge "
+             "here; nothing was written. To keep it (its users, targets and recordings) with a new enrolment key, "
+             f"add --re-key; for a fresh Warpgate, remove the volume first ({engine} volume rm {WARPGATE_VOLUME}; "
+             "its recordings go with it)")
 
 
 def state_volume(engine: str) -> None:
@@ -305,11 +367,12 @@ def enrol_by_code(code_file: str, seed: bytes) -> None:
 def enrol_main(argv: list[str]) -> int:
     a = argparse.ArgumentParser(prog="install.py enrol", description="present this installed edge's key to its fleet")
     a.add_argument("--code-file", required=True, help="the file holding the enrolment code from the fleet page")
+    a.add_argument("--engine", default="podman", help="as for the install: reads the key the agent owns")
     o = a.parse_args(argv)
-    keyfile = SECRETS / KEY if (SECRETS / KEY).exists() else SECRETS / LEGACY_KEY
+    keyfile = SECRETS / KEY if is_there(SECRETS / KEY) else SECRETS / LEGACY_KEY
     try:
-        seed = bytes.fromhex(keyfile.read_text().strip())
-    except (OSError, ValueError):
+        seed = bytes.fromhex(read_agent_file(o.engine, keyfile).strip())
+    except (OSError, ValueError, subprocess.CalledProcessError):
         sys.exit(f"{keyfile}: no enrolment key to present; install the edge first (with --enrol-code-file)")
     try:
         enrol_by_code(o.code_file, seed)
@@ -499,11 +562,14 @@ def main() -> int:
             sys.exit(f"--site-keys {o.site_keys}: {', '.join(missing)} missing; make the set on the active node with "
                      "python deploy/edge/install.py site-keys --out DIR and carry DIR here whole")
     external_host = urlparse(o.warpgate_url).hostname if o.warpgate_url else o.edge   # full-stack run: never a bare id
-    installed = next((SECRETS / k for k in (KEY, LEGACY_KEY) if (SECRETS / k).exists()), None)
+    installed = next((SECRETS / k for k in (KEY, LEGACY_KEY) if is_there(SECRETS / k)), None)
     if installed and not (o.re_key or o.enrolment_seed_file):
         sys.exit(f"this edge is already installed ({installed} exists). Running again would make a new "
                  "enrolment key, and the desk would refuse the edge until an officer enrols it again. To change the "
                  "agent's settings, edit agent.json; to re-key on purpose, add --re-key (full-stack run 2)")
+    setup = warpgate_setup_needed(o.engine, o.re_key)   # before anything is written: it may refuse
+    if installed:
+        reclaim(o.engine)   # --re-key (or a seed) rewrites the files fix_owners gave the agent
     SECRETS.mkdir(mode=0o700, parents=True, exist_ok=True)
     token = secrets.token_urlsafe(32)
     bundle = public_roots(o.ca_bundle) + b"\n" + Path(o.sso_ca).read_bytes() if o.sso_ca else None
@@ -515,8 +581,9 @@ def main() -> int:
     for name in ("front.env", "front.crt", "front.key", "warpgate.crt"):
         if not (SECRETS / name).exists():
             write(name, "", owner=None)
-    write("lldap.env", f"LLDAP_JWT_SECRET={secrets.token_urlsafe(32)}\nLLDAP_KEY_SEED={secrets.token_urlsafe(32)}\n"
-                       f"LLDAP_LDAP_USER_PASS={secrets.token_urlsafe(24)}\n", owner=None)
+    if not is_there(SECRETS / "lldap.env"):   # kept on --re-key: lldap refuses a changed key seed over its data (#186)
+        write("lldap.env", f"LLDAP_JWT_SECRET={secrets.token_urlsafe(32)}\nLLDAP_KEY_SEED={secrets.token_urlsafe(32)}\n"
+                           f"LLDAP_LDAP_USER_PASS={secrets.token_urlsafe(24)}\n", owner=None)
     seed = bytes.fromhex(Path(o.enrolment_seed_file).read_text().strip()) if o.enrolment_seed_file else secrets.token_bytes(32)
     keys_dir()
     (SECRETS / LEGACY_KEY).unlink(missing_ok=True)   # --re-key over an install from before #134
@@ -526,13 +593,14 @@ def main() -> int:
     # stack attack 2026-10-25, E2). It is random and kept nowhere: the agent works with the admin token.
     run = [o.engine, "compose", "-f", str(COMPOSE), "run", "--rm", "--no-deps", "-e", "WARPGATE_ADMIN_PASSWORD",
            "warpgate"]
-    subprocess.run(run + ["--config", "/data/warpgate.yaml", "unattended-setup", "--data-path", "/data",
-                          "--http-port", "8888", "--ssh-port", "2222", "--record-sessions",
-                          "--external-host", external_host],
-                   check=True, env={**os.environ, "WARPGATE_ADMIN_PASSWORD": secrets.token_urlsafe(24)})
+    if setup:
+        subprocess.run(run + ["--config", "/data/warpgate.yaml", "unattended-setup", "--data-path", "/data",
+                              "--http-port", "8888", "--ssh-port", "2222", "--record-sessions",
+                              "--external-host", external_host],
+                       check=True, env={**os.environ, "WARPGATE_ADMIN_PASSWORD": secrets.token_urlsafe(24)})
     # The Warpgate image holds only its binary (no shell, no cat): read the certificate from its volume with a
     # throwaway busybox, the same pinned one the agent image builds from.
-    busybox = [o.engine, "run", "--rm", "-i", "-v", "relikey-edge_warpgate:/data", BUSYBOX]
+    busybox = [o.engine, "run", "--rm", "-i", "-v", f"{WARPGATE_VOLUME}:/data", BUSYBOX]
     der = subprocess.run(busybox + ["cat", "/data/tls.certificate.pem"], capture_output=True, check=False).stdout
     import yaml
     wg = yaml.safe_load(subprocess.run(busybox + ["cat", "/data/warpgate.yaml"], capture_output=True, check=True).stdout)
@@ -540,6 +608,7 @@ def main() -> int:
     # point 1, stack attack E6). Warpgate builds its return URLs with the external port, and takes the client's address
     # from the front's X-Forwarded headers (only pod members reach 127.0.0.1:8899).
     wg.setdefault("http", {}).update({"listen": "127.0.0.1:8899", "external_port": 8888, "trust_x_forwarded_headers": True})
+    wg["external_host"] = external_host   # what the first setup writes; set again for a kept configuration (--re-key)
     if o.sso_issuer:   # the broker's sign-in in Warpgate's configuration, in its volume (0600, like the rest of it)
         # The button names the broker: beside Warpgate's own username and password form, which no ReliKey person
         # uses, a bare "Sign in" did not say it is the organisation's sign-in (rc.4 walk W11, #176).

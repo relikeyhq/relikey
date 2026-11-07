@@ -378,3 +378,73 @@ def test_no_healthcheck_needs_whitespace_inside_an_argument(part):
         if isinstance(test, list) and test and test[0] == "CMD":
             bad += [f"{name}: {a!r}" for a in test[1:] if any(c.isspace() for c in a)]
     assert not bad, "healthcheck arguments with whitespace: " + "; ".join(bad)
+
+
+def _engine(volume: bool, config: bool):
+    """An engine that answers whether Warpgate's volume exists and holds a configuration."""
+    import subprocess as sp
+    calls = []
+
+    def run(cmd, *a, **kw):
+        calls.append(list(cmd))
+        if cmd[1:3] == ["volume", "exists"]:
+            return sp.CompletedProcess(cmd, 0 if volume else 1, "", "")
+        if "test" in cmd and "/data/warpgate.yaml" in cmd:
+            return sp.CompletedProcess(cmd, 0 if config else 1, "", "")
+        raise AssertionError(f"the check ran more than it should: {cmd}")
+    return run, calls
+
+
+@pytest.mark.parametrize("volume,config,re_key,needed", [
+    (False, False, False, True), (True, False, False, True), (True, True, True, False)],
+    ids=["no volume", "an empty volume", "a configuration kept with --re-key"])
+def test_warpgate_setup_runs_only_where_there_is_no_configuration(volume, config, re_key, needed, tmp_path, monkeypatch):
+    """rc.5 check X3 (#186): Warpgate refuses its first setup over an existing configuration, so --re-key died over
+    every installed edge. The setup runs only where there is none; --re-key keeps an existing one."""
+    mod = installer("edge", tmp_path / "secrets", monkeypatch)
+    run, _ = _engine(volume, config)
+    monkeypatch.setattr(mod.subprocess, "run", run)
+    assert mod.warpgate_setup_needed("podman", re_key) is needed
+
+
+def test_an_existing_warpgate_without_re_key_is_refused_before_anything(tmp_path, monkeypatch):
+    mod = installer("edge", tmp_path / "secrets", monkeypatch)
+    run, _ = _engine(True, True)
+    monkeypatch.setattr(mod.subprocess, "run", run)
+    monkeypatch.setattr(sys, "argv", ["install.py"] + EDGE)
+    with pytest.raises(SystemExit) as refused:
+        mod.main()
+    message = str(refused.value.code)
+    assert "already holds a configuration" in message and "nothing was written" in message
+    assert "add --re-key" in message and "volume rm relikey-edge_warpgate" in message
+    assert not (tmp_path / "secrets").exists()
+
+
+def test_an_installed_edge_whose_key_the_agent_owns_is_refused_not_crashed(tmp_path, monkeypatch):
+    """rc.5 check X4 (#186): after fix_owners the key directory is the agent's, and Path.exists() raises there on
+    Python 3.13, so a rerun over an installed rootless edge died with a traceback. It is refused, saying what to do."""
+    secrets = tmp_path / "secrets"
+    (secrets / "keys").mkdir(parents=True)
+    (secrets / "keys" / "enrolment.key").write_text("d" * 64, encoding="utf-8")
+    mod = installer("edge", secrets, monkeypatch)
+    real = Path.exists
+
+    def exists(self, *a, **kw):
+        if "keys" in self.parts:
+            raise PermissionError(13, "Permission denied", str(self))
+        return real(self, *a, **kw)
+    monkeypatch.setattr(Path, "exists", exists)
+    monkeypatch.setattr(sys, "argv", ["install.py"] + EDGE)
+    with pytest.raises(SystemExit) as refused:
+        mod.main()
+    assert "already installed" in str(refused.value.code) and "--re-key" in str(refused.value.code)
+
+
+def test_re_key_keeps_the_facades_secrets():
+    """#186 (X5): a re-key wrote a new lldap.env, and lldap refused to start over its data ("The private key has
+    changed"). The installer writes lldap.env only where there is none; the re-key changes the enrolment key and
+    Warpgate's admin token, nothing the facade's data depends on."""
+    src = (ROOT / "deploy" / "edge" / "install.py").read_text(encoding="utf-8")
+    i = src.index('write("lldap.env"')
+    guard = src.rfind("\n", 0, i - 10)
+    assert 'if not is_there(SECRETS / "lldap.env")' in src[guard:i], "lldap.env is rewritten on every run"
