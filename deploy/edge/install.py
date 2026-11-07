@@ -82,6 +82,9 @@ def write(name: str, text: str, owner: int | None = AGENT_UID) -> Path:
 
 
 AGENT_READS = ("agent.json", KEYS, KEY, "warpgate.token")   # compose.yaml: mounted into the agent (AGENT_UID)
+# Mounted into the agent too, but not secret: written 0644, so the agent reads them as "other" under any engine and
+# owner mode (rc.3 walk R3: desk-ca.pem, 0600 and the installing user's on rootless podman, stopped the agent).
+AGENT_PUBLIC = ("desk-ca.pem", "governed-roles.json")
 FRONT_READS = ("front.key",)   # the front's key: root in the front's container (Caddy's image runs as root, no caps)
 
 
@@ -585,7 +588,7 @@ def main() -> int:
         keyclerk["ca_file"] = "/etc/relikey/desk-ca.pem"
         if (SECRETS / "desk-ca.pem").is_dir():   # the empty directory compose made for a pin install
             (SECRETS / "desk-ca.pem").rmdir()
-        write("desk-ca.pem", Path(o.desk_ca).read_text(encoding="utf-8"))
+        write("desk-ca.pem", Path(o.desk_ca).read_text(encoding="utf-8"), owner=None).chmod(0o644)   # AGENT_PUBLIC
     else:
         keyclerk["pin_sha256"] = o.desk_pin
     cfg = {"edge": o.edge, "mode": "enforce", "state_dir": "/var/lib/relikey",
