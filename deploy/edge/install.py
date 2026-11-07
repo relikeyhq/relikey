@@ -491,7 +491,24 @@ def move_keys_main(argv: list[str]) -> int:
     return 0
 
 
+NEEDS = {"yaml": "pyyaml", "cryptography": "cryptography"}   # imported where they are used, so checked first
+
+
+def require_modules() -> None:
+    """The packages the installer imports, checked before it writes anything: a Python without them made a
+    half-installed edge, the import failing only after Warpgate's first setup had run (rc.5 check X1, #185)."""
+    import importlib.util
+    missing = [pkg for mod, pkg in NEEDS.items() if importlib.util.find_spec(mod) is None]
+    if missing:
+        v = ".".join(map(str, sys.version_info[:3]))
+        sys.exit(f"this Python ({sys.executable}, {v}) lacks {', '.join(missing)}, which the installer needs; nothing "
+                 f"was written. Install them for it (python -m pip install {' '.join(missing)}), or run the installer "
+                 f"with uv: uv run --python {sys.version_info[0]}.{sys.version_info[1]} "
+                 + " ".join(f"--with {m}" for m in missing) + " deploy/edge/install.py ...")
+
+
 def main() -> int:
+    require_modules()
     if sys.argv[1:2] == ["enrol"]:
         return enrol_main(sys.argv[2:])
     if sys.argv[1:2] == ["move-keys"]:

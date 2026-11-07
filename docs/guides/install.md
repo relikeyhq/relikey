@@ -186,7 +186,9 @@ Enrolment binds the edge's enrolment key and the edge officer's key at the desk.
    - enrolment by code: an operator opens a slot on the fleet page, the code goes to the edge in a file, and
      `python deploy/edge/install.py enrol --code-file <file>` presents the key; an officer approves it with a passkey.
      This needs Python 3.13 or later on the edge. Ubuntu 24.04 ships 3.12: install 3.13 for the installing user
-     only, for example with `uv python install 3.13`, and run the command with it.
+     only, with the packages the installer needs, for example with uv:
+     `uv run --python 3.13 --with pyyaml --with cryptography deploy/edge/install.py enrol --code-file <file>`
+     (a bare `uv python install 3.13` has neither, and the installer says so before it writes anything).
 
 **Check it worked.** Within a minute the agent has a verified bundle:
 
