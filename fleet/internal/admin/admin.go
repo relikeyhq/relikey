@@ -31,7 +31,8 @@ type Version struct {
 // Event is one line of the evidence log: who did what, from where, with what outcome.
 type Event struct {
 	At      time.Time `json:"at"`
-	Subject string    `json:"subject"` // the broker subject, or "edge:<slot>" for an edge's presentation
+	Subject string    `json:"subject"`        // the broker subject, or "edge:<slot>" for an edge's presentation
+	Name    string    `json:"name,omitempty"` // the person's name as the page showed it, beside the subject
 	Session string    `json:"session,omitempty"`
 	Source  string    `json:"source,omitempty"`
 	Action  string    `json:"action"`
@@ -306,6 +307,7 @@ func (s *Store) OpenSlot(url, pin, name string, kind enrol.Kind, profile string,
 	if err != nil {
 		return enrol.Slot{}, enrol.Code{}, err
 	}
+	sl.OpenedByName = ev.Name
 	s.d.Slots[sl.ID] = sl
 	ev.Action, ev.Detail = "open slot", fmt.Sprintf("%s (%s, %s), expires %s", name, kind, profile, sl.Expires.Format(time.RFC3339))
 	s.d.Log = append(s.d.Log, ev)

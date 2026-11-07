@@ -50,19 +50,22 @@ var nameRE = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
 
 // Slot is one admission in progress.
 type Slot struct {
-	ID         string    `json:"id"`
-	Name       string    `json:"name"`
-	Kind       Kind      `json:"kind"`
-	Profile    string    `json:"profile"`
-	OpenedBy   string    `json:"opened_by"` // the broker subject of the GUI session (point 24)
-	OpenedAt   time.Time `json:"opened_at"`
-	Expires    time.Time `json:"expires"`
-	SecretHash string    `json:"secret_hash"`   // hex sha256 of the single-use secret: the commitment
-	Key        string    `json:"key,omitempty"` // the presented public key, hex, once presented
-	Presented  time.Time `json:"presented,omitzero"`
-	Source     string    `json:"source,omitempty"` // the address the presentation came from, shown to the approver
-	Active     bool      `json:"active"`
-	Refused    []string  `json:"refused,omitempty"` // what was refused for this slot: shown and alarmed, never silent
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Kind     Kind   `json:"kind"`
+	Profile  string `json:"profile"`
+	OpenedBy string `json:"opened_by"` // the broker subject of the GUI session (point 24)
+	// OpenedByName is that person's name as the page showed it, for people to read (a subject id told them nothing:
+	// rc.5 check Y2, #187); the subject stays the record.
+	OpenedByName string    `json:"opened_by_name,omitempty"`
+	OpenedAt     time.Time `json:"opened_at"`
+	Expires      time.Time `json:"expires"`
+	SecretHash   string    `json:"secret_hash"`   // hex sha256 of the single-use secret: the commitment
+	Key          string    `json:"key,omitempty"` // the presented public key, hex, once presented
+	Presented    time.Time `json:"presented,omitzero"`
+	Source       string    `json:"source,omitempty"` // the address the presentation came from, shown to the approver
+	Active       bool      `json:"active"`
+	Refused      []string  `json:"refused,omitempty"` // what was refused for this slot: shown and alarmed, never silent
 }
 
 // Code is what the installer takes: it names the fleet, its pin and anchor, the slot and the secret.
