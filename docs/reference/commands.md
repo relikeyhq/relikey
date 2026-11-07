@@ -143,9 +143,9 @@ options:
 usage: install.py [-h] --edge EDGE --desk DESK [--desk-ca DESK_CA] [--desk-pin DESK_PIN] --bundle-key BUNDLE_KEY
                   --officer-key OFFICER_KEY [--sso-provider SSO_PROVIDER] [--engine ENGINE]
                   [--enrolment-seed-file ENROLMENT_SEED_FILE] [--re-key] [--sso-issuer SSO_ISSUER]
-                  [--sso-secret-file SSO_SECRET_FILE] [--sso-client SSO_CLIENT] [--sso-ca SSO_CA]
-                  [--ca-bundle CA_BUNDLE] [--warpgate-url WARPGATE_URL] [--enrol-code-file ENROL_CODE_FILE]
-                  [--site-keys SITE_KEYS] [--lab]
+                  [--sso-secret-file SSO_SECRET_FILE] [--sso-client SSO_CLIENT] [--sso-label SSO_LABEL]
+                  [--sso-ca SSO_CA] [--ca-bundle CA_BUNDLE] [--warpgate-url WARPGATE_URL]
+                  [--enrol-code-file ENROL_CODE_FILE] [--site-keys SITE_KEYS] [--lab]
 
 Prepare a ReliKey edge pod: secrets, the enrolment key, Warpgate's first setup and the agent's configuration.
 
@@ -195,6 +195,8 @@ options:
                         this edge's client secret, from the core's add_edge.py
   --sso-client SSO_CLIENT
                         the client id at the broker (default warpgate-<edge>)
+  --sso-label SSO_LABEL
+                        the words on Warpgate's sign-in button (default: Sign in with <the broker's name>)
   --sso-ca SSO_CA       PEM of the CA that signs the broker's certificate, when it is not a public one
   --ca-bundle CA_BUNDLE
                         the public roots to keep beside --sso-ca (default: certifi, or the host's)
