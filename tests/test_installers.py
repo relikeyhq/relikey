@@ -378,3 +378,19 @@ def test_no_healthcheck_needs_whitespace_inside_an_argument(part):
         if isinstance(test, list) and test and test[0] == "CMD":
             bad += [f"{name}: {a!r}" for a in test[1:] if any(c.isspace() for c in a)]
     assert not bad, "healthcheck arguments with whitespace: " + "; ".join(bad)
+
+
+@pytest.mark.parametrize("argv", [EDGE, ["enrol", "--code-file", "c"], ["move-keys"]], ids=["install", "enrol", "move-keys"])
+def test_a_python_without_the_packages_is_refused_before_anything(argv, tmp_path, monkeypatch):
+    """rc.5 check X1 (#185): a Python without PyYAML (a bare uv Python 3.13) half-installed the edge, the import failing
+    after Warpgate's first setup. The installer checks its packages first, on every path, and says how to get them."""
+    import importlib.util
+    mod = installer("edge", tmp_path / "secrets", monkeypatch)
+    real = importlib.util.find_spec
+    monkeypatch.setattr(importlib.util, "find_spec", lambda name, *a: None if name == "yaml" else real(name, *a))
+    monkeypatch.setattr(sys, "argv", ["install.py"] + argv)
+    with pytest.raises(SystemExit) as refused:
+        mod.main()
+    message = str(refused.value.code)
+    assert "lacks pyyaml" in message and "nothing was written" in message and "--with pyyaml" in message, message
+    assert not (tmp_path / "secrets").exists()
