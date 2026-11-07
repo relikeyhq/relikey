@@ -5,7 +5,9 @@ publishes them."""
 import hashlib
 import importlib.util
 import json
+import os
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -388,3 +390,47 @@ def test_the_vex_is_signed_with_the_binaries_and_named_in_the_notes():
     assert not re.search(excluded, release.VEX_FILE) and re.search(excluded, "relikey-agent-linux-amd64.cdx.json")
     notes = next(s["run"] for s in steps if "notes/notes.md" in s.get("run", ""))
     assert release.VEX_FILE in notes
+
+
+def _notes_step():
+    steps = _build_jobs()["build"]["steps"]
+    return next(s["run"] for s in steps if s.get("name") == "Take the release notes from CHANGELOG.md")
+
+
+FOLDED = "# Changelog\n\n## [Unreleased]\n\n## [9.1.0] - 2026-11-06\n### Added\n- folded entry\n\n## [9.0.0] - 2026-10-01\n- ancient-entry\n"
+
+
+@pytest.mark.parametrize("tag, changelog, fragment, want", [
+    ("v9.1.0-rc.2", FOLDED, None, "folded entry"),                 # the release pull request folded the fragments
+    ("v9.1.0-rc.1", "# Changelog\n\n## [Unreleased]\n", "an unfolded entry", "an unfolded entry"),  # fragments only
+    ("v9.1.0", FOLDED, None, "folded entry"),                      # the release takes its own section
+])
+def test_the_release_notes_come_from_the_section_or_the_fragments(tmp_path, tag, changelog, fragment, want):
+    bash = shutil.which("bash")
+    if bash is None:
+        pytest.skip("no bash")
+    (tmp_path / "CHANGELOG.md").write_text(changelog, encoding="utf-8")
+    (tmp_path / "tools").mkdir()
+    shutil.copy(ROOT / "tools" / "changelog.py", tmp_path / "tools" / "changelog.py")
+    (tmp_path / "changelog.d").mkdir()
+    if fragment:
+        (tmp_path / "changelog.d" / "1.added.md").write_text(f"- {fragment}\n", encoding="utf-8")
+    env = {**os.environ, "GITHUB_REF_NAME": tag, "GITHUB_REPOSITORY": "relikeyhq/relikey"}
+    r = subprocess.run([bash, "-e", "-c", _notes_step()], cwd=tmp_path, env=env, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    notes = (tmp_path / "notes" / "notes.md").read_text(encoding="utf-8")
+    assert want in notes and "ancient-entry" not in notes
+    assert notes.startswith("Release candidate for 9.1.0") == ("-" in tag)
+
+
+def test_a_candidate_with_nothing_to_release_stops(tmp_path):
+    bash = shutil.which("bash")
+    if bash is None:
+        pytest.skip("no bash")
+    (tmp_path / "CHANGELOG.md").write_text("# Changelog\n\n## [Unreleased]\n\n## [9.0.0]\n- old\n", encoding="utf-8")
+    (tmp_path / "tools").mkdir()
+    shutil.copy(ROOT / "tools" / "changelog.py", tmp_path / "tools" / "changelog.py")
+    (tmp_path / "changelog.d").mkdir()
+    env = {**os.environ, "GITHUB_REF_NAME": "v9.1.0-rc.1", "GITHUB_REPOSITORY": "relikeyhq/relikey"}
+    r = subprocess.run([bash, "-e", "-c", _notes_step()], cwd=tmp_path, env=env, capture_output=True, text=True)
+    assert r.returncode != 0 and "no changes for 9.1.0-rc.1" in r.stderr

@@ -12,6 +12,7 @@ re-checked before the pin moves.
 | Fact | Result | How checked |
 |---|---|---|
 | Targets SSH, HTTPS, Kubernetes, MySQL, PostgreSQL, RDP, VNC | confirmed | README; crates `warpgate-protocol-{ssh,http,kubernetes,mysql,postgres,rdp,vnc}` |
+| An RDP session is listed under its user with its target, closing it or revoking its role ends it, and it is recorded as `Desktop` | confirmed on 0.30.4 (2026-11-06) | `tools/warpgate_live.py 0.30.4 --rdp` (TestLiveWarpgateRDP): FreeRDP through Warpgate to xrdp |
 | Session approvals over the admin API | confirmed | `warpgate-admin/src/api/session_approvals.rs`: `GET /session-approvals`, `POST .../:id/approve`, `POST .../:id/reject`, a stream; permission `ApproveSessions` |
 | Role assignments with expiry | confirmed | `warpgate-admin/src/api/users.rs`: `expires_at` ("null = permanent"), active = not expired and not revoked, `/users/:id/roles[/:role_id]` |
 | Admin UI and API on the user listener, under both `/@warpgate/admin` and `/_warpgate/admin` | confirmed | `warpgate-protocol-http/src/lib.rs` nests the same endpoints at `/@warpgate` and `/_warpgate` (main, 2026-10-20) |
