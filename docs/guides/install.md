@@ -36,7 +36,9 @@ Decide, and write down who signs each one, before you run anything:
 - **KeyClerk source.** A clone of `github.com/keyclerk/keyclerk` with its tags: the installer builds the pinned release
   from its signed tag and refuses a tag whose signature or commit differs.
 
-Get the release you will run, check it, and use the same checkout on every host. The README's "Verifying a release"
+Get the release you will run, check it, and use the same release on every host, in a checkout of its own for each
+component: the core and an edge write files of the same names into `deploy/secrets/`, so the installers refuse a
+directory that holds the other's (on a one-box lab, put the edge in a second directory). The README's "Verifying a release"
 shows the checks (signed tag, checksums, provenance). Then on a host with Go (the version `agent/go.mod` names):
 
     python agent/build.py dist
@@ -98,7 +100,7 @@ prints the secret. **Check:** the file exists and the command printed the edge's
 the edge host out of band, with `front-ca.crt` if the core uses a local CA.
 
 ## 3. Install the edge
-On the edge host, from the same repository checkout, with `agent/dist/` built (see above). You need the bundle key and
+On the edge host, from its own checkout of the same release, with `agent/dist/` built (see above). You need the bundle key and
 pin from step 1, the secret file from step 2 and the edge officer's public key from the officer's own console.
 
     python deploy/edge/install.py --edge plant-a --desk https://edge.example --desk-pin <pin from step 1> \
