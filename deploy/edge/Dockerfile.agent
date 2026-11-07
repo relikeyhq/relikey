@@ -11,8 +11,10 @@ FROM scratch
 ARG TARGETARCH
 ARG TARGETVARIANT
 COPY --chmod=0555 agent/dist/relikey-agent-linux-${TARGETARCH}${TARGETVARIANT} /relikey-agent
-COPY --from=prep --chown=65532:65532 --chmod=0700 /out/var/lib/relikey /var/lib/relikey
-COPY --from=prep --chown=65532:65532 --chmod=0755 /out/var/lib/relikey-metrics /var/lib/relikey-metrics
+# The parent is copied, not each directory: `COPY --chmod` on a directory sets its contents' mode, and buildah (podman
+# 4.9) leaves the copied directory itself 0755, which podman then copies into a fresh volume (rc.3 walk R4, #165).
+# Copied as entries of /out/var/lib, both keep the mode the prep stage gave them, on any builder.
+COPY --from=prep --chown=65532:65532 /out/var/lib/ /var/lib/
 COPY --from=prep /out/etc/relikey /etc/relikey
 USER 65532:65532
 ENTRYPOINT ["/relikey-agent"]
