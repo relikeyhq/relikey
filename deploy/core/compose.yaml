@@ -35,7 +35,7 @@ services:
       EDGE_HOST: ${EDGE_HOST:?run deploy/core/install.py first}
       REALM: ${REALM:?run deploy/core/install.py first}
     ports:
-      - "443:8443"                               # broker sign-in, the desk, and the edge-facing name (Caddyfile)
+      - "${FRONT_PORT:-443}:8443"                # broker sign-in, the desk, the edge-facing name (Caddyfile); install.py --port
       - "127.0.0.1:8444:8444"                    # the broker's admin console: host loopback only (an SSH tunnel)
       - "127.0.0.1:8092:8092"                    # the desk's management listener (metrics, readiness): loopback + bearer token (0018)
     volumes:

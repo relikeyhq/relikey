@@ -201,3 +201,12 @@ def test_site_keys_refusals_say_why_and_what_to_do_next(args, why, nxt, tmp_path
         mod.main()
     message = str(refused.value.code)
     assert why in message and nxt in message, message
+
+
+def test_the_core_publishes_the_port_the_installer_names():
+    """--port reaches the published port, not only the URLs (fresh-install walk of v0.3.0-rc.2, F2): rootless podman
+    cannot bind 443, and the guide's advice is a higher --port."""
+    compose = (ROOT / "deploy" / "core" / "compose.yaml").read_text(encoding="utf-8")
+    assert '"${FRONT_PORT:-443}:8443"' in compose and '"443:8443"' not in compose
+    install = (ROOT / "deploy" / "core" / "install.py").read_text(encoding="utf-8")
+    assert "FRONT_PORT={port}" in install
