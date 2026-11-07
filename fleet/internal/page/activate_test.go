@@ -35,7 +35,7 @@ func TestActivationThroughThePage(t *testing.T) {
 			t.Fatalf("%s signs the anchor: %d %v", n, code, out)
 		}
 	}
-	_, code, err := st.OpenSlot("https://edge.example/fleet/v1/enrol", strings.Repeat("a", 64), "plant-c", enrol.Edge, "basic", admin.Event{Subject: "sub-dan"}, time.Now())
+	_, code, err := st.OpenSlot("https://edge.example/fleet/v1/enrol", strings.Repeat("a", 64), "plant-c", enrol.Edge, "basic", admin.Event{Subject: "sub-dan", Name: "dan"}, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,8 +48,18 @@ func TestActivationThroughThePage(t *testing.T) {
 		return map[string]any{"items": []map[string]string{{"slot": code.Slot, "typed": typed, "read_by": "the installer", "read_how": "phone"}}}
 	}
 	ann := as(t, b, srv, browser, "ann")
-	if _, body, _ := get(t, ann, srv+"/"); !strings.Contains(body, `id="activate-sign"`) || !strings.Contains(body, "192.0.2.7") {
+	_, body, _ := get(t, ann, srv+"/")
+	if !strings.Contains(body, `id="activate-sign"`) || !strings.Contains(body, "192.0.2.7") {
 		t.Fatalf("the officer is not offered the activation, or not the source address: %s", body)
+	}
+	// rc.5 check Y1 (#187): the officer types the fingerprint as read from the edge's screen; the page that asks for it
+	// must not show it. Y2: the slot says who opened it by name, not by subject id.
+	if fp := enrol.Fingerprint(hex.EncodeToString(edge.Public().(ed25519.PublicKey))); strings.Contains(body, fp) ||
+		strings.Contains(body, strings.ReplaceAll(fp, " ", "")) {
+		t.Error("the page shows the fingerprint the officer is asked to read from the edge")
+	}
+	if !strings.Contains(body, ">dan</td>") || strings.Contains(body, "sub-dan") {
+		t.Error("the slot names its opener by subject id, not by name")
 	}
 	dan := as(t, b, srv, browser, "dan")
 	if _, body, _ := get(t, dan, srv+"/"); strings.Contains(body, `id="activate-sign"`) {

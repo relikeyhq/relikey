@@ -7,6 +7,7 @@
 package page
 
 import (
+	"cmp"
 	"context"
 	"crypto/aes"
 	"crypto/cipher"
@@ -700,13 +701,18 @@ func (p *Page) enrolView(s session) *enrolView {
 	v := &enrolView{Anchored: p.Admin.Anchor() != "", Script: template.JS(script)}
 	_, _, v.MeOfficer = p.officer(s)
 	for _, sl := range p.Admin.Slots() {
-		r := slotRow{Name: sl.Name, Kind: string(sl.Kind), OpenedBy: sl.OpenedBy, Expires: sl.Expires.UTC().Format("2006-01-02 15:04Z"),
-			Refused: len(sl.Refused)}
+		r := slotRow{Name: sl.Name, Kind: string(sl.Kind), OpenedBy: cmp.Or(sl.OpenedByName, sl.OpenedBy),
+			Expires: sl.Expires.UTC().Format("2006-01-02 15:04Z"), Refused: len(sl.Refused)}
 		switch {
 		case sl.Active:
-			r.State = "active"
+			r.State = "active" // the fingerprint it was admitted with: a record now, no longer something to check
+			if sl.Key != "" {
+				r.Fingerprint = enrol.Fingerprint(sl.Key)
+			}
 		case sl.Key != "" && now.Before(sl.Expires):
-			r.State, r.Fingerprint = "key presented, awaiting approval", enrol.Fingerprint(sl.Key)
+			// Not the fingerprint: the officer types it as read from the edge's own screen, and a copy on this page
+			// would let that out-of-band check be skipped (rc.5 check Y1, #187).
+			r.State = "key presented, awaiting approval"
 			v.Presented = append(v.Presented, presentedRow{ID: sl.ID, Name: sl.Name, Kind: string(sl.Kind), Source: sl.Source})
 		case !now.Before(sl.Expires):
 			r.State = "expired"
@@ -757,7 +763,7 @@ func (p *Page) openSlot(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
 	name, kind := r.PostFormValue("name"), enrol.Kind(r.PostFormValue("kind"))
-	ev := admin.Event{At: p.Now(), Subject: s.sub, Source: r.Header.Get("X-Forwarded-For")}
+	ev := admin.Event{At: p.Now(), Subject: s.sub, Name: s.name, Source: r.Header.Get("X-Forwarded-For")}
 	sl, code, err := p.Admin.OpenSlot(p.Cfg.EnrolURL, p.Pin, name, kind, "basic", ev, p.Now())
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err != nil {
