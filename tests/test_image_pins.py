@@ -72,3 +72,16 @@ def test_installer_refuses_a_tag_only_base(part, tmp_path):
     tagged.write_text("FROM docker.io/library/busybox:1.37.0 AS prep\n", encoding="utf-8")
     with pytest.raises(SystemExit):
         pinned_busybox(tagged)
+
+
+@pytest.mark.parametrize("path,state", [("deploy/edge/Dockerfile.agent", "relikey"),
+                                        ("deploy/core/Dockerfile.fleet", "relikey-fleet")])
+def test_the_state_directory_keeps_the_prep_stages_mode(path, state):
+    """The service refuses a state directory looser than 0700, and podman copies the image's directory, mode included,
+    into a fresh volume. `COPY --chmod` on a directory leaves the directory itself 0755 under buildah (podman 4.9;
+    rc.3 walk R4, #165), so the state directory is made 0700 in the prep stage and reaches the image as an entry of its
+    copied parent, never copied on its own."""
+    text = (ROOT / path).read_text(encoding="utf-8")
+    assert re.search(rf"chmod 0700 /out/var/lib/{state}\b", text), "the prep stage makes the state directory 0700"
+    assert re.search(r"^COPY --from=prep [^\n]*/out/var/lib/ /var/lib/$", text, re.M), "the parent is copied"
+    assert not re.search(rf"^COPY [^\n]*/out/var/lib/{state}\b", text, re.M), "the state directory copied on its own"
