@@ -111,6 +111,25 @@ def enrolment(cfg: dict, before: dict, url: str, pin: str, old_pin: str, why: st
     return said
 
 
+def sharing_front() -> list[str]:
+    """The services that run in the front's network namespace, in compose.yaml's order (its dependency order)."""
+    import yaml
+    services = yaml.safe_load((CORE / "compose.yaml").read_text(encoding="utf-8"))["services"]
+    return [name for name, s in services.items() if (s or {}).get("network_mode") == "service:front"]
+
+
+def restart_front(o) -> None:
+    """Restart the front, then every running service in its network namespace, in order. A restarted front gets a new
+    namespace while the services that joined the old one stay in it: the broker then restarted into the new one and
+    lost its database on 127.0.0.1 (fresh-install walk of v0.3.0-rc.2, F7). The fleet restarts with them."""
+    subprocess.run(compose(o) + ["restart", "front"], check=True)
+    running = set(subprocess.run(compose(o) + ["ps", "--services", "--status", "running"], check=True,
+                                 capture_output=True, text=True).stdout.split())
+    for name in sharing_front():
+        if name in running:
+            subprocess.run(compose(o) + ["restart", name], check=True)
+
+
 def compose(o) -> list:
     c = [o.engine, "compose", "--env-file", str(SECRETS / "core.env"), "-f", str(CORE / "compose.yaml")]
     return c + (["-f", str(CORE / "compose.lab.yaml")] if o.lab else [])
@@ -182,8 +201,7 @@ def page(o) -> None:
         f"\thandle {{\n\t\trespond 404\n\t}}\n}}\n", encoding="utf-8")
     (sites / "fleet.caddy").chmod(0o644)
     # The front has no admin API (Caddyfile: admin off), so no reload: a restart reads the new site file.
-    subprocess.run(compose(o) + ["restart", "front"], check=True)
-    subprocess.run(compose(o) + ["restart", "fleet"], check=True)
+    restart_front(o)
     print(f"fleet page: {page_url}/ for accounts holding the client role fleet-operator on relikey-fleet")
     print(*said, file=sys.stdout if pin else sys.stderr)
 

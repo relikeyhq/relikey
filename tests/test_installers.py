@@ -286,3 +286,12 @@ def test_the_state_volume_name_is_the_one_compose_makes():
 def test_rootless_podman_sets_the_fleet_page_secret():
     src = (ROOT / "deploy" / "core" / "fleet_page.py").read_text(encoding="utf-8")
     assert '[o.engine, "unshare", "sh", "-c", f"chown {FLEET_UID}:{FLEET_UID}' in src
+
+
+def test_the_core_publishes_the_port_the_installer_names():
+    """--port reaches the published port, not only the URLs (fresh-install walk of v0.3.0-rc.2, F2): rootless podman
+    cannot bind 443, and the guide's advice is a higher --port."""
+    compose = (ROOT / "deploy" / "core" / "compose.yaml").read_text(encoding="utf-8")
+    assert '"${FRONT_PORT:-443}:8443"' in compose and '"443:8443"' not in compose
+    install = (ROOT / "deploy" / "core" / "install.py").read_text(encoding="utf-8")
+    assert "FRONT_PORT={port}" in install
