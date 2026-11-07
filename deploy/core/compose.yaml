@@ -122,8 +122,9 @@ services:
     # /healthz and /readyz answer on the desk's own port (8091) before the host check, so a pod probe reaches them
     # by address (decision 0018 H1). urllib is in the python:3.12-slim base; it raises on a non-200, so 503 = unhealthy.
     healthcheck:
-      test: ["CMD", "python", "-c",
-             "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8091/readyz', timeout=3)"]
+      # No spaces inside an argument: podman 4.9's compose API joins the test and splits it again on whitespace, so
+      # `python -c "import ..."` reached Python as `-c import` and the desk was never healthy (rc.4 walk W12).
+      test: ["CMD", "python", "-c", "__import__('urllib.request').request.urlopen('http://127.0.0.1:8091/readyz',timeout=3)"]
       interval: 15s
       timeout: 5s
       retries: 5
