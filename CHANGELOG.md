@@ -37,7 +37,7 @@ Releases are semver tags, `v0.1.0` first. A ReliKey release is its pins and its 
 
 ## [Unreleased]
 
-## [0.3.0] - 2026-11-06
+## [0.3.0] - 2026-11-07
 
 ### Added
 - Each release carries an OpenVEX document, `relikey.openvex.json`: for each known vulnerability in a Go module or the
@@ -76,6 +76,16 @@ Releases are semver tags, `v0.1.0` first. A ReliKey release is its pins and its 
 - The agent reports a role a live lease grants that someone else removed before the lease ends, such as Warpgate's
   single sign-on role sync at a login whose roles claim lacks the role (warp-tech/warpgate#2785): a drift line per
   role, counted in the status as `roles_removed_outside`. Enforce mode grants the role again, as before.
+- `deploy/edge/enrol_change.py` writes the `enrol_edge` change the desk's Edges page asks for, from the cosigned
+  statement and `targets.yaml`, and refuses a statement the desk would refuse (an officer that is not an anchor, a
+  missing signature). The desk's page asked for a change "prepared with edge_cli", which has no such command, and a
+  change written by hand had missed the unlock key (#177). The install guide says root reads the anchors on the People
+  page, which only root sees, and hands them to the edge officer.
+- RDP is now exercised end to end, not only taken from Warpgate's documentation: `tools/warpgate_live.py <version>
+  --rdp` holds a real RDP session (FreeRDP to an xrdp target, images in `tools/rdp-live/`, Debian pinned by digest)
+  through Warpgate and checks what the agent relies on. The session is listed under its user and names its target,
+  closing it as the agent does when a lease ends cuts the client, revoking the role alone cuts it as well, and it is
+  recorded. It passes on Warpgate 0.30.4.
 
 ### Changed
 - The core runs KeyClerk 0.28.0 (was 0.26.3), built from its signed tag v0.28.0 (ee84b45). From 0.27.0: edge protocol
@@ -91,6 +101,14 @@ Releases are semver tags, `v0.1.0` first. A ReliKey release is its pins and its 
 - The release steps (`release`, `smoke`, `vex`, `dist`) moved from `agent/build.py` to `agent/release.py`; the
   commands stay `python agent/build.py ...`. build.py is the mutants' harness, so a change to the release steps no
   longer runs every mutant on a pull request and again in the merge queue.
+- The README's release verification names cosign 2.5 or later for the Sigstore bundles, and what an older cosign's
+  error means (#167).
+- The install guide names what the fresh-install walk of v0.3.0-rc.2 needed: podman's user socket and a current
+  compose provider for rootless podman, and how to get Python 3.13 on Ubuntu 24.04 for enrolment by code.
+- The release steps in `docs/publishing.md` now include running the live Warpgate tests by hand before a release or
+  candidate and on every Warpgate pin change, since CI cannot run them.
+- An edge's Warpgate sign-in button names the broker ("Sign in with <broker>", or `--sso-label`): beside Warpgate's
+  own username and password form, a bare "Sign in" did not say it is the organisation's sign-in (#176).
 
 ### Fixed
 - An enrolment-key rotation can now finish in the edge pod. The pod mounted the key read-only as a single file, so
@@ -98,6 +116,74 @@ Releases are semver tags, `v0.1.0` first. A ReliKey release is its pins and its 
   directory (`deploy/secrets/keys`, at `/etc/relikey/keys`), and the agent refuses at start a staged rotation it could
   not finish, with the fix, instead of failing after the desk has taken the new key. Upgrading an installed edge:
   `python deploy/edge/install.py move-keys`, then recreate the agent.
+- The agent's status now notes an edge ceiling that names no persons: it says whether the ceiling admits nobody or
+  only low-class leases by its roles, and that the edge officer seals one naming the persons. KeyClerk drops leases
+  outside the ceiling before they reach the edge, so such an edge got no leases without a word (walk F20).
+- `relikey-agent statement` and `cosign` note an enrolment statement whose officer is not an anchor (`op:...`): the
+  desk refuses it as "officer differ" (walk F17). `cosign` takes its enrolment key from the agent's configuration
+  when `-key` is not given, so the moved key (#134) is found (walk F18).
+- The install guide names the edge officer among the first people at the desk (walk F21), root's own broker signature
+  that applies an enrolment (walk F19), anchors for the statement's officer and the ceiling's persons, and the
+  `cosign` command without a key path.
+- The install guide and the agent's ceiling note ask for a `--max-lease-hours` that covers the longest membership
+  granted, not 24 hours: the desk's add-a-person form defaults to 30 days (720 hours), and a 24-hour ceiling still
+  dropped that membership's lease without a word on the edge (#174). Troubleshooting names where a dropped lease shows.
+- The agent's status notes an edge ceiling whose longest lease is under a day: memberships are granted in whole
+  days, and the desk dropped every membership's lease under KeyClerk's default of 8 hours while the edge's drift said
+  nothing (#166). The install guide asks for `--max-lease-hours` of at least 24 and says where a dropped lease shows.
+- The core's `install.py --port` now changes the port the front is published on, not only the URLs:
+  `deploy/core/compose.yaml` published 443 whatever `--port` said, so on rootless podman, which cannot bind 443, the
+  guide's advice of a higher port failed. An older `core.env` without `FRONT_PORT` still publishes 443.
+- An edge installed with `--desk-ca` on rootless podman starts: the installer writes `desk-ca.pem` 0644 (a public CA
+  certificate), where it wrote it 0600 owned by the installing user and the agent could not read it (#164). A test
+  checks that every file compose mounts into the agent is one it is given or one written world-readable.
+- The core's desk reports healthy on rootless podman: its health check's Python had spaces, and podman 4.9's
+  compose API splits the test on whitespace, so the check always failed (#179).
+- An edge installed with `--desk-ca` (the guide's route for a local CA) now starts: the installer wrote
+  `deploy/secrets/desk-ca.pem` and pointed the agent at `/etc/relikey/desk-ca.pem`, but the pod never mounted it, so
+  the agent restart-looped on a missing file. An edge installed with a pin is unaffected.
+- The edge installer checks the Python packages it needs (PyYAML, cryptography) before it writes anything, and says how
+  to get them: a Python without them, such as a bare uv Python 3.13 for enrolment by code, had half-installed the edge
+  and died with a traceback, leaving an edge its own rerun refused (#185). The guide gives a `uv run` command that
+  works.
+- The fleet page no longer shows a presented key's fingerprint while it waits for approval: it asked the officer to
+  type it as read from the edge's own screen while showing it a few lines above, so the out-of-band check could be
+  skipped. A slot also names who opened it, not their subject id (#187).
+- The core gives the first officers named with `--fleet-officers` the fleet page's `fleet-operator` role: they were
+  refused at the page, which they must reach to anchor the fleet, until someone ran `fleet_page.py --grant` (#175).
+- The fleet page now starts by itself once the broker answers. Before, a fleet that started before the broker (the
+  core starts them together) logged that the page did not start and stayed without it until someone restarted the
+  fleet. It now retries with backoff (2 seconds, doubling, up to a minute) and logs each miss with what to check.
+  Found by the v0.3.0-rc.2 walk (F9).
+- The fleet page opens enrolment slots from a browser: it sent `Referrer-Policy: no-referrer`, so browsers posted its
+  forms with `Origin: null` and every slot was refused as "Sign in on the fleet page first." (#172). The policy is
+  `same-origin`, and each refusal now says its own reason (no session, no admin section, another origin, an origin the
+  browser withheld). The slot name's pattern is valid under the browser's `v` flag, so the browser checks it (#173).
+- Adding the fleet page no longer breaks the core: `fleet_page.py` restarted the front alone, and a restarted front gets
+  a new network namespace while the services sharing it stay in the old one, so the broker lost its database. It now
+  restarts the front, then every running service in its namespace, in compose's order.
+- A release candidate tagged after the release pull request now builds: its notes come from the release's folded
+  `## [X.Y.Z]` section when there is one, and from the fragments in `changelog.d/` otherwise. `v0.3.0-rc.1` stopped at
+  its notes, since the fragments it looked for had been folded; the tag stays and `v0.3.0-rc.2` carries the fix.
+- `deploy/edge/install.py --re-key` works over an installed edge: it kept dying at Warpgate's first setup ("Config file
+  already exists"), so it now keeps Warpgate's configuration and data and the facade's `lldap.env`, and changes only the
+  enrolment key and admin token. Without `--re-key`, an existing Warpgate is refused before anything is written. On
+  rootless podman the installer no longer crashes on the files it gave the agent (#186).
+- Rootless podman installs now finish: the core and edge installers and `fleet_page.py` set the owners their containers
+  need through `podman unshare`, where they used to print a note and carry on until KeyClerk, the fleet or the agent
+  could not read its files. The edge installer also makes the agent's state volume the agent's, mode 0700, before
+  compose first mounts it. A re-run after the first sign-ins no longer fails on the deleted `people.json`.
+- The core's and the edge's installers now refuse a `deploy/secrets/` that holds the other's files (`agent.json`,
+  `core.env`), before writing anything: both write `front.crt` and `front.key` there, and an edge installed from the
+  core's checkout replaced the core's certificate, so nothing on the core's names verified any more. The install
+  guide says to use one checkout per component. Found by the v0.3.0-rc.2 walk (F15).
+- The agent's state directory (and the fleet's) is 0700 in images built with podman: the Dockerfiles copied it
+  with `COPY --chmod=0700`, which buildah applies to the contents and not to the directory, so a fresh volume started
+  0755 and the agent refused it (#165, F13 of the rc.2 walk was not fixed). The parent directory is copied instead.
+- `deploy/edge/targets.py` now applies the targets on every install, not only with `--lab`: Warpgate's admin API is
+  on the pod's loopback, which the host cannot reach, so the script checks the file on the host and hands it to the
+  agent's new `targets` command in the pod (`compose exec agent`), which applies it with the agent's own pinned
+  certificate and token. The pod must be running; `--engine docker` for docker. Found by the v0.3.0-rc.2 walk (F14).
 
 ### Security
 - The edge runs Warpgate 0.30.4 (was 0.30.2), which fixes three advisories: GHSA-hhq8-x2xc-95qx (High, the HTTP

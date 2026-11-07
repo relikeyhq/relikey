@@ -102,7 +102,26 @@ def show(root: Path) -> str:
     return merged(body, fragments(root))
 
 
-def release(root: Path, version: str, date: str) -> str:
+def tag_exists(root: Path, version: str) -> bool:
+    import subprocess
+    r = subprocess.run(["git", "-C", str(root), "tag", "-l", f"v{version}"], capture_output=True, text=True)
+    if r.returncode != 0:
+        raise SystemExit(f"cannot list the tags in {root}: {r.stderr.strip()}")
+    return bool(r.stdout.strip())
+
+
+def refold(text: str, version: str, date: str, frags: list[Path]) -> str:
+    """A section folded before its release was tagged, with the fragments since folded in and the date of the actual
+    release: v0.3.0's section was folded on 2026-11-06, then six release candidates found the bugs those fragments
+    fix, all released as 0.3.0."""
+    m = re.search(rf"^## \[{re.escape(version)}\][^\n]*\n", text, re.M)
+    nxt = re.search(r"^## ", text[m.end():], re.M)
+    end = m.end() + nxt.start() if nxt else len(text)
+    section = merged(text[m.end():end], frags)
+    return f"{text[:m.start()]}## [{version}] - {date}\n\n{section}\n\n{text[end:]}"
+
+
+def release(root: Path, version: str, date: str, tagged=tag_exists) -> str:
     if not VERSION.match(version):
         raise SystemExit(f"{version!r} is not X.Y.Z (the tag is vX.Y.Z)")
     if bad := check(root):
@@ -110,7 +129,16 @@ def release(root: Path, version: str, date: str) -> str:
     path = root / "CHANGELOG.md"
     text = path.read_text(encoding="utf-8")
     if re.search(rf"^## \[{re.escape(version)}\]", text, re.M):
-        raise SystemExit(f"CHANGELOG.md already has a section for {version}; release tags never move (docs/publishing.md)")
+        if tagged(root, version):
+            raise SystemExit(f"CHANGELOG.md already has a section for {version}, and v{version} is tagged; release tags "
+                             "never move (docs/publishing.md): release the fragments as the next version")
+        frags = fragments(root)
+        if not frags:
+            raise SystemExit(f"nothing to add to {version}'s untagged section: changelog.d/ is empty")
+        path.write_text(refold(text, version, date, frags), encoding="utf-8", newline="\n")
+        for f in frags:
+            f.unlink()
+        return f"folded {len(frags)} fragment(s) into the untagged {version} section, dated {date}"
     before, body, after = split_unreleased(text)
     frags = fragments(root)
     section = merged(body, frags)
