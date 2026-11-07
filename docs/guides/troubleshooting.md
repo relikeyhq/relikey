@@ -127,6 +127,8 @@ The `drift` list in `status.json` and on the status page says what the agent saw
 | `role R reaches T, which the lease for U does not name: not applied` | A role reaches every target bound to it. Bind each role only to the targets its leases name. |
 | `the targets of role R could not be read` | The agent could not read Warpgate this tick; it assigns nothing blind. Retried. |
 | `lease L is outside the edge's ceiling: not applied` | The edge officer's ceiling does not allow this lease (class, hours or target). Widen the ceiling at the desk if it should be allowed: a target carried by a privileged group needs the `privileged` class. |
+| `the edge's ceiling names no persons ...` | The ceiling admits nobody, or only low-class leases by its roles. KeyClerk drops the other leases at the desk, so none arrive. The edge officer seals a new ceiling naming the persons by their anchors. |
+| `the edge's ceiling allows leases of at most N hours ...` | Memberships are granted in whole days, and the desk drops a lease longer than the ceiling allows, until its last N hours. The edge officer seals a new ceiling with `--max-lease-hours` of at least 24. |
 | `user U exists on the bastion and is not managed by ReliKey: not touched; rename or remove it` | An account of that name already exists on Warpgate. The agent touches only the accounts it created. |
 | `leases for different people share the username U: none applied` | Usernames must be unique per person. Fix it at the desk. |
 | `lease L carries no e-mail: U cannot sign in through SSO` | The person has no verified e-mail at the broker. Fix it there. |

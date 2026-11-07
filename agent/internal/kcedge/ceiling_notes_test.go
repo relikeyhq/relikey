@@ -41,3 +41,31 @@ func TestACeilingWithoutPersonsIsNoted(t *testing.T) {
 		}
 	}
 }
+
+// A ceiling whose longest lease is under a day is noted: memberships are granted in days, and the desk drops their
+// leases until the last max_lease_hours (rc.3 walk R5, #166: the default 8 hours dropped a one-day membership's lease
+// and nothing on the edge said so).
+func TestACeilingShorterThanADayIsNoted(t *testing.T) {
+	dave := []Value{"op:5c29"}
+	for name, c := range map[string]struct {
+		ceiling Object
+		want    []string
+	}{
+		"the walk's: 8 hours": {Object{"persons": dave, "max_lease_hours": Number("8")}, []string{"at most 8 hours"}},
+		"a day":               {Object{"persons": dave, "max_lease_hours": Number("24")}, nil},
+		"a week":              {Object{"persons": dave, "max_lease_hours": Number("168")}, nil},
+		"23 hours":            {Object{"persons": dave, "max_lease_hours": Number("23")}, []string{"at most 23 hours"}},
+		"no persons, 8 hours": {Object{"persons": []Value{}, "roles": []Value{}, "max_lease_hours": Number("8")}, []string{"admits nobody", "at most 8 hours"}},
+		"no max_lease_hours":  {Object{"persons": dave}, nil},
+	} {
+		notes := CeilingNotes(c.ceiling)
+		if len(notes) != len(c.want) {
+			t.Fatalf("%s: %v, want %d note(s)", name, notes, len(c.want))
+		}
+		for i, w := range c.want {
+			if !strings.Contains(notes[i], w) || (strings.Contains(w, "hours") && !strings.Contains(notes[i], "at least 24")) {
+				t.Fatalf("%s: note %q, want %q and what to do", name, notes[i], w)
+			}
+		}
+	}
+}
