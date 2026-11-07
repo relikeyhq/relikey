@@ -215,3 +215,12 @@ def test_the_agent_gets_the_desk_ca_the_installer_writes():
     assert ca[0]["bind"]["create_host_path"] is True
     install = (ROOT / "deploy" / "edge" / "install.py").read_text(encoding="utf-8")
     assert '"/etc/relikey/desk-ca.pem"' in install and 'write("desk-ca.pem"' in install
+
+
+def test_the_core_publishes_the_port_the_installer_names():
+    """--port reaches the published port, not only the URLs (fresh-install walk of v0.3.0-rc.2, F2): rootless podman
+    cannot bind 443, and the guide's advice is a higher --port."""
+    compose = (ROOT / "deploy" / "core" / "compose.yaml").read_text(encoding="utf-8")
+    assert '"${FRONT_PORT:-443}:8443"' in compose and '"443:8443"' not in compose
+    install = (ROOT / "deploy" / "core" / "install.py").read_text(encoding="utf-8")
+    assert "FRONT_PORT={port}" in install
