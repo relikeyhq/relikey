@@ -217,7 +217,9 @@ func headers(next http.Handler) http.Handler {
 		h.Set("Content-Security-Policy", "default-src 'none'; style-src '"+styleHash+"'; script-src '"+scriptHash+"'; "+
 			"connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
 		h.Set("X-Content-Type-Options", "nosniff")
-		h.Set("Referrer-Policy", "no-referrer")
+		// same-origin, not no-referrer: under no-referrer a browser posts the page's own forms with "Origin: null",
+		// and sameOrigin refused every slot (rc.4 walk W8, #172). Other sites still get no referrer.
+		h.Set("Referrer-Policy", "same-origin")
 		next.ServeHTTP(w, r)
 	})
 }
@@ -625,7 +627,7 @@ Until all have signed, no edge can be enrolled. Check that the list below is the
 {{if .MeNamed}}<p class="open">{{if .MeSign}}<button type="button" id="anchor-sign" data-msg="anchor-msg">Sign the officer list with my passkey</button> {{end}}<button type="button" id="officer-register" data-msg="anchor-msg">{{if .MeHas}}Replace my officer passkey{{else}}Register my officer passkey{{end}}</button></p>
 <p id="anchor-msg" role="status" aria-live="polite"></p><noscript><p>The passkey steps need JavaScript in this browser.</p></noscript>
 <script>{{.Script}}</script>{{else}}<p class="basis">You are not one of the named first officers: they register and sign here.</p>{{end}}{{end}}
-{{else}}<form method="post" action="/slots" class="open"><label>Name <input name="name" required pattern="[a-z0-9][a-z0-9-]{0,62}" maxlength="63"></label>
+{{else}}<form method="post" action="/slots" class="open"><label>Name <input name="name" required pattern="[a-z0-9][a-z0-9\-]{0,62}" maxlength="63"></label>
 <label>Kind <select name="kind"><option value="edge">edge</option><option value="relay">relay</option><option value="site">site fleet</option></select></label>
 <button>Open a slot</button></form>
 {{if .Slots}}<table><thead><tr><th>Slot</th><th>State</th><th>Opened by</th><th>Open until</th></tr></thead><tbody>
@@ -724,11 +726,33 @@ func (p *Page) sameOrigin(r *http.Request) bool {
 	return err == nil && r.Header.Get("Origin") == u.Scheme+"://"+u.Host
 }
 
+// actionRefusal says why a state-changing request is refused, one reason each, with what to do, and logs it: one
+// message for all three hid which it was (rc.4 walk W8, #172). Empty when the request may go on.
+func (p *Page) actionRefusal(r *http.Request, signedIn bool) string {
+	var why string
+	switch origin := r.Header.Get("Origin"); {
+	case !signedIn:
+		why = "sign in on the fleet page first: this browser has no fleet session, or it ended; reload the page and sign in"
+	case p.Admin == nil:
+		why = "enrolment is not set up on this fleet: fleet.json has no admin section; deploy/core/fleet_page.py writes it"
+	case !p.sameOrigin(r):
+		why = fmt.Sprintf("refused: the request did not come from this fleet page (Origin %q); open the fleet page itself "+
+			"and try again", origin)
+		if origin == "" || origin == "null" {
+			why += "; this browser withheld the page's origin (a privacy setting or extension), which the page needs"
+		}
+	default:
+		return ""
+	}
+	p.Log.Warn("fleet page action refused", "path", r.URL.Path, "why", why)
+	return why
+}
+
 // openSlot opens an enrolment slot and shows its code once (point 15): a session action, logged (point 26).
 func (p *Page) openSlot(w http.ResponseWriter, r *http.Request) {
 	s, ok := p.current(r)
-	if !ok || p.Admin == nil || !p.sameOrigin(r) {
-		http.Error(w, "Sign in on the fleet page first.", http.StatusForbidden)
+	if why := p.actionRefusal(r, ok); why != "" {
+		http.Error(w, why, http.StatusForbidden)
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 4<<10)
