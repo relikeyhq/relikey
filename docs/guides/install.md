@@ -36,7 +36,9 @@ Decide, and write down who signs each one, before you run anything:
 - **KeyClerk source.** A clone of `github.com/keyclerk/keyclerk` with its tags: the installer builds the pinned release
   from its signed tag and refuses a tag whose signature or commit differs.
 
-Get the release you will run, check it, and use the same checkout on every host. The README's "Verifying a release"
+Get the release you will run, check it, and use the same release on every host, in a checkout of its own for each
+component: the core and an edge write files of the same names into `deploy/secrets/`, so the installers refuse a
+directory that holds the other's (on a one-box lab, put the edge in a second directory). The README's "Verifying a release"
 shows the checks (signed tag, checksums, provenance). Then on a host with Go (the version `agent/go.mod` names):
 
     python agent/build.py dist
@@ -81,10 +83,11 @@ as a dry run and asks before starting the reconciler (`--yes` skips the question
    The answer is JSON with a `key` equal to the printed bundle key. If the installer printed `not read yet`, run this
    once the desk is up.
 
-**Then, the first people.** The root holder and the officer sign in at the desk (`https://desk.example`) with the
-temporary passwords in `deploy/secrets/people.json`, set their own, register a passkey, and `deploy/secrets/people.json`
-is deleted. Make a permanent broker admin with a passkey and remove the bootstrap admin soon: the steps are in
-[the core's README](../../deploy/core/README.md#after-install). On rootful docker, `fix_owners` runs for you; on
+**Then, the first people.** The root holder, the security officer and the edge officer sign in at the desk
+(`https://desk.example`) with the temporary passwords in `deploy/secrets/people.json`, set their own and register a
+passkey; the edge officer needs this too, as only they can set the edge's ceiling at the desk (step 4). Then
+`deploy/secrets/people.json` is deleted. Make a permanent broker admin with a passkey and remove the bootstrap admin
+soon: the steps are in [the core's README](../../deploy/core/README.md#after-install). On rootful docker, `fix_owners` runs for you; on
 rootless podman the installer prints a note about file owners.
 
 ## 2. Register the edge at the broker
@@ -98,7 +101,7 @@ prints the secret. **Check:** the file exists and the command printed the edge's
 the edge host out of band, with `front-ca.crt` if the core uses a local CA.
 
 ## 3. Install the edge
-On the edge host, from the same repository checkout, with `agent/dist/` built (see above). You need the bundle key and
+On the edge host, from its own checkout of the same release, with `agent/dist/` built (see above). You need the bundle key and
 pin from step 1, the secret file from step 2 and the edge officer's public key from the officer's own console.
 
     python deploy/edge/install.py --edge plant-a --desk https://edge.example --desk-pin <pin from step 1> \
@@ -140,24 +143,29 @@ If the installer or the agent refuses something, [troubleshooting](troubleshooti
 Enrolment binds the edge's enrolment key and the edge officer's key at the desk. The desk's own pages are KeyClerk's
 (github.com/keyclerk/keyclerk); what ReliKey adds is the edge's side.
 
-1. The edge officer and the edge both sign one enrolment statement; the edge's side is the agent's `unlock-keygen`,
-   `statement` and `cosign` commands ([the agent page](../agent.md), "Running it"). The agent is in the pod, so run them
-   there, as the agent's user. This path inside the pod has not been walked end to end in these docs; try it once on a
-   test edge before the real one:
+1. The edge officer and the edge both sign one enrolment statement. The officer makes it with KeyClerk's
+   `edge_cli statement`, naming themselves by their **anchor** (`--officer op:...`, as the desk's People page shows it),
+   not their username: the desk names the edge's officer by anchor and refuses any other statement as "officer differ".
+   The edge's side is the agent's `unlock-keygen`, `statement` and `cosign` commands
+   ([the agent page](../agent.md), "Running it"), run in the pod as the agent's user:
 
        podman compose -f deploy/edge/compose.yaml exec agent /relikey-agent unlock-keygen -out /var/lib/relikey/unlock.key
        podman compose -f deploy/edge/compose.yaml cp st1.json agent:/var/lib/relikey/st1.json
        podman compose -f deploy/edge/compose.yaml exec agent /relikey-agent statement -in /var/lib/relikey/st1.json
        podman compose -f deploy/edge/compose.yaml exec agent /relikey-agent cosign -in /var/lib/relikey/st1.json \
-           -out /var/lib/relikey/st2.json -key /etc/relikey/enrolment.key -unlock-key /var/lib/relikey/unlock.key
+           -out /var/lib/relikey/st2.json -unlock-key /var/lib/relikey/unlock.key
 
    Read what `statement` prints (the edge, the purpose, each node's keys, who has signed) before you `cosign`: it checks
-   that the statement names this edge's own keys.
-2. At the desk, root proposes the enrolment, the security officer approves it, each with a passkey. The edge officer
-   then seals and sets the edge's **ceiling**. Its classes must include every class the edge's targets need (a target
-   carried by a privileged group needs `privileged`), or KeyClerk drops those leases; the
-   [checklist](../installation-checklist.md) says where that shows.
-3. Make the edge known to the fleet service on the core, by either route ([the fleet](../fleet.md)):
+   that the statement names this edge's own keys, and notes an officer named by something other than an anchor.
+   `cosign` signs with the enrolment key the agent's configuration names (`-key` to give another).
+2. At the desk, root proposes the enrolment and the security officer approves it, each with a passkey. Enrolment is a
+   high-risk change, so it applies only once root also signs it at the broker: the desk's page for the change says so
+   ("your own signature"), and root's fresh sign-in there applies it.
+3. The edge officer, signed in at the desk with their passkey, seals and sets the edge's **ceiling**. Name its persons
+   by their anchors: a ceiling with no persons admits only low-class leases by its roles, and the agent's status then
+   says so. Its classes must include every class the edge's targets need (a target carried by a privileged group needs
+   `privileged`), or KeyClerk drops those leases; the [checklist](../installation-checklist.md) says where that shows.
+4. Make the edge known to the fleet service on the core, by either route ([the fleet](../fleet.md)):
    - `python deploy/core/fleet_edge.py --edge plant-a --key <the edge's enrolment public key> --engine podman`, or
    - enrolment by code: an operator opens a slot on the fleet page, the code goes to the edge in a file, and
      `python deploy/edge/install.py enrol --code-file <file>` presents the key; an officer approves it with a passkey.

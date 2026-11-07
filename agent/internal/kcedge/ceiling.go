@@ -65,3 +65,25 @@ func CeilingPolicyGo(ceiling Object, e CeilingEntry) (bool, error) {
 	allow, _ := CeilingDecision(ceiling, e)
 	return allow, nil
 }
+
+// CeilingNotes says when a sealed ceiling lets fewer people in than its officer likely meant: with no persons, only a
+// low-class lease by one of its roles is inside, and with no roles or no low class, nobody is. KeyClerk drops the
+// leases outside the ceiling before they reach the edge, so without this note an edge with such a ceiling gets no
+// leases and nothing says why (walk 2026-11-06, F20).
+func CeilingNotes(ceiling Object) []string {
+	if ceiling == nil {
+		return nil
+	}
+	count := func(k string) int { l, _ := ceiling[k].([]Value); return len(l) }
+	if count("persons") > 0 {
+		return nil
+	}
+	classes, _ := ceiling["classes"].([]Value)
+	low := slices.ContainsFunc(classes, func(v Value) bool { return v == "low" })
+	if count("roles") == 0 || !low {
+		return []string{"the edge's ceiling names no persons and lets no low-class lease in by role: it admits nobody, " +
+			"so no lease reaches this edge; the edge officer seals a new ceiling that names the persons (their anchors)"}
+	}
+	return []string{"the edge's ceiling names no persons: only low-class leases by its roles reach this edge; the " +
+		"edge officer seals a new ceiling that names the persons (their anchors) for any other lease"}
+}

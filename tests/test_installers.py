@@ -102,6 +102,24 @@ def test_an_installed_edge_is_not_re_keyed_in_passing(where, tmp_path, monkeypat
     assert (secrets / where).read_text(encoding="utf-8") == "d" * 64
 
 
+# Walk 2026-11-06, F15: core and edge installed from one checkout share deploy/secrets/, and the edge's front.crt
+# replaced the core's. Each installer refuses the other's directory before writing anything.
+@pytest.mark.parametrize("which,args,other,nxt", [
+    ("core", CORE, "agent.json", "Install the core from its own checkout"),
+    ("edge", EDGE, "core.env", "copy into its deploy/secrets/ only what the core gave it")], ids=["core", "edge"])
+def test_an_installer_refuses_the_other_components_secrets(which, args, other, nxt, tmp_path, monkeypatch):
+    secrets = tmp_path / "secrets"
+    secrets.mkdir()
+    (secrets / other).write_text("x", encoding="utf-8")
+    mod = installer(which, secrets, monkeypatch)
+    monkeypatch.setattr(sys, "argv", ["install.py"] + args)
+    with pytest.raises(SystemExit) as refused:
+        mod.main()
+    message = str(refused.value.code)
+    assert other in message and "Nothing was written" in message and nxt in message, message
+    assert sorted(p.name for p in secrets.iterdir()) == [other]
+
+
 # #134: the pod mounts a writable key directory, where a rotation can rename; the agent's configuration points there.
 def test_the_pod_keeps_the_enrolment_key_in_a_writable_directory():
     compose = (ROOT / "deploy" / "edge" / "compose.yaml").read_text(encoding="utf-8")
