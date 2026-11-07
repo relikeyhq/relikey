@@ -1,6 +1,6 @@
 # 0029: Signed updates, the first slice: a TUF repository, offline release keys, and an updater per edge profile
 
-- Status: proposed (draft 2, 2026-11-06, after a red team of draft 1), for the maintainer's review
+- Status: proposed (draft 2, 2026-11-06, after an adversarial review of draft 1), for the maintainer's review
 - Date: 2026-11-06
 - Changes: 0026 points 2, 7, 8 and 28 (the order of building them; key rotation through TUF's root instead of the
   bundle until the director lands; the updater on two edge profiles 0026 did not have: RHEL image mode and the Windows
@@ -9,7 +9,7 @@
   signed, staged updates; Uptane's model on go-tuf v2; rollback outside the agent; the floor of point 28), 0028 (the
   spare), contract C-11
 - Milestones: 0.4.0 (this slice), 0.5.0 (#33: the director in the bundle, staged rollout), 0.6.0 (#81: the Windows edge)
-- Red team (draft 1): keys, the missing director, offline expiry, the updater, the gate, consistency with 0026; the
+- Adversarial review (draft 1): keys, the missing director, offline expiry, the updater, the gate, consistency with 0026; the
   record is kept with the maintainer. Its five main findings are answered in points 2, 5, 3, 6 and 9 below.
 
 ## Context
@@ -135,7 +135,7 @@ rollback on a failed health check; unsigned binaries, 0026). Notary v1 (TUF for 
 without TUF's freshness). sigstore's use of TUF for its own trust root.
 
 ## Changelog
-- 2026-11-06: draft 1; red team: the targets key's place, three keys called "release key", the site-key re-anchoring
+- 2026-11-06: draft 1; adversarial review: the targets key's place, three keys called "release key", the site-key re-anchoring
   (wrong and unneeded: TUF's root chain handles an expired root), the floor against rollback, the updater's privilege
   and its own update, bootc's `/etc` and boot counting, the gate as availability only, a targeted freeze, the first
   root. Draft 2 answers each.
