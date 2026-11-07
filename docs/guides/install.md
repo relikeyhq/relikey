@@ -165,6 +165,8 @@ Enrolment binds the edge's enrolment key and the edge officer's key at the desk.
    by their anchors: a ceiling with no persons admits only low-class leases by its roles, and the agent's status then
    says so. Its classes must include every class the edge's targets need (a target carried by a privileged group needs
    `privileged`), or KeyClerk drops those leases; the [checklist](../installation-checklist.md) says where that shows.
+   Give `--max-lease-hours` at least 24: memberships are granted in whole days, and KeyClerk's default of 8 drops a
+   one-day membership's lease until its last 8 hours (the agent's status then says so).
 4. Make the edge known to the fleet service on the core, by either route ([the fleet](../fleet.md)):
    - `python deploy/core/fleet_edge.py --edge plant-a --key <the edge's enrolment public key> --engine podman`, or
    - enrolment by code: an operator opens a slot on the fleet page, the code goes to the edge in a file, and
@@ -187,7 +189,9 @@ The log has `bundle verified`. The edge appears on the fleet page as `ok` after 
 3. End the membership. The agent closes the session and removes the account: `live_leases` returns to 0.
 
 If step 1 does not happen, read `drift` in the status JSON or on the status page; each line says why and what to change
-([troubleshooting](troubleshooting.md#the-status-and-drift-lines)).
+([troubleshooting](troubleshooting.md#the-status-and-drift-lines)). A lease the ceiling refuses never reaches the edge:
+KeyClerk drops it at the desk and records why in the edge's `dropped` list at the desk. The agent notes the ceilings
+that cause it (no persons, a longest lease under a day); for any other reason, read the desk's list.
 
 ## 6. Before you call it live
 - Work through the [installation checklist](../installation-checklist.md) for the system, including the exposure test

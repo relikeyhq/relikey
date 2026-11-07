@@ -2,7 +2,10 @@
 
 package kcedge
 
-import "slices"
+import (
+	"fmt"
+	"slices"
+)
 
 // CeilingDecision is keyclerk/policy/ceiling.rego (KeyClerk v0.21.2) in Go, rule for
 // rule, until the signed policy module runs in process (wazero, decision 0007). It is
@@ -66,24 +69,35 @@ func CeilingPolicyGo(ceiling Object, e CeilingEntry) (bool, error) {
 	return allow, nil
 }
 
-// CeilingNotes says when a sealed ceiling lets fewer people in than its officer likely meant: with no persons, only a
-// low-class lease by one of its roles is inside, and with no roles or no low class, nobody is. KeyClerk drops the
-// leases outside the ceiling before they reach the edge, so without this note an edge with such a ceiling gets no
-// leases and nothing says why (walk 2026-11-06, F20).
+// CeilingNotes says when a sealed ceiling lets fewer leases in than its officer likely meant. KeyClerk drops the leases
+// outside the ceiling before they reach the edge, so without these notes such an edge gets no leases and nothing on it
+// says why.
+//   - No persons: only a low-class lease by one of its roles is inside, and with no roles or no low class, nobody is
+//     (walk 2026-11-06, F20).
+//   - A longest lease under a day: memberships are granted in whole days and a lease runs to the membership's end,
+//     counted from now, so a one-day membership's lease is dropped until its last max_lease_hours (KeyClerk's
+//     `edge_cli ceiling` defaults to 8; rc.3 walk R5, #166).
 func CeilingNotes(ceiling Object) []string {
 	if ceiling == nil {
 		return nil
 	}
+	var notes []string
 	count := func(k string) int { l, _ := ceiling[k].([]Value); return len(l) }
-	if count("persons") > 0 {
-		return nil
+	if count("persons") == 0 {
+		classes, _ := ceiling["classes"].([]Value)
+		low := slices.ContainsFunc(classes, func(v Value) bool { return v == "low" })
+		if count("roles") == 0 || !low {
+			notes = append(notes, "the edge's ceiling names no persons and lets no low-class lease in by role: it admits "+
+				"nobody, so no lease reaches this edge; the edge officer seals a new ceiling that names the persons (their anchors)")
+		} else {
+			notes = append(notes, "the edge's ceiling names no persons: only low-class leases by its roles reach this edge; "+
+				"the edge officer seals a new ceiling that names the persons (their anchors) for any other lease")
+		}
 	}
-	classes, _ := ceiling["classes"].([]Value)
-	low := slices.ContainsFunc(classes, func(v Value) bool { return v == "low" })
-	if count("roles") == 0 || !low {
-		return []string{"the edge's ceiling names no persons and lets no low-class lease in by role: it admits nobody, " +
-			"so no lease reaches this edge; the edge officer seals a new ceiling that names the persons (their anchors)"}
+	if h, ok := asInt(ceiling["max_lease_hours"]); ok && h < 24 {
+		notes = append(notes, fmt.Sprintf("the edge's ceiling allows leases of at most %d hours, but memberships are granted "+
+			"in whole days: the desk drops a membership's lease (\"longer than the ceiling's longest lease\") until its last "+
+			"%d hours; the edge officer seals a new ceiling with max_lease_hours of at least 24", h, h))
 	}
-	return []string{"the edge's ceiling names no persons: only low-class leases by its roles reach this edge; the " +
-		"edge officer seals a new ceiling that names the persons (their anchors) for any other lease"}
+	return notes
 }
