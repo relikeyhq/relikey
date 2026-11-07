@@ -83,8 +83,9 @@ ceremony need the browser's WebAuthn API, and that one script is allowed by its 
   `127.0.0.1:8094` (`deploy/secrets/sites/fleet.caddy`); the JSON route stays on loopback 8093.
 - The page reaches the broker only: its client trusts only `ca_file` (the front's CA or chain) and dials the issuer's
   host at the front on the pod's loopback (`front`), so neither DNS nor a hairpin route matters.
-- If the broker is not reachable when the fleet starts, the inventory runs and the log says the page did not start
-  and why; restart the fleet once the broker is up.
+- If the broker is not reachable when the fleet starts, the inventory runs and the page keeps trying, waiting 2
+  seconds and then twice as long each time, up to a minute. Each try that fails is logged with why
+  (`fleet page not started yet`); the page starts by itself once the broker answers.
 
 fleet.json's `page` section (written by `fleet_page.py`): `listen`, `issuer`, `client_id`, `secret_file`,
 `redirect_url`, `role`, `ca_file`, `front`, `officers`.

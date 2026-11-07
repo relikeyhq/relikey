@@ -133,6 +133,24 @@ func load(path string) (config, map[string]ed25519.PublicKey, error) {
 	return c, keys, nil
 }
 
+// retryStart runs start until it succeeds or ctx ends, waiting first, then twice as long each time, up to most. Each
+// failure is logged with why and what to check, so a broker that never comes up is visible and not silent.
+func retryStart(ctx context.Context, start func() error, log *slog.Logger, first, most time.Duration) {
+	for wait := first; ; wait = min(2*wait, most) {
+		err := start()
+		if err == nil {
+			return
+		}
+		log.Warn("fleet page not started yet", "err", err, "retry_in", wait.String(),
+			"next", "it retries by itself; if this repeats, check page.issuer and that the broker answers")
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(wait):
+		}
+	}
+}
+
 func main() {
 	path := flag.String("config", "/etc/relikey/fleet.json", "the fleet service's configuration")
 	showVersion := flag.Bool("version", false, "print the version and exit")
@@ -204,12 +222,13 @@ func main() {
 				os.Exit(2)
 			}
 		}
-		pg, err := page.New(page.WithClient(ctx, hc), *c.Page, secret, func() (string, any) {
-			return "self-reported, not attested (no clerk facts yet)", inv.View()
-		}, log)
-		if err != nil { // the broker is not reachable yet: the inventory runs, the page says why it is missing
-			log.Error("fleet page not started", "err", err, "next", "check page.issuer and that the broker is up, then restart the fleet service")
-		} else {
+		start := func() error {
+			pg, err := page.New(page.WithClient(ctx, hc), *c.Page, secret, func() (string, any) {
+				return "self-reported, not attested (no clerk facts yet)", inv.View()
+			}, log)
+			if err != nil {
+				return err
+			}
 			pg.HTTP = hc
 			pg.Admin = st
 			pg.Pin = pin
@@ -223,7 +242,11 @@ func main() {
 				}
 			}()
 			log.Info("fleet page started", "listen", c.Page.Listen, "issuer", c.Page.Issuer)
+			return nil
 		}
+		// The broker may not answer yet (the core starts them together): the inventory runs, and the page keeps
+		// trying with backoff instead of waiting for a restart (walk 2026-11-06, F9).
+		go retryStart(ctx, start, log, 2*time.Second, time.Minute)
 	}
 	log.Info("fleet service started", "listen", c.Listen, "edges", len(keys), "silence_seconds", c.SilenceSeconds)
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
