@@ -144,8 +144,10 @@ Enrolment binds the edge's enrolment key and the edge officer's key at the desk.
 (github.com/keyclerk/keyclerk); what ReliKey adds is the edge's side.
 
 1. The edge officer and the edge both sign one enrolment statement. The officer makes it with KeyClerk's
-   `edge_cli statement`, naming themselves by their **anchor** (`--officer op:...`, as the desk's People page shows it),
-   not their username: the desk names the edge's officer by anchor and refuses any other statement as "officer differ".
+   `edge_cli statement`, naming themselves by their **anchor** (`--officer op:...`), not their username: the desk names
+   the edge's officer by anchor and refuses any other statement as "officer differ". The desk's People page, which
+   shows every person's anchor, is in root's menu only: root reads the officer's anchor there, and those of the persons
+   the ceiling will name (step 3), and gives them to the edge officer.
    The edge's side is the agent's `unlock-keygen`, `statement` and `cosign` commands
    ([the agent page](../agent.md), "Running it"), run in the pod as the agent's user:
 
@@ -158,9 +160,19 @@ Enrolment binds the edge's enrolment key and the edge officer's key at the desk.
    Read what `statement` prints (the edge, the purpose, each node's keys, who has signed) before you `cosign`: it checks
    that the statement names this edge's own keys, and notes an officer named by something other than an anchor.
    `cosign` signs with the enrolment key the agent's configuration names (`-key` to give another).
-2. At the desk, root proposes the enrolment and the security officer approves it, each with a passkey. Enrolment is a
-   high-risk change, so it applies only once root also signs it at the broker: the desk's page for the change says so
-   ("your own signature"), and root's fresh sign-in there applies it.
+2. Write the change the desk asks for from that statement, so its fields are what the two signed, and copy it out of the
+   pod with the statement:
+
+       podman compose -f deploy/edge/compose.yaml cp agent:/var/lib/relikey/st2.json st2.json
+       python deploy/edge/enrol_change.py --statement st2.json --targets deploy/edge/targets.yaml \
+           --name "Plant A" > enrol.json
+
+   `--entitlement TARGET=ENTITLEMENT` names the catalogue entry that grants a target when it is not the target's name.
+   At the desk, root pastes `enrol.json` under "Enrol or rotate an edge" (More, then Edges) and presses Review; the
+   review says who must act next. Root proposes the enrolment and the security officer approves it under Approvals,
+   each with a passkey. Enrolment is a high-risk change, so it applies only once root also signs it at the broker: the
+   change's page says so ("Sign your change"), and root's fresh sign-in there applies it. After the security officer's
+   key, that page may list other people under "Who can add the next key": the step left is root's own signature.
 3. The edge officer, signed in at the desk with their passkey, seals and sets the edge's **ceiling**. Name its persons
    by their anchors: a ceiling with no persons admits only low-class leases by its roles, and the agent's status then
    says so. Its classes must include every class the edge's targets need (a target carried by a privileged group needs
