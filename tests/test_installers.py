@@ -364,3 +364,17 @@ def test_the_sign_in_button_names_the_broker(tmp_path, monkeypatch):
     assert mod.sso_label("  Sign in with Plant A's account ", "https://id.example.org") == "Sign in with Plant A's account"
     src = (ROOT / "deploy" / "edge" / "install.py").read_text(encoding="utf-8")
     assert '"label": label' in src and '"label": "Sign in"' not in src
+
+
+@pytest.mark.parametrize("part", ["core", "edge"])
+def test_no_healthcheck_needs_whitespace_inside_an_argument(part):
+    """podman 4.9's compose API joins a healthcheck's exec test and splits it again on whitespace: an argument with a
+    space reaches the program in pieces. The desk's `python -c "import urllib.request; ..."` arrived as `-c import`, a
+    SyntaxError, so the desk was never healthy on rootless podman (rc.4 walk W12)."""
+    compose = yaml.safe_load((ROOT / "deploy" / part / "compose.yaml").read_text(encoding="utf-8"))
+    bad = []
+    for name, svc in (compose.get("services") or {}).items():
+        test = (svc.get("healthcheck") or {}).get("test")
+        if isinstance(test, list) and test and test[0] == "CMD":
+            bad += [f"{name}: {a!r}" for a in test[1:] if any(c.isspace() for c in a)]
+    assert not bad, "healthcheck arguments with whitespace: " + "; ".join(bad)

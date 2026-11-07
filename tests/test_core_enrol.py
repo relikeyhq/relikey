@@ -51,10 +51,15 @@ def core(tmp_path, monkeypatch):
         monkeypatch.setattr(m, "SECRETS", secrets_dir)
     monkeypatch.setattr(install, "ROOT", tmp_path)
 
+    calls, failing = [], set()
+
     def run(cmd, **kw):
+        calls.append([str(c) for c in cmd])
         if str(cmd[1]).endswith("fleet_page.py"):
             monkeypatch.setattr(sys, "argv", ["fleet_page.py"] + cmd[2:])
             assert page.main() == 0
+        if "fleet-grant" in cmd and cmd[-1] in failing:
+            return subprocess.CompletedProcess(cmd, 1, "", f"user {cmd[-1]} not found")
         out = "ab" * 32 if "exec" in cmd else ""
         return subprocess.CompletedProcess(cmd, 0, out, "")
     monkeypatch.setattr(subprocess, "run", run)
@@ -63,7 +68,7 @@ def core(tmp_path, monkeypatch):
         monkeypatch.setattr(sys, "argv", ["install.py"] + ARGS + list(extra))
         assert install.main() == 0
         return json.loads((secrets_dir / "fleet" / "fleet.json").read_text(encoding="utf-8"))
-    go.secrets, go.install, go.page = secrets_dir, install, page
+    go.secrets, go.install, go.page, go.calls, go.failing = secrets_dir, install, page, calls, failing
     return go
 
 
@@ -210,3 +215,16 @@ def test_restarting_the_front_restarts_what_shares_its_network_in_order(monkeypa
     restarted = [c[1] for c in calls if c and c[0] == "restart"]
     assert restarted == ["front", "broker-db", "broker", "signer", "desk", "reconcile", "mirror", "fleet"]
     assert "setup" not in restarted
+
+
+def test_the_first_officers_are_given_the_fleet_role(core, capsys):
+    """rc.4 walk W6 (#175): the officers named with --fleet-officers must reach the fleet page to anchor it; the core
+    gives each the client role, and says how to finish a grant that fails, without failing the install."""
+    core.failing.add("cat")
+    core()
+    granted = [c[-1] for c in core.calls if "fleet-grant" in c]
+    assert granted == ["ann", "bob", "cat"], granted
+    out, err = capsys.readouterr()
+    assert "first officer ann: holds fleet-operator" in out and "first officer bob: holds fleet-operator" in out
+    assert "first officer cat: not granted fleet-operator" in err and "fleet_page.py --grant cat" in err
+

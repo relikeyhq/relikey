@@ -29,8 +29,8 @@ func officerNote(officer any) string {
 	if anchor.MatchString(s) {
 		return ""
 	}
-	return fmt.Sprintf("note: the statement names the officer %q, which is not an anchor (op:..., as the desk's People "+
-		"page shows it); the desk names the edge's officer by anchor and will refuse this statement (officer differ). "+
+	return fmt.Sprintf("note: the statement names the officer %q, which is not an anchor (op:...; root reads it on the "+
+		"desk's People page); the desk names the edge's officer by anchor and will refuse this statement (officer differ). "+
 		"Ask the officer for a statement made with --officer <their anchor>", s)
 }
 
