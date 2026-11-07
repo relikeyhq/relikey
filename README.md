@@ -140,7 +140,9 @@ example is v0.2.1; run the checks from a clone of this repository, the last two 
 
 5. **The keyless signatures** (from 0.2.1), for readers without the GitHub CLI: `SHA256SUMS`, each binary and, after
    0.2.1, the VEX come with a Sigstore bundle, `FILE.sigstore.json`, made by the release build with no long-lived key.
-   Check the sums' bundle, then the sums as in step 2:
+   Check the sums' bundle, then the sums as in step 2. The bundles are in Sigstore's current format, which needs cosign
+   2.5 or later (checked with 2.5.3, 2.6.1 and 3.0.2). An older cosign fails with "bundle does not contain cert for
+   verification": that is the old cosign, not a broken or unsigned release.
 
        cosign verify-blob SHA256SUMS --bundle SHA256SUMS.sigstore.json \
            --certificate-identity https://github.com/relikeyhq/relikey/.github/workflows/release-build.yml@refs/tags/v0.2.1 \
