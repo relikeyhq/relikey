@@ -306,6 +306,19 @@ def test_rootless_podman_sets_the_fleet_page_secret():
     assert '[o.engine, "unshare", "sh", "-c", f"chown {FLEET_UID}:{FLEET_UID}' in src
 
 
+def test_the_agent_gets_the_desk_ca_the_installer_writes():
+    """--desk-ca, the guide's route for a local CA: install.py points the agent at /etc/relikey/desk-ca.pem and writes
+    deploy/secrets/desk-ca.pem, so the pod mounts it (fresh-install walk of v0.3.0-rc.2, F12: it was never mounted and
+    the agent restart-looped). An edge installed with a pin before this gets an empty directory, which it never reads."""
+    compose = yaml.safe_load((ROOT / "deploy" / "edge" / "compose.yaml").read_text(encoding="utf-8"))
+    mounts = [v for v in compose["services"]["agent"]["volumes"] if isinstance(v, dict)]
+    ca = [v for v in mounts if v["target"] == "/etc/relikey/desk-ca.pem"]
+    assert ca and ca[0]["source"] == "../secrets/desk-ca.pem" and ca[0]["read_only"] is True
+    assert ca[0]["bind"]["create_host_path"] is True
+    install = (ROOT / "deploy" / "edge" / "install.py").read_text(encoding="utf-8")
+    assert '"/etc/relikey/desk-ca.pem"' in install and 'write("desk-ca.pem"' in install
+
+
 def test_the_core_publishes_the_port_the_installer_names():
     """--port reaches the published port, not only the URLs (fresh-install walk of v0.3.0-rc.2, F2): rootless podman
     cannot bind 443, and the guide's advice is a higher --port."""

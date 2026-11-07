@@ -52,6 +52,12 @@ A release candidate is a tag `vX.Y.Z-rc.N` on a commit of `main`, signed and gat
 whole release build, publishes a GitHub pre-release (never the latest release) with the not yet released changes from
 `changelog.d/` as its notes, and needs no release pull request. Use one before a release whose build steps changed.
 
+Before a release or a candidate, and on every change of a Warpgate pin, run the live tests by hand on a machine
+with podman or docker: `python tools/warpgate_live.py <each pinned version> --rdp`. CI has no containers for them, and
+they are the only check of the adapter's admin API calls (the agent's loop and the `targets` command) and of an RDP
+session against a real Warpgate; the unit tests run against a fake that encodes what we believe Warpgate does. Note
+the versions and the result in the release pull request.
+
 Tag the merge commit by its full hash, after the change it needs has merged and CI has passed on it on `main`, not
 `origin/main` from a clone that may be behind. A merge that lands soon after cancels the CI run of the one before it;
 re-run that run before tagging, or the release stops at the CI check. Release tags are never moved or deleted (a

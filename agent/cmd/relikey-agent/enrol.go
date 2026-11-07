@@ -12,10 +12,27 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 
 	"relikey/agent/internal/kcedge"
 )
+
+// anchor is a person's anchor at the desk: provider-prefixed (op:, idp:, ext:, ...), as KeyClerk names people.
+var anchor = regexp.MustCompile(`^[a-z][a-z0-9-]*:\S+$`)
+
+// officerNote warns when a statement names its officer by something other than an anchor: the desk names the edge's
+// officer by anchor and refuses such a statement as another record's ("officer differ"; walk 2026-11-06, F17). A
+// warning, not a refusal: the anchor's form is the desk's to define.
+func officerNote(officer any) string {
+	s, _ := officer.(string)
+	if anchor.MatchString(s) {
+		return ""
+	}
+	return fmt.Sprintf("note: the statement names the officer %q, which is not an anchor (op:..., as the desk's People "+
+		"page shows it); the desk names the edge's officer by anchor and will refuse this statement (officer differ). "+
+		"Ask the officer for a statement made with --officer <their anchor>", s)
+}
 
 // Enrolment on the edge's side (KeyClerk 0.23.0, interface section 2): the officer and
 // each node sign one kc-edge-officer-v2 statement over the same bytes, and each node
@@ -78,6 +95,9 @@ func statementShow(args []string) error {
 	}
 	fmt.Printf("statement %s for edge %v, purpose %v\nofficer %v key %v\n", kcedge.OfficerFormat, says["edge"], says["purpose"],
 		says["officer"], says["officer_key"])
+	if note := officerNote(says["officer"]); note != "" {
+		fmt.Println(note)
+	}
 	nodes, _ := says["nodes"].([]kcedge.Value)
 	for i, n := range nodes {
 		o, _ := n.(kcedge.Object)
@@ -96,11 +116,20 @@ func cosign(args []string) error {
 	fs := flag.NewFlagSet("cosign", flag.ExitOnError)
 	in := fs.String("in", "", "the statement file")
 	out := fs.String("out", "", "file for the statement with this node's signature (must not exist)")
-	keyFile := fs.String("key", "", "this node's enrolment key file")
+	keyFile := fs.String("key", "", "this node's enrolment key file (default: enrolment_key_file in the agent's configuration)")
+	cfgPath := fs.String("config", "/etc/relikey/agent.json", "the agent's configuration, for its enrolment key when -key is not given")
 	unlockFile := fs.String("unlock-key", "", "this node's software unlock key file (optional: checks the statement names it)")
 	_ = fs.Parse(args)
-	if *in == "" || *out == "" || *keyFile == "" {
-		return errors.New("usage: relikey-agent cosign -in STATEMENT -out FILE -key ENROLMENT_KEY [-unlock-key FILE]")
+	if *in == "" || *out == "" {
+		return errors.New("usage: relikey-agent cosign -in STATEMENT -out FILE [-key ENROLMENT_KEY] [-unlock-key FILE]")
+	}
+	if *keyFile == "" { // the key the agent itself uses, so a moved key (#134: keys/enrolment.key) is still found (walk F18)
+		c, err := loadConfig(*cfgPath)
+		if err != nil {
+			return fmt.Errorf("no -key given and the agent's configuration cannot be read (%w): give -key, this node's "+
+				"enrolment key file", err)
+		}
+		*keyFile = c.EnrolmentKeyFile
 	}
 	key, err := enrolmentKey(*keyFile)
 	if err != nil {
@@ -131,6 +160,9 @@ func cosign(args []string) error {
 			return errors.New("the statement names another unlock key for this node: not signed. Check that " +
 				"-unlock-key is the one made for this node, or ask the officer for a statement that names it")
 		}
+	}
+	if note := officerNote(says["officer"]); note != "" {
+		fmt.Fprintln(os.Stderr, note)
 	}
 	signed, err := kcedge.Cosign(m, key)
 	if err != nil {

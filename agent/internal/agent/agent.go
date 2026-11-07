@@ -500,6 +500,7 @@ func (a *Agent) live(rec state.Record) (live, time.Time, []string) {
 	for _, id := range applied.RefusedByCeiling {
 		drift = append(drift, "lease "+id+" is outside the edge's ceiling: not applied")
 	}
+	drift = append(drift, kcedge.CeilingNotes(applied.Ceiling)...)
 	return live{applied.Leases, applied.VisitLeases, applied.GovernedRoles}, now, drift
 }
 

@@ -64,6 +64,11 @@ services:
       - ../secrets/keys:/etc/relikey/keys        # the enrolment key, writable: a rotation renames in it (#134)
       - ../secrets/warpgate.token:/etc/relikey/warpgate.token:ro
       - ../secrets/governed-roles.json:/etc/relikey/governed-roles.json:ro   # targets.py writes it; not secret (0644)
+      - type: bind                               # install.py --desk-ca writes it; with --desk-pin it is never read,
+        source: ../secrets/desk-ca.pem           # and an edge installed before this mount gets an empty directory here
+        target: /etc/relikey/desk-ca.pem
+        read_only: true
+        bind: {create_host_path: true}
     restart: unless-stopped
     stop_grace_period: 15s                       # above the agent's removal grace (grace_seconds, default 5)
     security_opt: [no-new-privileges:true]
