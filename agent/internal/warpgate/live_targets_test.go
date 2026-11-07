@@ -26,7 +26,7 @@ func TestLiveWarpgateTargets(t *testing.T) {
 	c := &Client{Base: url, Token: token, HTTP: &http.Client{Transport: &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}}} //nolint:gosec // local throwaway, as TestLiveWarpgate
 	spec := TargetSpec{Name: "relikey-live-target", Role: "relikey-live-target-role",
-		SSH: SSH{Host: "192.0.2.10", Port: 22, Username: "liveuser"},
+		SSH:     SSH{Host: "192.0.2.10", Port: 22, Username: "liveuser"},
 		HostKey: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl"}
 	t.Cleanup(func() {
 		bg := context.Background()
