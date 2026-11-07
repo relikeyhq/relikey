@@ -184,8 +184,9 @@ The log has `bundle verified`. The edge appears on the fleet page as `ok` after 
 ## 5. Grant a lease and use it
 1. At the desk, root grants a test person a membership that carries a target's role. Within a minute the agent applies
    it: `live_leases` is 1 in the status, and the log shows the account and role created.
-2. The person opens `https://plant-a.example:8888`, signs in through the broker with a passkey, and opens a session to
-   the target. The session is recorded.
+2. The person opens `https://plant-a.example:8888`, presses "Sign in with <the broker's name>" (not Warpgate's own
+   username and password form, which no one here has an account in), signs in with a passkey, and opens a session to
+   the target: the target's menu shows the SSH command under "Connection instructions". The session is recorded.
 3. End the membership. The agent closes the session and removes the account: `live_leases` returns to 0.
 
 If step 1 does not happen, read `drift` in the status JSON or on the status page; each line says why and what to change

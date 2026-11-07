@@ -152,6 +152,13 @@ def state_volume(engine: str) -> None:
                    check=True)
 
 
+def sso_label(given: str | None, issuer: str) -> str:
+    """The words on Warpgate's sign-in button: the site's own, or Sign in with the broker's host name."""
+    if given and given.strip():
+        return given.strip()[:60]
+    return f"Sign in with {urlparse(issuer).hostname or 'your organisation'}"
+
+
 def public_roots(given: str | None) -> bytes:
     """The public roots Warpgate keeps when SSL_CERT_FILE adds the core's CA: a bundle without them would silently
     break its other TLS clients (recording upload, public HTTPS targets, a public identity provider)."""
@@ -443,6 +450,7 @@ def main() -> int:
     a.add_argument("--sso-issuer", help="the core broker's realm, https://<broker>/realms/<realm>")
     a.add_argument("--sso-secret-file", help="this edge's client secret, from the core's add_edge.py")
     a.add_argument("--sso-client", help="the client id at the broker (default warpgate-<edge>)")
+    a.add_argument("--sso-label", help="the words on Warpgate's sign-in button (default: Sign in with <the broker's name>)")
     a.add_argument("--sso-ca", help="PEM of the CA that signs the broker's certificate, when it is not a public one")
     a.add_argument("--ca-bundle", help="the public roots to keep beside --sso-ca (default: certifi, or the host's)")
     a.add_argument("--warpgate-url", help="the URL people reach this edge's Warpgate on, exactly as given to the core's "
@@ -533,7 +541,10 @@ def main() -> int:
     # from the front's X-Forwarded headers (only pod members reach 127.0.0.1:8899).
     wg.setdefault("http", {}).update({"listen": "127.0.0.1:8899", "external_port": 8888, "trust_x_forwarded_headers": True})
     if o.sso_issuer:   # the broker's sign-in in Warpgate's configuration, in its volume (0600, like the rest of it)
-        wg["sso_providers"] = [{"name": o.sso_provider, "label": "Sign in", "auto_create_users": False,
+        # The button names the broker: beside Warpgate's own username and password form, which no ReliKey person
+        # uses, a bare "Sign in" did not say it is the organisation's sign-in (rc.4 walk W11, #176).
+        label = sso_label(o.sso_label, o.sso_issuer)
+        wg["sso_providers"] = [{"name": o.sso_provider, "label": label, "auto_create_users": False,
                                 "provider": {"type": "custom", "client_id": o.sso_client or f"warpgate-{o.edge}",
                                              "client_secret": Path(o.sso_secret_file).read_text(encoding="utf-8").strip(),
                                              "issuer_url": o.sso_issuer.rstrip("/"), "scopes": ["openid", "email", "profile"],

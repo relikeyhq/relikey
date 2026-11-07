@@ -354,3 +354,13 @@ def test_the_core_publishes_the_port_the_installer_names():
     assert '"${FRONT_PORT:-443}:8443"' in compose and '"443:8443"' not in compose
     install = (ROOT / "deploy" / "core" / "install.py").read_text(encoding="utf-8")
     assert "FRONT_PORT={port}" in install
+
+
+def test_the_sign_in_button_names_the_broker(tmp_path, monkeypatch):
+    """rc.4 walk W11 (#176): beside Warpgate's own username and password form, which no ReliKey person uses, a bare
+    "Sign in" did not say it is the organisation's sign-in. The button names the broker, or the site's own words."""
+    mod = installer("edge", tmp_path / "secrets", monkeypatch)
+    assert mod.sso_label(None, "https://id.example.org:8443/realms/relikey") == "Sign in with id.example.org"
+    assert mod.sso_label("  Sign in with Plant A's account ", "https://id.example.org") == "Sign in with Plant A's account"
+    src = (ROOT / "deploy" / "edge" / "install.py").read_text(encoding="utf-8")
+    assert '"label": label' in src and '"label": "Sign in"' not in src
