@@ -97,7 +97,8 @@ func CeilingNotes(ceiling Object) []string {
 	if h, ok := asInt(ceiling["max_lease_hours"]); ok && h < 24 {
 		notes = append(notes, fmt.Sprintf("the edge's ceiling allows leases of at most %d hours, but memberships are granted "+
 			"in whole days: the desk drops a membership's lease (\"longer than the ceiling's longest lease\") until its last "+
-			"%d hours; the edge officer seals a new ceiling with max_lease_hours of at least 24", h, h))
+			"%d hours; the edge officer seals a new ceiling whose max_lease_hours covers the longest membership granted (the "+
+			"desk's form defaults to 30 days, 720 hours)", h, h))
 	}
 	return notes
 }
