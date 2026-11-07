@@ -30,6 +30,28 @@
 |---|---|---|
 | `-cert` | "" | a PEM certificate file |
 
+### relikey-agent statement
+
+| flag | default | meaning |
+|---|---|---|
+| `-in` | "" | the statement file (kc-edge-officer-v2) |
+
+### relikey-agent cosign
+
+| flag | default | meaning |
+|---|---|---|
+| `-in` | "" | the statement file |
+| `-out` | "" | file for the statement with this node's signature (must not exist) |
+| `-key` | "" | this node's enrolment key file |
+| `-unlock-key` | "" | this node's software unlock key file (optional: checks the statement names it) |
+
+### relikey-agent targets
+
+| flag | default | meaning |
+|---|---|---|
+| `-config` | "/etc/relikey/agent.json" | configuration file |
+| `-in` | "-" | the targets as JSON, as deploy/edge/targets.py sends them; - for standard input |
+
 ## Install the shared core: `deploy/core/install.py`
 
 ```text
@@ -191,11 +213,11 @@ options:
 ## Apply an edge's targets to Warpgate: `deploy/edge/targets.py`
 
 ```text
-usage: targets.py [-h] targets_file
+usage: targets.py [-h] [--engine ENGINE] targets_file
 
 Apply an edge's targets to its Warpgate: for each one, the role a lease names, the target, the role bound to it and
 the target's pinned host key. Idempotent: run it again after any change to the file (the installation's part of
-"the installation creates roles and binds them to targets"; the agent only assigns roles from signed leases).
+"the installation creates roles and binds them to targets"; the agent's loop only assigns roles from signed leases).
 
     python deploy/edge/targets.py deploy/edge/targets.yaml          # after: compose up -d
 
@@ -205,6 +227,10 @@ targets.yaml:
         role: plc-operators            # the role a lease for it names (enrol_edge targets[].role)
         ssh: {host: 10.0.0.5, port: 22, username: plcuser}
         host_key: "ssh-ed25519 AAAA..."   # the target's own host key, verified out of band: required
+
+Warpgate's admin API listens on the pod's loopback only (decision 0008), which the host cannot reach. So this checks the
+file here and hands it to the agent's `targets` command inside the pod (`compose exec agent`), which applies it with the
+agent's own pinned certificate and token (walk 2026-11-06, F14). The pod must be running.
 
 Warpgate authenticates to an SSH target with its own client key; the keys it prints at the end go into the legacy
 account's authorized_keys. A target without host_key is refused: Warpgate would trust whatever key answers first, and
@@ -216,10 +242,11 @@ never changing it (full-stack run 2, finding 8). The file is the edge's own sour
 with a clerk's signed catalogue in the bundle (KeyClerk 0.25.0, its decision 0025) the agent governs the union.
 
 positional arguments:
-  targets_file  the edge's targets.yaml (copy targets.example.yaml)
+  targets_file     the edge's targets.yaml (copy targets.example.yaml)
 
 options:
-  -h, --help    show this help message and exit
+  -h, --help       show this help message and exit
+  --engine ENGINE  podman (default) or docker, as for the edge's installer
 ```
 
 ## The broker's realm: `deploy/core/realm.py` (inside the core pod)

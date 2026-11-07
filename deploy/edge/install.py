@@ -526,7 +526,7 @@ def main() -> int:
                  "the agent would refuse to start without the pin. Check that Warpgate's setup above succeeded, then "
                  f"run again with --enrolment-seed-file {SECRETS / 'enrolment.key'} to keep the enrolment key made "
                  "here")
-    write("warpgate.pin", pin + "\n", owner=None)   # targets.py checks who answers before sending the token
+    write("warpgate.pin", pin + "\n", owner=None)   # the pin agent.json carries, readable by the installing user
     # The front: Warpgate's own certificate and key on the published port (people see what they saw before), and the
     # certificate as the only root the front trusts towards Warpgate, under the name it carries.
     key_pem = subprocess.run(busybox + ["cat", "/data/tls.key.pem"], capture_output=True, check=True).stdout.decode()
@@ -582,8 +582,9 @@ def main() -> int:
     files = [COMPOSE] + ([COMPOSE_LAB] if o.lab else [])
     print(f"then: {o.engine} compose {' '.join(f'-f {f.relative_to(ROOT).as_posix()}' for f in files)} up -d"
           + ("   (lab: without compose.lab.yaml the agent cannot reach the desk on the host's loopback)" if o.lab else ""))
-    print("and:  python deploy/edge/targets.py deploy/edge/targets.yaml   (the roles leases name, the targets, their "
-          "pinned host keys; see targets.example.yaml) - without it no lease can grant access")
+    print(f"and:  python deploy/edge/targets.py deploy/edge/targets.yaml --engine {o.engine}   (once the pod runs: the "
+          "roles leases name, the targets, their pinned host keys; see targets.example.yaml) - without it no lease can "
+          "grant access")
     return 0
 
 

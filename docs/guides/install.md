@@ -116,8 +116,9 @@ Start the pod and apply the targets:
     python deploy/edge/targets.py deploy/edge/targets.yaml
 
 In `targets.yaml`, each target names its role, its SSH address and account, and **its own SSH host key, verified out of
-band** (a target without `host_key` is refused). `targets.py` creates the roles and targets on Warpgate, binds them,
-pins the host keys, and prints Warpgate's client keys: add each, as printed, to the target account's `authorized_keys`.
+band** (a target without `host_key` is refused). `targets.py` checks the file and hands it to the agent in the pod
+(Warpgate's admin API is on the pod's loopback only, so the pod must be running; with docker add `--engine docker`).
+The agent creates the roles and targets on Warpgate, binds them, pins the host keys, and prints Warpgate's client keys: add each, as printed, to the target account's `authorized_keys`.
 Run it again after any change to the file; it is idempotent. The roles it lists are what leases name: without them no
 lease can grant access.
 

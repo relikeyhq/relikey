@@ -3,7 +3,8 @@
 // Package warpgate is the agent's client for Warpgate's admin API on loopback
 // (routes under /@warpgate/admin/api, header X-Warpgate-Token). It covers only what
 // the agent does: users, SSO and public-key credentials (and the other credentials, to
-// remove them), role assignments with expiry, the targets a role reaches, sessions.
+// remove them), role assignments with expiry, the targets a role reaches, sessions; and, for the installation's
+// targets command only, the roles, targets and host keys of the edge's targets file (targets.go).
 package warpgate
 
 import (

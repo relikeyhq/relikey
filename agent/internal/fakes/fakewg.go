@@ -15,6 +15,7 @@ import (
 	"net/http/httptest"
 	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -43,12 +44,16 @@ type Warpgate struct {
 	keys         map[string][]warpgate.PublicKeyCredential
 	other        map[string]map[string][]string // user id -> credential kind (passwords, otp, certificates) -> ids
 	sessions     map[string]*fakeSession
-	targetRoles  map[string][]string // target id -> role ids
-	seq          int
-	defaults     []string            // role ids every new user gets, as Warpgate's is_default roles
-	params       warpgate.Parameters // as a stock Warpgate ships: self-service on, password SSH on, no token limit
-	Requests     int
-	Failed       int
+	targetRoles  map[string][]string       // target id -> role ids
+	targets      map[string]map[string]any // target id -> its body, for targets the installation creates (targets command)
+	knownHosts   []map[string]any          // the pinned SSH host keys
+	// OwnKeys are Warpgate's own SSH client keys, as /ssh/own-keys lists them.
+	OwnKeys  []string
+	seq      int
+	defaults []string            // role ids every new user gets, as Warpgate's is_default roles
+	params   warpgate.Parameters // as a stock Warpgate ships: self-service on, password SSH on, no token limit
+	Requests int
+	Failed   int
 	// Refuse answers 503 to the requests it matches, as an overloaded or broken endpoint would (stack attack tests).
 	Refuse func(method, path string) bool
 }
@@ -63,8 +68,9 @@ func NewWarpgate(token string, roles map[string][]string) *Warpgate {
 	w := &Warpgate{Token: token, Now: time.Now, users: map[string]warpgate.User{}, roles: map[string]string{},
 		assign: map[string]map[string]*time.Time{}, revoked: map[string]map[string]bool{}, sso: map[string][]warpgate.SSOCredential{},
 		keys: map[string][]warpgate.PublicKeyCredential{}, other: map[string]map[string][]string{},
-		sessions: map[string]*fakeSession{}, targetRoles: map[string][]string{},
-		params: warpgate.Parameters{AllowOwnCredentialManagement: true, SSHClientAuthPassword: true}}
+		sessions: map[string]*fakeSession{}, targetRoles: map[string][]string{}, targets: map[string]map[string]any{},
+		OwnKeys: []string{"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFakeWarpgateClientKey warpgate"},
+		params:  warpgate.Parameters{AllowOwnCredentialManagement: true, SSHClientAuthPassword: true}}
 	for name, targets := range roles {
 		id := w.id("role")
 		w.roles[id] = name
@@ -488,6 +494,75 @@ func (w *Warpgate) Handler() http.Handler {
 		out := []warpgate.Role{}
 		for _, rid := range w.targetRoles[r.PathValue("id")] {
 			out = append(out, warpgate.Role{ID: rid, Name: w.roles[rid]})
+		}
+		writeJSON(rw, 200, out)
+	})
+	// What the installation does (relikey-agent targets): roles, targets, their roles and pinned host keys.
+	h("POST "+wgBase+"/roles", func(rw http.ResponseWriter, r *http.Request) {
+		var in struct {
+			Name string `json:"name"`
+		}
+		if json.UnmarshalRead(r.Body, &in) != nil || in.Name == "" {
+			writeJSON(rw, 400, nil)
+			return
+		}
+		id := w.id("role")
+		w.roles[id] = in.Name
+		writeJSON(rw, 201, warpgate.Role{ID: id, Name: in.Name})
+	})
+	h("GET "+wgBase+"/targets", func(rw http.ResponseWriter, r *http.Request) {
+		out := []map[string]any{}
+		for id, body := range w.targets {
+			out = append(out, map[string]any{"id": id, "name": body["name"], "options": body["options"]})
+		}
+		slices.SortFunc(out, func(a, b map[string]any) int { return compareStr(a["id"].(string), b["id"].(string)) })
+		writeJSON(rw, 200, out)
+	})
+	saveTarget := func(id string, rw http.ResponseWriter, r *http.Request, status int) {
+		var body map[string]any
+		if json.UnmarshalRead(r.Body, &body) != nil || body["name"] == nil {
+			writeJSON(rw, 400, nil)
+			return
+		}
+		w.targets[id] = body
+		writeJSON(rw, status, map[string]any{"id": id, "name": body["name"]})
+	}
+	h("POST "+wgBase+"/targets", func(rw http.ResponseWriter, r *http.Request) { saveTarget(w.id("target"), rw, r, 201) })
+	h("PUT "+wgBase+"/targets/{id}", func(rw http.ResponseWriter, r *http.Request) {
+		if _, ok := w.targets[r.PathValue("id")]; !ok {
+			writeJSON(rw, 404, nil)
+			return
+		}
+		saveTarget(r.PathValue("id"), rw, r, 200)
+	})
+	h("POST "+wgBase+"/targets/{id}/roles/{rid}", func(rw http.ResponseWriter, r *http.Request) {
+		tid, rid := r.PathValue("id"), r.PathValue("rid")
+		if _, ok := w.roles[rid]; !ok {
+			writeJSON(rw, 404, nil)
+			return
+		}
+		if !slices.Contains(w.targetRoles[tid], rid) {
+			w.targetRoles[tid] = append(w.targetRoles[tid], rid)
+		}
+		writeJSON(rw, 201, nil)
+	})
+	h("GET "+wgBase+"/ssh/known-hosts", func(rw http.ResponseWriter, r *http.Request) {
+		writeJSON(rw, 200, append([]map[string]any{}, w.knownHosts...))
+	})
+	h("POST "+wgBase+"/ssh/known-hosts", func(rw http.ResponseWriter, r *http.Request) {
+		var in map[string]any
+		if json.UnmarshalRead(r.Body, &in) != nil {
+			writeJSON(rw, 400, nil)
+			return
+		}
+		in["id"] = w.id("known-host")
+		w.knownHosts = append(w.knownHosts, in)
+		writeJSON(rw, 201, in)
+	})
+	h("GET "+wgBase+"/ssh/own-keys", func(rw http.ResponseWriter, r *http.Request) {
+		out := []map[string]string{}
+		for _, k := range w.OwnKeys {
+			out = append(out, map[string]string{"kind": strings.Fields(k)[0], "public_key": k})
 		}
 		writeJSON(rw, 200, out)
 	})
