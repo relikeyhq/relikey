@@ -19,6 +19,11 @@ Decide, and write down who signs each one, before you run anything:
 - **Hosts.** One for the core, one per edge. Linux with podman or docker and compose, and Python 3.11 or later with
   PyYAML and `cryptography` (the installers import them). An edge's host is a switch's container host or a small
   board: the agent is built for linux amd64, arm64 and armv7.
+- **Compose.** `podman compose` hands the work to a compose provider. With rootless podman and docker's compose as the
+  provider, the installing user needs podman's socket running and to stay logged in for services
+  (`systemctl --user enable --now podman.socket`, `loginctl enable-linger <user>`). Use compose v2.24 or later:
+  check `docker-compose version`. Some cloud images ship an older one (v2.15) that fails on the services sharing the
+  front's network; set `PODMAN_COMPOSE_PROVIDER` to a current one, such as Ubuntu's `docker-compose-v2`.
 - **Names.** Three DNS names for the core that resolve from people and from every edge: the broker's, the desk's and the
   edge-facing one, each different (for example `id.example`, `desk.example`, `edge.example`). An optional fourth for the
   fleet page. One for each edge's Warpgate that people can reach.
@@ -115,6 +120,12 @@ Start the pod and apply the targets:
     cp deploy/edge/targets.example.yaml deploy/edge/targets.yaml     # then edit it
     python deploy/edge/targets.py deploy/edge/targets.yaml
 
+`targets.py` reaches Warpgate's admin API on the pod's own loopback. With `--lab` that is the host's loopback. On
+other installs, until `targets.py` enters the pod by itself, run it in the pod's network on rootless podman:
+
+    pid=$(podman inspect -f '{{.State.Pid}}' relikey-edge-front-1)
+    podman unshare nsenter -t "$pid" -n python deploy/edge/targets.py deploy/edge/targets.yaml
+
 In `targets.yaml`, each target names its role, its SSH address and account, and **its own SSH host key, verified out of
 band** (a target without `host_key` is refused). `targets.py` checks the file and hands it to the agent in the pod
 (Warpgate's admin API is on the pod's loopback only, so the pod must be running; with docker add `--engine docker`).
@@ -156,7 +167,8 @@ Enrolment binds the edge's enrolment key and the edge officer's key at the desk.
    - `python deploy/core/fleet_edge.py --edge plant-a --key <the edge's enrolment public key> --engine podman`, or
    - enrolment by code: an operator opens a slot on the fleet page, the code goes to the edge in a file, and
      `python deploy/edge/install.py enrol --code-file <file>` presents the key; an officer approves it with a passkey.
-     This needs Python 3.13 or later on the edge.
+     This needs Python 3.13 or later on the edge. Ubuntu 24.04 ships 3.12: install 3.13 for the installing user
+     only, for example with `uv python install 3.13`, and run the command with it.
 
 **Check it worked.** Within a minute the agent has a verified bundle:
 
