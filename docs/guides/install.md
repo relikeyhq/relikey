@@ -120,12 +120,6 @@ Start the pod and apply the targets:
     cp deploy/edge/targets.example.yaml deploy/edge/targets.yaml     # then edit it
     python deploy/edge/targets.py deploy/edge/targets.yaml
 
-`targets.py` reaches Warpgate's admin API on the pod's own loopback. With `--lab` that is the host's loopback. On
-other installs, until `targets.py` enters the pod by itself, run it in the pod's network on rootless podman:
-
-    pid=$(podman inspect -f '{{.State.Pid}}' relikey-edge-front-1)
-    podman unshare nsenter -t "$pid" -n python deploy/edge/targets.py deploy/edge/targets.yaml
-
 In `targets.yaml`, each target names its role, its SSH address and account, and **its own SSH host key, verified out of
 band** (a target without `host_key` is refused). `targets.py` checks the file and hands it to the agent in the pod
 (Warpgate's admin API is on the pod's loopback only, so the pod must be running; with docker add `--engine docker`).
