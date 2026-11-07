@@ -72,9 +72,10 @@ func (p *Page) ceremony(w http.ResponseWriter, r *http.Request, v any) (session,
 func (p *Page) step(w http.ResponseWriter, r *http.Request, v any, anchored bool) (session, bool) {
 	s, ok := p.current(r)
 	ct, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	why := p.actionRefusal(r, ok)
 	switch {
-	case !ok || p.Admin == nil || !p.sameOrigin(r):
-		fail(w, http.StatusForbidden, "sign in on the fleet page first")
+	case why != "":
+		fail(w, http.StatusForbidden, why)
 		return s, false
 	case ct != "application/json":
 		fail(w, http.StatusUnsupportedMediaType, "the page sends JSON")

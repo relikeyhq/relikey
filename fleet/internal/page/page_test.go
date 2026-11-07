@@ -17,7 +17,9 @@ import (
 	"net/http/cookiejar"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"path/filepath"
+	"regexp"
 	"relikey/fleet/internal/admin"
 	"relikey/fleet/internal/enrol"
 	"relikey/fleet/internal/registry"
@@ -492,5 +494,73 @@ func TestOpeningASlot(t *testing.T) {
 	}
 	if log := st.Log(1); len(log) != 1 || log[0].Action != "open slot" || log[0].Subject != "alice" {
 		t.Fatalf("evidence log: %+v", log)
+	}
+}
+
+// rc.4 walk W8 (#172): a browser posts the page's own forms with the Origin its referrer policy allows. Under
+// no-referrer that is "null", and every slot was refused; the policy is same-origin, which sends the real Origin.
+// Each refusal names its own cause, so the officer and the log can tell which it was.
+func TestAFormFromThePageCarriesItsOriginAndARefusalSaysWhy(t *testing.T) {
+	_, p, srv, browser := rig(t)
+	st, _ := admin.Open(filepath.Join(t.TempDir(), "admin.json"), "fleet-1")
+	p.Admin = st
+	p.Cfg.EnrolURL, p.Pin = "https://edge.example/fleet/v1/enrol", strings.Repeat("a", 64)
+	code, _, hdr := get(t, browser, srv.URL+"/")
+	if code != 200 {
+		t.Fatal("sign-in")
+	}
+	if rp := hdr.Get("Referrer-Policy"); rp != "same-origin" {
+		t.Fatalf("Referrer-Policy %q: under no-referrer a browser posts forms with Origin null", rp)
+	}
+	r := registry.Registry{Fleet: "fleet-1", Version: 1, Officers: []registry.Officer{{ID: "ann"}, {ID: "bob"}, {ID: "cat"}}}
+	_ = st.SetAnchor(registry.Accepted{Registry: r, Effective: time.Now().Add(-time.Hour)}, registry.Change{Registry: r}, admin.Event{})
+	post := func(c *http.Client, origin string) (int, string) {
+		req, _ := http.NewRequest("POST", srv.URL+"/slots", strings.NewReader(url.Values{"name": {"plant-c"}, "kind": {"edge"}}.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("Origin", origin)
+		resp, err := c.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		b, _ := io.ReadAll(resp.Body)
+		return resp.StatusCode, string(b)
+	}
+	for _, c := range []struct {
+		name, origin, want string
+		client             *http.Client
+	}{
+		{"no session", srv.URL, "sign in on the fleet page first", &http.Client{Transport: browser.Transport}},
+		{"origin withheld", "null", "withheld the page's origin", browser},
+		{"another site", "https://evil.example", "did not come from this fleet page", browser},
+	} {
+		if code, body := post(c.client, c.origin); code != 403 || !strings.Contains(body, c.want) {
+			t.Fatalf("%s: %d %q, want 403 with %q", c.name, code, body, c.want)
+		}
+	}
+	p.Admin = nil
+	if code, body := post(browser, srv.URL); code != 403 || !strings.Contains(body, "no admin section") {
+		t.Fatalf("no admin section: %d %q", code, body)
+	}
+}
+
+// rc.4 walk W7 (#173): browsers compile an input's pattern with the v flag, where a hyphen at either end of a
+// character class must be escaped; otherwise the pattern is invalid and the browser checks nothing.
+func TestEveryPatternIsValidUnderTheVFlag(t *testing.T) {
+	src, err := os.ReadFile("page.go") // the templates live in it
+	if err != nil {
+		t.Fatal(err)
+	}
+	ms := regexp.MustCompile(`pattern="([^"]*)"`).FindAllStringSubmatch(string(src), -1)
+	if len(ms) == 0 {
+		t.Fatal("no pattern found: the test no longer reads the templates")
+	}
+	for _, m := range ms {
+		for _, class := range regexp.MustCompile(`\[((?:\\.|[^\]\\])*)\]`).FindAllStringSubmatch(m[1], -1) {
+			body := class[1]
+			if strings.HasPrefix(body, "-") || (strings.HasSuffix(body, "-") && !strings.HasSuffix(body, `\-`)) {
+				t.Fatalf("pattern %q: the class [%s] has an unescaped hyphen at its edge, invalid under the v flag", m[1], body)
+			}
+		}
 	}
 }
