@@ -166,6 +166,9 @@ type Applied struct {
 	// holding one, never changing it (full-stack run 2, finding 8).
 	GovernedRoles *[]string `json:"governed_roles"`
 	State         State     `json:"state"`
+	// Ceiling is the sealed ceiling the leases were held against, for the agent's notes on it (CeilingNotes); not part
+	// of the conformance output.
+	Ceiling Object `json:"-"`
 }
 
 // Refusal lists every reason a bundle was refused.
@@ -452,7 +455,7 @@ func (o *opened) evaluate(doc Object, now time.Time, ceilingPolicy CeilingPolicy
 	}
 	age := now.Sub(o.issued)
 	out := &Applied{Leases: []Lease{}, VisitLeases: []VisitLease{}, Revoked: *b.Revoked, RefusedByCeiling: []string{},
-		GovernedRoles: o.governed}
+		GovernedRoles: o.governed, Ceiling: doc}
 	for _, x := range *b.Leases {
 		from, err1 := ParseTime(x.From)
 		until, err2 := ParseTime(x.Until)
