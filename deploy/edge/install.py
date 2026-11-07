@@ -427,6 +427,11 @@ def main() -> int:
     a.add_argument("--lab", action="store_true", help="the pod on the host network (compose.lab.yaml), to reach a core "
                                                       "installed with --lab on the same box. Never in production")
     o = a.parse_args()
+    if (SECRETS / "core.env").exists():   # walk 2026-11-06, F15: this edge's front.crt replaced the core's
+        sys.exit(f"{SECRETS} holds the core's files (core.env): the core and an edge use the same file names there "
+                 "(front.crt, front.key), so the edge would overwrite the core's certificate. Nothing was written. "
+                 "Install the edge from its own checkout of the release, and copy into its deploy/secrets/ only what "
+                 "the core gave it: warpgate-<edge>.secret and, with a local CA, front-ca.crt")
     # The agent refuses both pins in another form when it starts; caught here, the right key is still at hand.
     for flag, key, whose in (("--bundle-key", o.bundle_key, "the desk's bundle key, as the core's install.py printed"),
                              ("--officer-key", o.officer_key, "the edge officer's public key")):
