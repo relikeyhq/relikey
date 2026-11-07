@@ -189,3 +189,24 @@ def test_a_core_that_loses_its_ca_keeps_the_last_one_so_the_fleet_starts(core, t
     # the fleet refuses an admin section without enrol_url and pin_ca_file: the last ones stay, with the fleet's id
     assert cfg["admin"] == first["admin"] and cfg["page"]["pin_ca_file"] == first["page"]["pin_ca_file"]
     assert "keeps its last CA" in capsys.readouterr().err
+
+
+def test_restarting_the_front_restarts_what_shares_its_network_in_order(monkeypatch):
+    """F7 of the fresh-install walk of v0.3.0-rc.2: a restarted front gets a new network namespace, and the broker,
+    restarting later into it, lost its database on 127.0.0.1. Every running service that shares the front's network
+    restarts after it, in compose.yaml's order (the database before the broker); a one-shot that is not running does not."""
+    if importlib.util.find_spec("fcntl") is None:   # fleet_edge.py's lock, imported by fleet_page.py
+        monkeypatch.setitem(sys.modules, "fcntl", types.SimpleNamespace(flock=lambda *a: None, LOCK_EX=2))
+    monkeypatch.syspath_prepend(str(CORE))
+    page = load("core_fleet_page_restart", CORE / "fleet_page.py")
+    calls = []
+
+    def run(cmd, **kw):
+        calls.append(cmd[cmd.index("compose") + 5:] if "compose" in cmd else cmd)
+        out = "front\nbroker-db\nbroker\nsigner\ndesk\nreconcile\nmirror\nfleet\n" if "ps" in cmd else ""
+        return subprocess.CompletedProcess(cmd, 0, out, "")
+    monkeypatch.setattr(page.subprocess, "run", run)
+    page.restart_front(types.SimpleNamespace(engine="podman", lab=False))
+    restarted = [c[1] for c in calls if c and c[0] == "restart"]
+    assert restarted == ["front", "broker-db", "broker", "signer", "desk", "reconcile", "mirror", "fleet"]
+    assert "setup" not in restarted
