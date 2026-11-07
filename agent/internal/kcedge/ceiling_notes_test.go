@@ -63,7 +63,7 @@ func TestACeilingShorterThanADayIsNoted(t *testing.T) {
 			t.Fatalf("%s: %v, want %d note(s)", name, notes, len(c.want))
 		}
 		for i, w := range c.want {
-			if !strings.Contains(notes[i], w) || (strings.Contains(w, "hours") && !strings.Contains(notes[i], "at least 24")) {
+			if !strings.Contains(notes[i], w) || (strings.Contains(w, "hours") && !strings.Contains(notes[i], "covers the longest membership granted")) {
 				t.Fatalf("%s: note %q, want %q and what to do", name, notes[i], w)
 			}
 		}

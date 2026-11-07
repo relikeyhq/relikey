@@ -165,8 +165,10 @@ Enrolment binds the edge's enrolment key and the edge officer's key at the desk.
    by their anchors: a ceiling with no persons admits only low-class leases by its roles, and the agent's status then
    says so. Its classes must include every class the edge's targets need (a target carried by a privileged group needs
    `privileged`), or KeyClerk drops those leases; the [checklist](../installation-checklist.md) says where that shows.
-   Give `--max-lease-hours` at least 24: memberships are granted in whole days, and KeyClerk's default of 8 drops a
-   one-day membership's lease until its last 8 hours (the agent's status then says so).
+   Give `--max-lease-hours` the length of the longest membership you will grant to this edge's people: a lease runs to
+   its membership's end, and the desk drops a longer one until its last `--max-lease-hours`. The desk's add-a-person
+   form defaults to 30 days, 720 hours; KeyClerk's own default of 8 hours drops even a one-day membership (the
+   agent's status notes a ceiling under a day, not one shorter than your memberships).
 4. Make the edge known to the fleet service on the core, by either route ([the fleet](../fleet.md)):
    - `python deploy/core/fleet_edge.py --edge plant-a --key <the edge's enrolment public key> --engine podman`, or
    - enrolment by code: an operator opens a slot on the fleet page, the code goes to the edge in a file, and
@@ -190,8 +192,10 @@ The log has `bundle verified`. The edge appears on the fleet page as `ok` after 
 
 If step 1 does not happen, read `drift` in the status JSON or on the status page; each line says why and what to change
 ([troubleshooting](troubleshooting.md#the-status-and-drift-lines)). A lease the ceiling refuses never reaches the edge:
-KeyClerk drops it at the desk and records why in the edge's `dropped` list at the desk. The agent notes the ceilings
-that cause it (no persons, a longest lease under a day); for any other reason, read the desk's list.
+KeyClerk drops it at the desk: the edge officer's Edges page says how many leases the last bundle left out, and the
+edge's `dropped` list at the desk says why (most often a membership longer than the ceiling's `max_lease_hours`). The
+agent notes only the ceilings it can judge alone (no persons, a longest lease under a day) until KeyClerk carries the
+dropped reasons in the bundle.
 
 ## 6. Before you call it live
 - Work through the [installation checklist](../installation-checklist.md) for the system, including the exposure test
