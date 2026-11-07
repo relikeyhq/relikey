@@ -42,7 +42,8 @@
 |---|---|---|
 | `-in` | "" | the statement file |
 | `-out` | "" | file for the statement with this node's signature (must not exist) |
-| `-key` | "" | this node's enrolment key file |
+| `-key` | "" | this node's enrolment key file (default: enrolment_key_file in the agent's configuration) |
+| `-config` | "/etc/relikey/agent.json" | the agent's configuration, for its enrolment key when -key is not given |
 | `-unlock-key` | "" | this node's software unlock key file (optional: checks the statement names it) |
 
 ### relikey-agent targets
