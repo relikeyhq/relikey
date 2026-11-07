@@ -204,6 +204,22 @@ def page(o) -> None:
     restart_front(o)
     print(f"fleet page: {page_url}/ for accounts holding the client role fleet-operator on relikey-fleet")
     print(*said, file=sys.stdout if pin else sys.stderr)
+    grant_officers(o)
+
+
+def grant_officers(o) -> None:
+    """The first officers named here must reach the page to anchor the fleet, so each gets the client role. Named
+    with --officers and never granted, each was refused at the page until someone ran --grant (rc.4 walk W6). A grant
+    that fails is said, with the command that completes it; the page itself is set up either way."""
+    for name in o.officers or []:
+        r = subprocess.run(compose(o) + ["run", "--rm", "--no-deps", "-T", "setup", "fleet-grant", name],
+                           capture_output=True, text=True)
+        if r.returncode == 0:
+            print(f"first officer {name}: holds fleet-operator")
+        else:
+            print(f"first officer {name}: not granted fleet-operator ({(r.stderr or r.stdout).strip()[-200:]}); "
+                  f"they cannot reach the fleet page until it is: check the broker username, then run "
+                  f"python deploy/core/fleet_page.py --grant {name} --engine {o.engine}", file=sys.stderr)
 
 
 def _read_secret(o, d: Path) -> str:
