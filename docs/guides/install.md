@@ -58,7 +58,7 @@ On the core host, from the repository root:
         --cert front.crt --key front.key --engine podman
 
 Leave out `--cert` and `--key` for a local CA. Add `--fleet-host fleet.example --fleet-officers u1,u2,u3` for the fleet
-page (at least three broker usernames). Never add `--lab`: it puts the pod on the host network and is for a one-box lab
+page (at least three broker usernames; the installer gives each the page's `fleet-operator` role, and says so). Never add `--lab`: it puts the pod on the host network and is for a one-box lab
 only. A fresh desk can enrol an edge only when its seed names at least one entitlement and an edge officer who is no
 administrator, so give `--entitlement ID[:RISK]` and `--edge-officer` as above; `--person` adds more people. The full flag list is in the
 [commands reference](../reference/commands.md).
