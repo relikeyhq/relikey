@@ -59,10 +59,9 @@ Each refusal happens before anything is written, unless it says otherwise.
 | `--edge: lower-case letters, digits and dashes` | The edge name is `[a-z0-9][a-z0-9-]*`, up to 63 characters. |
 | `--key: the edge's enrolment public key, 64 lower-case hex (or --remove)` | Give the public key `install.py` or `relikey-agent keygen` printed, not the file's contents. |
 | `refused, nothing changed:` then `target X: host_key is missing` | Every target needs its own SSH host key, verified out of band. Nothing is trusted on first use. |
-| `no pin for Warpgate's certificate (deploy/secrets/warpgate.pin)` | Run the edge's installer again, or write the agent's `bastion.pin_sha256` there. Nothing was sent. |
-| `Warpgate is not answering on 127.0.0.1:8899 (...): start the edge first` | `compose ... up -d`, then check the `warpgate` container's logs. Nothing was changed. |
-| `127.0.0.1:8899 answered with a certificate that is not Warpgate's pinned one` | Something else holds that port, or Warpgate's certificate changed. The token is sent only to the pinned Warpgate. |
-| `Warpgate METHOD PATH: 401 ...` | The admin token in `deploy/secrets/warpgate.token` is not the one Warpgate was started with (`WARPGATE_ADMIN_TOKEN` in `warpgate.env`). Both files must hold the same token. |
+| `the agent did not apply the targets (exit N)` | `targets.py` hands the file to the agent's `targets` command in the pod; the agent's own message is the line above, starting `relikey-agent:`. If the agent is not running, start the edge (`compose ... up -d`) and read its log. `governed-roles.json` is changed only after the agent applied the targets. |
+| `relikey-agent: ... warpgate METHOD PATH: 401 ...` | The admin token in `deploy/secrets/warpgate.token` is not the one Warpgate was started with (`WARPGATE_ADMIN_TOKEN` in `warpgate.env`). Both files must hold the same token. |
+| `relikey-agent: ...` with a certificate or pin error | The agent sends the token only to the Warpgate whose certificate `agent.json` pins (`bastion.pin_sha256`). Warpgate's certificate changed, or something else answers on its loopback port. |
 
 ## The agent refuses to start
 `relikey-agent run` checks its configuration and its files before it does anything, and exits with the reason. In the pod

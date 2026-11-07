@@ -7,6 +7,7 @@
 //	relikey-agent plan   -config agent.json    one reconcile in shadow, the plan as JSON
 //	relikey-agent status -file status.json [-max-streak N] [-max-age 2m]
 //	                                           print the status; exit 1 when unhealthy (canary gate)
+//	relikey-agent targets -in targets.json     apply the edge's targets to the bastion (deploy/edge/targets.py runs it)
 //	relikey-agent keygen -out enrolment.key    a new enrolment key (0600), prints the public key
 //	relikey-agent pin    -cert warpgate.pem    the SHA-256 pin of a certificate
 //	relikey-agent version
@@ -25,6 +26,7 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"net/url"
 	"os"
 	"os/signal"
@@ -158,6 +160,8 @@ func main() {
 		err = unlockKeygen(args)
 	case "unlock-code":
 		err = unlockCode(args)
+	case "targets":
+		err = targets(args)
 	case "version":
 		fmt.Println(versionString())
 	default:
@@ -170,7 +174,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: relikey-agent run|plan|status|keygen|pin|statement|cosign|unlock-keygen|unlock-code|version [flags]")
+	fmt.Fprintln(os.Stderr, "usage: relikey-agent run|plan|status|targets|keygen|pin|statement|cosign|unlock-keygen|unlock-code|version [flags]")
 	os.Exit(2)
 }
 
@@ -276,6 +280,15 @@ func readSecret(path string) (string, error) {
 	return strings.TrimSpace(string(b)), err
 }
 
+// bastionHTTP is the client for the bastion's admin API on loopback: its pinned certificate, hybrid key exchange.
+func bastionHTTP(c *Config, g *httpx.Group) (*http.Client, error) {
+	h, err := httpx.New(httpx.Options{Timeout: 20 * time.Second, PinSHA256: c.Bastion.PinSHA256, RequireHybrid: true, Group: g})
+	if err != nil {
+		return nil, fmt.Errorf("bastion: %w", err)
+	}
+	return h, nil
+}
+
 func run(args []string, once bool) error {
 	fs := flag.NewFlagSet("run", flag.ExitOnError)
 	cfgPath := fs.String("config", "/etc/relikey/agent.json", "configuration file")
@@ -339,10 +352,9 @@ func run(args []string, once bool) error {
 	case c.LongPollSeconds > 0:
 		wait = time.Duration(c.LongPollSeconds) * time.Second
 	}
-	wgHTTP, err := httpx.New(httpx.Options{Timeout: 20 * time.Second, PinSHA256: c.Bastion.PinSHA256,
-		RequireHybrid: true, Group: bastionTLS})
+	wgHTTP, err := bastionHTTP(c, bastionTLS)
 	if err != nil {
-		return fmt.Errorf("bastion: %w", err)
+		return err
 	}
 	store, err := state.Open(c.StateDir, c.Lab)
 	if err != nil {

@@ -91,8 +91,12 @@ def run_one(engine: str, version: str, rdp: bool = False) -> bool:
         r = subprocess.run(["go", "test", "-count=1", "-run", "TestLiveWarpgate", "-v", "./internal/warpgate"], cwd=AGENT,
                            capture_output=True, text=True, env=env)
         ok = r.returncode == 0 and "--- PASS: TestLiveWarpgate " in r.stdout + " " and (
+            "--- PASS: TestLiveWarpgateTargets" in r.stdout) and (
             not rdp or "--- PASS: TestLiveWarpgateRDP" in r.stdout)
         print(f"{version}: {'pass' if ok else 'FAIL'}")
+        for ln in r.stdout.splitlines():
+            if ln.startswith("--- "):
+                print("  " + ln)
         if not ok:
             print(r.stdout[-3000:], r.stderr[-2000:], sep="\n")
         return ok

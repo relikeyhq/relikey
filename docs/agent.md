@@ -108,6 +108,7 @@ relikey-agent statement -in st1.json                          # what the officer
 relikey-agent cosign -in st1.json -out st2.json -key /var/lib/relikey/enrolment.key -unlock-key /var/lib/relikey/unlock.key
 relikey-agent unlock-code -unlock-key ... -key ... -desk-unlock-key B64 -edge E -person P -fingerprint F -target T -nonce N -minutes M
 relikey-agent pin -cert /etc/warpgate/tls.certificate.pem     # the Warpgate pin for agent.json
+relikey-agent targets -in targets.json                        # apply the edge's targets (deploy/edge/targets.py runs it)
 relikey-agent run -config /etc/relikey/agent.json
 relikey-agent plan -config /etc/relikey/agent.json            # one shadow reconcile, the plan as JSON
 relikey-agent status -file /var/lib/relikey/status.json       # exit 1 when unhealthy

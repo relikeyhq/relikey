@@ -166,7 +166,10 @@ def agent_config() -> tuple[str, list[str]]:
 def cli() -> str:
     s = HEADER.format(src="each command's own --help and the agent's flag definitions") + "# Commands\n\n"
     s += "## relikey-agent\n\n"
-    src = AGENT_MAIN.read_text(encoding="utf-8")
+    # main.go first, then the subcommands in their own files (enrol.go, targets.go), so none goes undocumented
+    src = "\n".join(p.read_text(encoding="utf-8") for p in
+                    [AGENT_MAIN] + sorted(p for p in AGENT_MAIN.parent.glob("*.go")
+                                          if p != AGENT_MAIN and not p.name.endswith("_test.go")))
     for sub in re.finditer(r'flag\.NewFlagSet\("(\w+)"', src):
         body = src[sub.end():].split("flag.NewFlagSet(")[0]
         flags = re.findall(r'fs\.(?:String|Bool|Int|Duration|Int64)\("([\w-]+)",\s*([^,]+),\s*"([^"]*)"\)', body)
