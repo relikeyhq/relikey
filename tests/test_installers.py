@@ -319,6 +319,34 @@ def test_the_agent_gets_the_desk_ca_the_installer_writes():
     assert '"/etc/relikey/desk-ca.pem"' in install and 'write("desk-ca.pem"' in install
 
 
+def test_every_file_mounted_into_the_agent_is_one_it_can_read(tmp_path, monkeypatch):
+    """The agent runs as 65532 under every engine and owner mode. A file compose mounts into it is either one the
+    installer gives the agent (AGENT_READS, chowned by fix_owners or podman unshare) or a public one written 0644
+    (AGENT_PUBLIC). rc.3 walk R3 (#164): desk-ca.pem was mounted, written 0600 by the installing user, and in neither
+    list, so the agent could not read it on rootless podman."""
+    mod = installer("edge", tmp_path / "secrets", monkeypatch)
+    compose = yaml.safe_load((ROOT / "deploy" / "edge" / "compose.yaml").read_text(encoding="utf-8"))
+    sources = []
+    for v in compose["services"]["agent"]["volumes"]:
+        src = v["source"] if isinstance(v, dict) else v.split(":")[0]
+        if src.startswith("../secrets/"):
+            sources.append(src.removeprefix("../secrets/"))
+    known = set(mod.AGENT_READS) | set(mod.AGENT_PUBLIC)
+    assert sources and not [s for s in sources if s not in known], f"mounted but in neither list: {sources}"
+    # the public ones are written world-readable, without an owner that rootless podman cannot give
+    tree = ast.parse((ROOT / "deploy" / "edge" / "install.py").read_text(encoding="utf-8"))
+    public_writes = {}
+    for node in ast.walk(tree):
+        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "chmod"
+                and isinstance(node.func.value, ast.Call) and getattr(node.func.value.func, "id", "") == "write"):
+            inner = node.func.value
+            name = inner.args[0].value if inner.args and isinstance(inner.args[0], ast.Constant) else None
+            owner_none = any(k.arg == "owner" and isinstance(k.value, ast.Constant) and k.value.value is None
+                             for k in inner.keywords)
+            public_writes[name] = (node.args[0].value, owner_none)
+    assert public_writes.get("desk-ca.pem") == (0o644, True), public_writes
+
+
 def test_the_core_publishes_the_port_the_installer_names():
     """--port reaches the published port, not only the URLs (fresh-install walk of v0.3.0-rc.2, F2): rootless podman
     cannot bind 443, and the guide's advice is a higher --port."""
