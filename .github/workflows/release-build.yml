@@ -86,7 +86,7 @@ jobs:
         # (gh attestation verify FILE --bundle relikey-provenance.intoto.jsonl --repo relikeyhq/relikey).
         run: cp "$BUNDLE" agent/dist/relikey-provenance.intoto.jsonl
       # installs cosign v3.0.6
-      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6  # v4.1.2
+      - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532  # v4.1.3
       - name: Sign the sums, each binary and the VEX (keyless cosign, a Sigstore bundle per file)
         working-directory: agent/dist
         run: |
@@ -182,7 +182,7 @@ jobs:
           subject-digest: ${{ steps.push.outputs.fleet }}
           push-to-registry: true
       # installs cosign v3.0.6
-      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6  # v4.1.2
+      - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532  # v4.1.3
       - name: Sign the images (keyless, by digest)
         env:
           AGENT: ${{ steps.push.outputs.agent }}
@@ -224,7 +224,7 @@ jobs:
           subject-digest: ${{ steps.push.outputs.demo }}
           push-to-registry: true
       # installs cosign v3.0.6
-      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6  # v4.1.2
+      - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532  # v4.1.3
       - name: Sign the demo image (keyless, by digest)
         env:
           DEMO: ${{ steps.push.outputs.demo }}
