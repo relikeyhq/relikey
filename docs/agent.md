@@ -1,7 +1,7 @@
 # The edge agent (relikey-agent)
 
 The agent is the only ReliKey code on an edge (decision 0011). It verifies what KeyClerk signed and makes Warpgate
-hold exactly what the live leases allow; it decides nothing of its own. Code: `agent/` (Go 1.27.3, one static binary
+hold exactly what the live leases allow; it decides nothing of its own. Code: `agent/` (Go 1.27.4, one static binary
 for linux amd64, arm64, armv7). How it is written and built: `docs/go-engineering.md`.
 
 ## What it does, every 15 seconds and every minute
