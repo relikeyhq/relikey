@@ -1,6 +1,6 @@
 # relikey-agent
 
-The edge agent (decision 0011), built by the rules in `../docs/go-engineering.md`. Go 1.27.3, no dependencies yet.
+The edge agent (decision 0011), built by the rules in `../docs/go-engineering.md`. Go 1.27.4, no dependencies yet.
 
     GOTOOLCHAIN=local go test ./...      # unit tests and the reference vectors
     python mutants.py                    # every verifier guard must be caught by a test

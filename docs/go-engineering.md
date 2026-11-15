@@ -1,16 +1,16 @@
 # Writing and building the edge agent in Go
 
-Rules for `agent/` (decision 0011). Go **1.27.3** (go.dev/dl, 2026-10-23). Sources: the Go 1.24 to 1.27 release notes,
+Rules for `agent/` (decision 0011). Go **1.27.4** (go.dev/dl, 2026-11-10). Sources: the Go 1.24 to 1.27 release notes,
 go.dev/doc/toolchain, go.dev/doc/security/best-practices, go.dev/doc/modules/layout, go.dev/doc/articles/race_detector,
 pkg.go.dev for every package named below, and KeyClerk v0.19.0 (`docs/keyclerk-edge-interface.md`, `keyclerk/edge.py`,
 `relay.py`, `policy_wasm.py`). Red-teamed the same day: `a review record kept with the maintainer` (GE-1 to
 GE-20, all taken in). Each rule says why.
 
 ## Toolchain and module
-- `go 1.27` and `toolchain go1.27.3` in `agent/go.mod`. The `toolchain` line is only a suggestion and
-  `GOTOOLCHAIN=local` ignores it, so the build script **fails unless `go env GOVERSION` is `go1.27.3`**; CI uses a
-  build image pinned by digest. Locally: `go1.27.3` (golang.org/dl) under your Go SDK directory
-  (`$HOME/sdk/go1.27.3`, or `%USERPROFILE%\sdk\go1.27.3` on Windows).
+- `go 1.27` and `toolchain go1.27.4` in `agent/go.mod`. The `toolchain` line is only a suggestion and
+  `GOTOOLCHAIN=local` ignores it, so the build script **fails unless `go env GOVERSION` is `go1.27.4`**; CI uses a
+  build image pinned by digest. Locally: `go1.27.4` (golang.org/dl) under your Go SDK directory
+  (`$HOME/sdk/go1.27.4`, or `%USERPROFILE%\sdk\go1.27.4` on Windows).
 - Module hygiene: `go.sum` committed; `GOFLAGS` set only by the build script; `GOSUMDB` on; `GOPROXY` the default, or
   `off` with `vendor/` for offline lab builds; `GONOSUMDB`, `GOINSECURE` never set.
 - Agent dependencies: the standard library, `github.com/tetratelabs/wazero` (policy), `golang.org/x/sys` (boot clock,

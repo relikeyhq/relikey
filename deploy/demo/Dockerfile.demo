@@ -3,7 +3,7 @@
 # Build from the repository root (its own ignore file lets only the agent module in):
 #   podman build --ignorefile deploy/demo/Dockerfile.demo.dockerignore -f deploy/demo/Dockerfile.demo -t relikey-demo:dev .
 # Run, publishing on the host's loopback only:  docker run --rm -p 127.0.0.1:8080:8080 relikey-demo:dev
-FROM --platform=$BUILDPLATFORM docker.io/library/golang:1.27.3@sha256:0c050feb47802ae436b9030833694a0b80160d08e3b3049ad30bf7c9e724e09d AS build
+FROM --platform=$BUILDPLATFORM docker.io/library/golang:1.27.4@sha256:5e8afd493a7124a8586e134d9b532731161d4b9becf9dee5a5956b107426f93d AS build
 ARG TARGETOS
 ARG TARGETARCH
 WORKDIR /src/agent
